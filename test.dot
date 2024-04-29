@@ -1,0 +1,31 @@
+digraph G {
+    subgraph cluster_0 {
+        label="Main Area";
+        a0 -> a1 -> a2 -> a3;
+        a3 -> a0;
+    }
+
+    subgraph cluster_1 {
+        label="Details for Node a0";
+        style="invis";  // Make this subgraph invisible initially
+        a0 -> detail1;
+        a0 -> detail2;
+        detail1 -> detail2;
+    }
+
+    // Define node with HTML-like label
+    a0 [shape=none, margin=0, label=<
+        <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+          <TR><TD PORT="f0">Main Node</TD></TR>
+          <TR><TD PORT="f1">Click for details</TD></TR>
+        </TABLE>>];
+
+    // Edge from main node to its details
+    a0:f1 -> cluster_1 [style=dotted];
+
+    // Tooltips
+    a0 [tooltip="Main Node, click for more details"];
+
+    // URL (You can specify a local file or a webpage)
+    a0 [URL="http://example.com"];
+}

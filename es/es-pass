@@ -1,0 +1,23 @@
+curl -u elastic:pGKutlxXcPckjYBbMLmt -X GET "http://localhost:9200/"
+
+
+Changed password for user apm_system
+PASSWORD apm_system = C6pPxmHevqDIyogZ667n
+
+Changed password for user kibana_system
+PASSWORD kibana_system = POWqYd8xbaB8ADHvFnbK
+
+Changed password for user kibana
+PASSWORD kibana = POWqYd8xbaB8ADHvFnbK
+
+Changed password for user logstash_system
+PASSWORD logstash_system = ThtND0dMuAIoQzQPrPGb
+
+Changed password for user beats_system
+PASSWORD beats_system = PXyc792AL7djwWqrQXMY
+
+Changed password for user remote_monitoring_user
+PASSWORD remote_monitoring_user = 9RFoAQXdaucmo4RVvz6G
+
+Changed password for user elastic
+PASSWORD elastic = pGKutlxXcPckjYBbMLmt
