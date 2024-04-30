@@ -1,6 +1,6 @@
 
 from anytree import Node, RenderTree, PreOrderIter
-import generic_tree
+import GenericTree
 
 class Conversation:
     def __init__(self, path, metadata):
@@ -36,7 +36,7 @@ class Conversation:
     def __str__(self):
         return self.metadata + "\n" + "".join([txt for node, txt in self.to_list()])
 
-class ConversationTree(generic_tree.GenericTree):
+class ConversationTree(GenericTree.GenericTree):
     def __init__(self, root):
         super().__init__(root)
 

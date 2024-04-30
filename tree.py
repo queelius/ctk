@@ -4,32 +4,6 @@ from anytree import Node, RenderTree, find, PreOrderIter
 from anytree.exporter import DotExporter
 import graphviz
 
-
-# Function to load JSON data into an anytree structure
-def load_json_to_anytree(json_data):
-    nodes = {}
-    
-    # First pass: create all nodes
-    for key, value in json_data.items():
-        node_id = key
-        if node_id not in nodes:
-            nodes[node_id] = Node(name=node_id,
-                                  parent=None,
-                                  children=[],
-                                  payload=value['message'])
-    
-    # Second pass: establish parent-child relationships
-    for key, value in json_data.items():
-        node_id = key
-        parent_id = value['parent']
-        if parent_id and parent_id in nodes:
-            nodes[node_id].parent = nodes[parent_id]
-        for child_id in value.get('children', []):
-            if child_id in nodes:
-                nodes[child_id].parent = nodes[node_id]
-    
-    return nodes
-
 def flatten_conversations(tree): 
     paths = []
     for leaf in [node for node in PreOrderIter(tree) if node.is_leaf]:
@@ -40,7 +14,6 @@ def flatten_conversations(tree):
             current = current.parent
         paths.append(path[::-1])
     return paths
-
 
 def flatten_conversation(conversation, roles = ['user', 'assistant']):
     def flatten(node):
@@ -68,31 +41,6 @@ def flatten_conversation(conversation, roles = ['user', 'assistant']):
             conversation_nodes.append((node, txt))
     return conversation_nodes
 
-
-def render_tree(root,
-                nodenamefunc,
-                filename='tree.png'):
-    """
-    Render the tree to an image file. The filename should include the
-    format extension (e.g., 'tree.png').
-
-    :param root: Root node of the tree.        
-    :param nodenamefunc: Function to generate node names.
-    :param filename: Name of the output file.
-
-    :return: None
-    """
-    format = filename.split('.')[-1]
-    base = filename.split('.')[0]
-    print(f"Rendering tree to {filename}")
-    
-    DotExporter(node = root,
-                nodenamefunc = nodenamefunc).to_dotfile(f"{base}.dot")
-    
-    if format != "dot":
-        graphviz.render('dot', format = format, filepath = f"{base}.dot", outfile = filename)
-        os.remove(f"{base}.dot")
-    print(f"Tree rendered and saved as {filename}")
 
 if __name__ == "__main__": 
 
@@ -123,17 +71,8 @@ if __name__ == "__main__":
         return node.name
         
 
-    # Print the tree structure
-    #for pre, fill, node in RenderTree(root_node):
-    #    print("%s%s" % (pre, handle(node)))
-
     #conversations = flatten_conversations(root_node)
 
     # just print the txt in the conversation nodes
     #for node, txt in flatten_conversation(conversations[0]):
     #    print(txt, end="")
-
-
-    # Render the tree to an image file
-    #render_tree(root_node, filename='tree.png', nodenamefunc=handle)
-    render_tree(root_node, filename='tree.dot', nodenamefunc=lambda node: node.name)
