@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctk"                  # The package name as it will appear on PyPI
+version = "0.1.0"
+description = "A CLI tool and library for managing and analyzing chat logs."
+readme = "README.md"
+requires-python = ">=3.7"
+
+# List your runtime dependencies here:
+dependencies = [
+    "jmespath>=1.0.0",
+    "streamlit>=1.0.0",
+    # argparse is part of the Python standard library, so it's not needed here.
+    # Add any others you actually use.
+]
+
+# Optional: authors/maintainers
+authors = [
+  { name="Alex Example", email="alex@example.com" }
+]
+
+# Entry points let you define console commands that map to Python functions.
+# The key "console_scripts" is recognized by setuptools for installing CLI tools.
+[project.scripts]
+ctk = "ctk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ctk*"]
