@@ -1,4 +1,4 @@
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, SpinnerColumn, BarColumn, TimeElapsedColumn
 import logging
 import networkx as nx
 import requests
@@ -12,19 +12,17 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from rich.table import Table
 from rich.console import Console
-from colorama import init as colorama_init, Fore, Style
 
-# Initialize colorama and rich console
-colorama_init(autoreset=True)
 console = Console()
 
-def extract_urls(html_content, base_url, bookmark_urls=None, max_mentions=50):
-    """Extract a limited number of absolute URLs from the HTML content.
-    
-    If bookmark_urls is provided, only include URLs present in this set.
+def extract_urls(html_content):
+    """
+    Extract a lURLs from the HTML content.
+    :param html_content: The HTML content to extract URLs from.
+    :return: A set of URLs extracted from the content.
     """
     try:
-        soup = BeautifulSoup(html_content, 'lxml')  # Use 'lxml' parser for robustness
+        soup = BeautifulSoup(html_content, 'lxml')
     except Exception as e:
         logging.warning(f"lxml parser failed: {e}. Falling back to 'html.parser'.")
         try:
@@ -35,47 +33,21 @@ def extract_urls(html_content, base_url, bookmark_urls=None, max_mentions=50):
     
     urls = set()
     for link in soup.find_all('a', href=True):
-        href = link['href']
-        # Resolve relative URLs
-        full_url = urljoin(base_url, href)
-        parsed = urlparse(full_url)
+        url = link['href']
+        parsed = urlparse(url)
         if parsed.scheme in ('http', 'https'):
-            if bookmark_urls is None or full_url in bookmark_urls:
-                if full_url != base_url:  # Prevent self-loop by excluding the bookmark's own URL
-                    urls.add(full_url)
-                    if len(urls) >= max_mentions:
-                        break
-    return urls
-
-
-def extract_urls2(html_content, base_url, bookmark_urls=None):
-    """Extract all absolute URLs from the HTML content.
-    
-    If bookmark_urls is provided, only include URLs present in this set.
-    """
-    try:
-        soup = BeautifulSoup(html_content, 'lxml')  # Try 'lxml' parser first
-    except Exception as e:
-        logging.warning(f"lxml parser failed: {e}. Falling back to 'html.parser'.")
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-        except Exception as e:
-            logging.error(f"html.parser also failed: {e}. Skipping this content.")
-            return set()
-    
-    urls = set()
-    for link in soup.find_all('a', href=True):
-        href = link['href']
-        # Resolve relative URLs
-        full_url = urljoin(base_url, href)
-        parsed = urlparse(full_url)
-        if parsed.scheme in ('http', 'https'):
-            if bookmark_urls is None or full_url in bookmark_urls:
-                urls.add(full_url)
+            urls.add(url)
     return urls
 
 def get_session(retries=3, backoff_factor=0.3, status_forcelist=(500, 502, 504)):
-    """Configure a requests Session with retry strategy."""
+    """
+    Configure a requests Session with retry strategy.
+
+    :param retries: Number of retries for transient errors.
+    :param backoff_factor: Factor by which to back off between retries.
+    :param status_forcelist: HTTP status codes to force a retry on.
+    :return: A configured requests Session object.
+    """
     session = requests.Session()
     retry = Retry(
         total=retries,
@@ -91,7 +63,14 @@ def get_session(retries=3, backoff_factor=0.3, status_forcelist=(500, 502, 504))
     return session
 
 def fetch_html(url, verify_ssl=True, session=None):
-    """Fetch HTML content from a URL with optional SSL verification."""
+    """
+    Fetch HTML content from a URL with optional SSL verification.
+
+    :param url: The URL to fetch.
+    :param verify_ssl: Whether to verify SSL certificates.
+    :param session: An optional requests Session object.
+    :return: The HTML content as a string, or None if an error occurred.
+    """
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (compatible; BookmarkTool/1.0)'
@@ -117,11 +96,13 @@ def is_valid_url(url):
     parsed = urlparse(url)
     return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
 
-def generate_url_graph(bookmarks, max_bookmarks=100, only_in_library=True, ignore_ssl=False):
-    """Generate a NetworkX graph based on URL mentions in bookmarks."""
+def generate_url_graph(conversations, limit, ignore_ssl=False):
+    """
+    Generate a NetworkX graph based on URL mentions in conversation trees.
+    """
     G = nx.DiGraph()
-    total = min(len(bookmarks), max_bookmarks)
-    logging.info(f"Generating graph from {total} bookmarks.")
+    total = min(len(conversations), limit)
+    logging.debug(f"Generating graph from {total} conversations.")
     
     # Create a set of all bookmark URLs for quick lookup
     bookmark_urls = set(b['url'] for b in bookmarks[:total])
@@ -156,19 +137,12 @@ def generate_url_graph(bookmarks, max_bookmarks=100, only_in_library=True, ignor
                     continue
                 html_content = future.result()
                 if html_content:
-                    if only_in_library:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'], bookmark_urls=bookmark_urls)
-                    else:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'])
+                    mentioned_urls = extract_urls(html_content, bookmark['url'])
                     
                     for mentioned_url in mentioned_urls:
                         # Prevent self-loops by ensuring mentioned_url is different from bookmark['url']
                         if mentioned_url != bookmark['url']:
-                            if only_in_library:
-                                if mentioned_url in bookmark_urls:
-                                    G.add_edge(bookmark['url'], mentioned_url)
-                            else:
-                                G.add_edge(bookmark['url'], mentioned_url)
+                            G.add_edge(bookmark['url'], mentioned_url)
                     success_count += 1
                 else:
                     logging.warning(f"Skipping bookmark ID {bookmark['id']} due to fetch failure.")
@@ -184,118 +158,6 @@ def generate_url_graph(bookmarks, max_bookmarks=100, only_in_library=True, ignor
     logging.info(f"Graph generated with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
     logging.info(f"Successfully processed {success_count} bookmarks.")
     logging.info(f"Failed to process {failure_count} bookmarks.")
-    return G
-
-def generate_url_graph0(bookmarks, max_bookmarks=100, only_in_library=True, ignore_ssl=False):
-    """Generate a NetworkX graph based on URL mentions in bookmarks."""
-    G = nx.DiGraph()
-    total = min(len(bookmarks), max_bookmarks)
-    logging.info(f"Generating graph from {total} bookmarks.")
-    
-    # Create a set of all bookmark URLs for quick lookup
-    bookmark_urls = set(b['url'] for b in bookmarks[:total])
-    
-    session = get_session()  # Assuming get_session is defined elsewhere
-    
-    success_count = 0
-    failure_count = 0
-    
-    with Progress(
-        SpinnerColumn(),
-        "[progress.description]{task.description}",
-        BarColumn(),
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        TimeElapsedColumn(),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Processing bookmarks...", total=total)
-        
-        # Use ThreadPoolExecutor for concurrent fetching
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_bookmark = {
-                executor.submit(fetch_html, bookmark['url'], verify_ssl=not ignore_ssl, session=session): bookmark 
-                for bookmark in bookmarks[:total]
-            }
-            for future in as_completed(future_to_bookmark):
-                bookmark = future_to_bookmark[future]
-                if not is_valid_url(bookmark['url']):
-                    logging.error(f"Invalid URL '{bookmark['url']}' for bookmark ID {bookmark['id']}. Skipping.")
-                    failure_count += 1
-                    progress.advance(task)
-                    continue
-                html_content = future.result()
-                if html_content:
-                    if only_in_library:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'], bookmark_urls=bookmark_urls)
-                    else:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'])
-                    
-                    for mentioned_url in mentioned_urls:
-                        # Prevent self-loops by ensuring mentioned_url is different from bookmark['url']
-                        if mentioned_url != bookmark['url']:
-                            if only_in_library:
-                                if mentioned_url in bookmark_urls:
-                                    G.add_edge(bookmark['url'], mentioned_url)
-                            else:
-                                G.add_edge(bookmark['url'], mentioned_url)
-                    success_count += 1
-                else:
-                    logging.warning(f"Skipping bookmark ID {bookmark['id']} due to fetch failure.")
-                    failure_count += 1
-                progress.advance(task)
-    
-    logging.info(f"Graph generated with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
-    logging.info(f"Successfully processed {success_count} bookmarks.")
-    logging.info(f"Failed to process {failure_count} bookmarks.")
-    return G
-
-def generate_url_graph2(bookmarks, max_bookmarks=100, only_in_library=True, ignore_ssl=False):
-    """Generate a NetworkX graph based on URL mentions in bookmarks."""
-    G = nx.DiGraph()
-    total = min(len(bookmarks), max_bookmarks)
-    logging.info(f"Generating graph from {total} bookmarks.")
-    
-    # Create a set of all bookmark URLs for quick lookup
-    bookmark_urls = set(b['url'] for b in bookmarks[:total])
-    
-    session = get_session()
-    
-    with Progress(
-        SpinnerColumn(),
-        "[progress.description]{task.description}",
-        BarColumn(),
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        TimeElapsedColumn(),
-        transient=True,
-    ) as progress:
-        task = progress.add_task("Processing bookmarks...", total=total)
-        
-        # Use ThreadPoolExecutor for concurrent fetching
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_bookmark = {
-                executor.submit(fetch_html, bookmark['url'], verify_ssl=not ignore_ssl, session=session): bookmark for bookmark in bookmarks[:total]
-            }
-            for future in as_completed(future_to_bookmark):
-                bookmark = future_to_bookmark[future]
-                html_content = future.result()
-                if html_content:
-                    if only_in_library:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'], bookmark_urls=bookmark_urls)
-                    else:
-                        mentioned_urls = extract_urls(html_content, bookmark['url'])
-                    
-                    for mentioned_url in mentioned_urls:
-                        if only_in_library:
-                            # Since extract_urls already filters, just add the edge
-                            G.add_edge(bookmark['url'], mentioned_url)
-                        else:
-                            if mentioned_url != bookmark['url']:
-                                G.add_edge(bookmark['url'], mentioned_url)
-                else:
-                    logging.warning(f"Skipping bookmark ID {bookmark['id']} due to fetch failure.")
-                progress.advance(task)
-    
-    logging.info(f"Graph generated with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
     return G
 
 def visualize_graph_pyvis(graph, output_file):

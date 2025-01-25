@@ -9,144 +9,26 @@ launch a Streamlit dashboard, etc. It uses doxygen-style tags for documentation.
 import argparse
 import json
 import os
-import shutil
 import sys
-import jmespath
-import re
 import AlgoTree
 import subprocess
-import time
-from colorama import init as colorama_init, Fore, Style
 from rich.console import Console
-from rich.table import Table
-from rich.markdown import Markdown
 from rich.json import JSON
+from  .utils import ( load_conversations, save_conversations, pretty_print_conversation, 
+                    query_conversations_search, query_conversations_jmespath, path_value,
+                    list_conversations, ensure_libdir_structure, print_json_as_table)
+from .merge import union_libs, intersect_libs, diff_libs
 
-colorama_init(autoreset=True)
+
+from .llm import query_llm
+from .vis import generate_url_graph, visualize_graph_pyvis, visualize_graph_png, display_graph_stats
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 console = Console()
-
-def load_conversations(libdir):
-    """
-    @brief Load all conversations from `<libdir>/conversations.json`.
-    @param libdir Path to the conversation library directory.
-    @return A Python object (usually a list) of conversations.
-    """
-    conv_path = os.path.join(libdir, "conversations.json")
-    if not os.path.isfile(conv_path):
-        # Return empty if missing
-        return []
-
-    with open(conv_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def save_conversations(libdir, conversations):
-    """
-    @brief Save conversation data to `<libdir>/conversations.json`.
-    @param libdir Path to the conversation library directory.
-    @param conversations Python list/dict containing conversation data.
-    """
-    conv_path = os.path.join(libdir, "conversations.json")
-    with open(conv_path, "w", encoding="utf-8") as f:
-        for conv in conversations:
-            if "id" not in conv:
-                raise ValueError("Conversation missing 'id' field")
-
-def ensure_libdir_structure(libdir):
-    """
-    @brief Ensure that the specified library directory contains expected structure.
-    @param libdir Path to the conversation library directory.
-    @details Creates the directory if it doesn't exist, as well as placeholders.
-    """
-    if not os.path.isdir(libdir):
-        os.makedirs(libdir)
-
-def list_conversations(libdir, path_fields, indices=None, json_output=False):
-    """
-    @brief List all conversations found in `<libdir>/conversations.json`.
-
-    @param libdir Path to the conversation library directory.
-    @param path_fields A list of JMESPath query strings to include in the output.
-    @param indices A list of indices to list. If None, list all.
-    @param json_output If True, output as JSON instead of a table.
-    @return None
-    @details Prints a numbered list of conversation with the indicated fields.
-    """
-
-    conversations = load_conversations(libdir)
-    if not conversations:
-        console.print("[red]No conversations found.[/red]")
-        return
-
-    max_index = len(conversations)
-    if indices is None:
-        indices = range(max_index)
-
-    table = Table(title="Conversations")
-    color_cycle = ["cyan", "magenta", "green", "yellow", "blue"]
-    color_idx = 0
-    table.add_column("#", justify="right", style=color_cycle[color_idx])
-    for pf in path_fields:
-        color_idx += 1
-        table.add_column(pf, style=color_cycle[color_idx % len(color_cycle)])
-
-    import time
-
-    for i, conv in enumerate(conversations):
-        if i not in indices:
-            continue
-        #path_values = [jmespath.search(p, conv) for p in path_fields]
-        path_values = [str(jmespath.search(p, conv)) if not isinstance(jmespath.search(p, conv), (int, float)) 
-               else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(jmespath.search(p, conv)))
-               for p in path_fields]
-
-        table.add_row(str(i), *path_values)
-    console.print(table)
-        
-
-def query_conversations_jmespath(libdir, expression):
-    """
-    @brief Query the conversations with a JMESPath expression.
-
-    @param libdir Path to the conversation library directory.
-    @param expression A JMESPath query string.
-    @return The result of the JMESPath query.
-    """
-    conversations = load_conversations(libdir)
-    return jmespath.search(expression, conversations)
-
-def query_conversations_search(libdir, expression, fields):
-    """
-    @brief Query the conversations with a regex expression.
-
-    @param libdir Path to the conversation library directory.
-    @param expression A regex expression.
-    @param fields A list of JMESPath query strings to apply the regex to.
-    @param ignore_case If True, ignore case when matching.
-    @return A list of conversations that satisfy the regex expression.
-
-    """
-    conversations = load_conversations(libdir)
-    results = []
-    pattern = re.compile(expression, re.IGNORECASE)
-
-    for conv in conversations:
-        for field in fields:
-            out = jmespath.search(field, conv)
-            if isinstance(out, (int, float)):
-                out = str(out)
-            elif isinstance(out, (list, dict)):
-                out = json.dumps(out)  # Convert complex types to JSON string
-            elif out is None:
-                continue  # Skip if the field is None
-            else:
-                out = str(out)
-
-            if pattern.search(out):
-                results.append(conv)
-                break  # Move to the next conversation after a match
-
-    return results
 
 def launch_streamlit_dashboard(libdir):
     """
@@ -154,143 +36,14 @@ def launch_streamlit_dashboard(libdir):
     @param libdir Path to the conversation library directory.
     @return None
     @details This function just outlines how you'd call Streamlit. 
-    You might build an actual `.py` file for your dashboard with
-    `streamlit run dash_app.py -- --libdir=...`.
     """
     dash_cmd = [
         "streamlit", "run",
-        "dash_app.py",
-        "--",  # pass CLI arguments to the Streamlit app
+        "streamlit/app.py",
+        #"--",  # pass CLI arguments to the Streamlit app
         f"--libdir={libdir}"
     ]
     subprocess.run(dash_cmd, check=True)
-
-def union_libs(libdirs, output_dir, conflict_resolution="skip"):
-    """
-    @brief Take the union of multiple conversation libraries.
-    @param libdirs List of library directories to merge.
-    @param conflict_resolution How to handle duplicate conversation ids. Options: "skip", "overwrite-old", "error"
-    @param output_dir Output library directory.
-    """
-
-    union_lib = load_conversations(libdirs[0])
-    for d in libdirs[1:]:
-        # check if unique ids conflict
-        lib = load_conversations(d)
-        if not lib:
-            continue
-        for conv in lib:
-            if conv["id"] in [c["id"] for c in union_lib]:
-                union_conv = lib[conv["id"]]
-                if conflict_resolution == "skip":
-                    console.print(f"Skipping duplicate id {conv['id']}")
-                    continue
-                elif conflict_resolution == "overwrite-old":
-                    # keep the one with the newest update_time or if that doesn't exist, the newest create_time
-                    latest_time_lib = max(conv.get("update_time", 0), conv.get("create_time", 0))
-                    latest_time_union = max(union_conv.get("update_time", 0), union_conv.get("create_time", 0))
-                    if latest_time_lib > latest_time_union:
-                        union_lib[conv["id"]] = conv
-                        console.print(f"Overwriting with newer id {conv['id']}")
-                    else:
-                        console.print(f"Keeping existing id {conv['id']}")
-                elif conflict_resolution == "error":
-                    raise ValueError(f"Duplicate id {conv['id']} found in libraries")
-            else:
-                union_lib.append(conv)
-
-    save_conversations(output_dir, union_lib)
-
-def pretty_print_conversation(conv, terminal_node=None):
-    # Basic metadata
-    title = conv.get("title", "Untitled Conversation")
-    created = conv.get("create_time")
-    updated = conv.get("update_time")
-    model = conv.get("default_model_slug")
-    safe_urls = conv.get("safe_urls", [])
-
-    if created is not None:
-        created = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created))
-    if updated is not None:
-        updated = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated))
-
-    # Create a table for overall conversation metadata
-    table = Table(title=f"[bold green]{title}[/bold green]")
-    table.add_column("Created", justify="right")
-    table.add_column("Updated", justify="right")
-    table.add_column("Model", justify="right")
-    table.add_column("Safe URLs", justify="right")
-
-    # Build a clickable list of safe URLs
-    clickable_safe_urls = "\n".join(f"[bold blue][link={url}]{url}[/link][/bold blue]" for url in safe_urls)
-    table.add_row(
-        created or "N/A",
-        updated or "N/A",
-        f"[purple]{model}[/purple]" if model else "N/A",
-        clickable_safe_urls if safe_urls else "N/A",
-    )
-    console.print(table)
-
-    try:
-        # Retrieve conversation mapping and pick the terminal node for the conversation path
-        if terminal_node is None:
-            terminal_node = conv.get("current_node")
-
-        t = AlgoTree.FlatForest(conv.get("mapping", {}))
-        n = t.node(terminal_node)
-        ancestors = reversed(AlgoTree.ancestors(n))
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        return
-
-    # Print out conversation messages
-    for ancestor in ancestors:
-
-        try:
-            msg = ancestor.payload.get("message")
-            if not msg:
-                continue
-
-            content = msg.get("content")
-            if not content:
-                continue
-
-            content_type = content.get("content_type")
-            if content_type != "text":
-                continue
-
-            author = msg.get("author", {})
-            role = author.get("role")
-            name = author.get("name")
-            created_time = msg.get("create_time")
-
-            subtitle = ""
-            if created_time is not None:
-                created_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created_time))
-                subtitle = f"Created: {created_str}"
-            if name is not None:
-                subtitle = f"{name}, {subtitle}"
-            
-            message_table = Table(
-                title=f"[bold purple]{role}[/bold purple] :: [dim]{subtitle}[/dim]",
-                title_justify="center",
-                show_header=False,
-                show_lines=True,
-                show_edge=True,
-                highlight=True
-            )
-
-            parts = content.get("parts", [])
-            combined_text = "".join(parts)
-            message_table.add_row(Markdown(combined_text))
-            console.print(message_table)
-            console.print()
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            continue
-
-
-
 
 
 ################################################################################
@@ -315,24 +68,30 @@ def main():
     regex_parser.add_argument("--json", action="store_true", help="Output as JSON. Default: False")
 
     # Subcommand: conversation-tree
-    tree_parser = subparsers.add_parser("tree-stats", help="Compute conversation tree statistics")
+    tree_parser = subparsers.add_parser("conv-stats", help="Compute conversation tree statistics")
     tree_parser.add_argument("libdir", help="Path to the conversation library directory")
-    tree_parser.add_argument("indices", nargs="+", default=None, type=int, help="Indices of conversation trees. Default: all")
+    tree_parser.add_argument("index", type=int, help="Index of conversation tree")
     tree_parser.add_argument("--json", action="store_true", help="Output as JSON. Default: False")
+    tree_parser.add_argument("--no-payload", action="store_true", help="Do not show payload in the output. Default: False")
 
     # Subcommand: show-conversation-tree
-    show_tree_parser = subparsers.add_parser("conversation-tree", help="Conversation tree visualization")
+    show_tree_parser = subparsers.add_parser("tree", help="Conversation tree visualization")
     show_tree_parser.add_argument("libdir", help="Path to the conversation library directory")
     show_tree_parser.add_argument("index", type=int, help="Index of conversation tree to visualize")
-    show_tree_parser.add_argument("--label-field", type=str, default="name", help="When showing the tree, use this field as the node name")
-    # TODO AlgoTree to output image files
+    show_tree_parser.add_argument("--label-fields", nargs="+", 
+                                  type=str, default=['id', 'message.content.parts'], help="When showing the tree, use this field as the node's label")
+    show_tree_parser.add_argument("--truncate", type=int, default=8, help="Truncate each field to this length. Default: 8")
 
     # Subcommand: conversation
-    linear_conv = subparsers.add_parser("conversation", help="Print conversation based on a particular node id. Defaults to using `current_node` for the corresponding conversation tree.")
-    linear_conv.add_argument("libdir", help="Path to the conversation library directory")
-    linear_conv.add_argument("indices", nargs="+", type=int, help="Indices of conversations to print")
-    linear_conv.add_argument("--node", default=None, help="Node id that indicates the terminal node of a conversation path")
-    linear_conv.add_argument("--json", action="store_true", help="Output as JSON")
+    conv_parser = subparsers.add_parser("conv", help="Print conversation based on a particular node id. Defaults to using `current_node` for the corresponding conversation tree.")
+    conv_parser.add_argument("libdir", help="Path to the conversation library directory")
+    conv_parser.add_argument("indices", nargs="+", type=int, help="Indices of conversations to print")
+    conv_parser.add_argument("--node", default=None, help="Node id that indicates the terminal node of a conversation path")
+    conv_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    conv_parser.add_argument("--msg-limit", type=int, default=1000, help="Limit the number of messages to display. Default: 1000")
+    conv_parser.add_argument("--msg-roles", type=str, nargs="+", default=["user", "assistant"], help="Roles to include in message output")
+    conv_parser.add_argument("--msg-start-index", type=int, default=0, help="Start index for messages to display. Default: 0")
+    conv_parser.add_argument("--msg-end-index", type=int, default=-1, help="End index for messages to display. Default: -1 (end of list). Use negative values to count from the end.")
 
     # Subcommand: remove
     remove_parser = subparsers.add_parser("remove", help="Remove a conversation from the ctk lib")
@@ -343,7 +102,7 @@ def main():
     share_parser = subparsers.add_parser("export", help="Export a conversation from the ctk lib")
     share_parser.add_argument("libdir", help="Path to the conversation library directory")
     share_parser.add_argument("indices", type=int, nargs="+", default=None, help="Indices of conversations to export. Default: all")
-    share_parser.add_argument("--format", choices=["json", "markdown", "hugo"], default="json", help="Output format")
+    share_parser.add_argument("--format", choices=["json", "markdown", "hugo", "zip"], default="json", help="Output format")
 
     # Subcommand: list
     list_parser = subparsers.add_parser("list", help="List all conversations in the ctk lib")
@@ -373,6 +132,21 @@ def main():
     llm_parser.add_argument('query', type=str, help='Query string')
     llm_parser.add_argument('--json', action='store_true', help='Output in JSON format')
 
+    # Subcommand: viz
+    viz_parser = subparsers.add_parser('viz', help='Visualize the conversation library as a complex network')
+    viz_parser.add_argument('libdir', type=str, help='Directory of the ctk library to visualize')
+    viz_parser.add_argument('output_format', type=str, help='Output format: html, png, json')
+    viz_parser.add_argument('--limit', type=int, default=5000, help='Limit the number of conversations to visualize')
+
+    # Subcommand: purge
+    purge_parser = subparsers.add_parser('purge', help='Purge dead links from the conversation library')
+    purge_parser.add_argument('libdir', type=str, help='Directory of the ctk library to purge')
+
+    # Subcommand: visit
+    visit_parser = subparsers.add_parser('web', help='View a conversation in the OpenAI chat interface')
+    visit_parser.add_argument('libdir', type=str, help='Directory of the ctk library to visit')
+    visit_parser.add_argument('index', type=int, nargs='+', help='Indices of the conversations to view in the browser')
+
     args = parser.parse_args()
 
     if args.command == "list":
@@ -392,7 +166,7 @@ def main():
         for index in sorted(args.indices, reverse=True):
             del conversations[index]
         save_conversations(args.libdir, conversations)
-        print(f"Removed {len(args.indices)} conversations")
+        logger.debug(f"Removed {len(args.indices)} conversations")
 
     elif args.command == "export":
         print("TODO: Implement export command")
@@ -400,16 +174,14 @@ def main():
     elif args.command == 'llm':
         lib_dir = args.lib_dir
         if not os.path.isdir(lib_dir):
-            #logging.error(f"The specified library directory '{lib_dir}' does not exist or is not a directory.")
+            logging.error(f"The specified library directory '{lib_dir}' does not exist or is not a directory.")
             sys.exit(1)
         conversations = load_conversations(lib_dir)
 
-        from ctk import llm
         while True:
             try:
-                results = llm.query_llm(lib_dir, args.query)
+                results = query_llm(lib_dir, args.query)
                 results = json.loads(results['response'])
-                print(results)
 
                 cmd = results["command"]
                 arglist = results["args"]
@@ -427,57 +199,152 @@ def main():
         # pretty print
         console.print(JSON(json.dumps(result, indent=2)))
 
-    elif args.command == "show-conversation-tree":
-        conversations = load_conversations(args.libdir)
-        for index in args.indices:
-            conv = conversations[index]
-            # print the non-tree metadata fields
-            for key, value in conv.items():
-                if key != "mapping":
-                    print(f"{key}: {value}")
-            tree_map = conv.get("mapping", {})
-            t = AlgoTree.FlatForest(tree_map)
-            console.print(AlgoTree.pretty_tree(t, node_name=lambda n: n['text']))
 
-    elif args.command == "conversation":
+    elif args.command == "conv-stats":
+        conversations = load_conversations(args.libdir)
+        if args.index >= len(conversations):
+            console.debug(f"[red]Error: Index {index} out of range.[/red]")
+        conv = conversations[args.index]
+
+        cur_node_name = conv.get("current_node")
+        
+        tree_map = conv.get("mapping")
+        t = AlgoTree.FlatForest(tree_map)
+        cur_node = t.node(cur_node_name)
+        ancestors = AlgoTree.utils.ancestors(cur_node)
+        cur_conv_ids = [node.name for node in ancestors] + [cur_node_name]
+
+        stats = {}
+        metadata = conv
+        metadata.pop("mapping", None)
+
+        stats['metadata'] = metadata
+        stats["num_paths"] = len(AlgoTree.utils.leaves(t.root))
+        stats["num_nodes"] = AlgoTree.utils.size(t.root)
+        stats["max_path"] = AlgoTree.utils.height(t.root)
+
+        def walk(node):
+            node_dict = {}
+            siblings = AlgoTree.utils.siblings(node)
+            node_dict["num_siblings"] = len(siblings)
+            node_dict["is_leaf"] = AlgoTree.utils.is_leaf(node)
+            node_dict["is_root"] = AlgoTree.utils.is_root(node)
+            node_dict["is_current"] = node.name in cur_conv_ids
+            node_dict["num_children"] = len(node.children)
+            node_dict["depth"] = AlgoTree.utils.depth(node)
+            node_dict["num_descendants"] = AlgoTree.utils.size(node)
+            node_dict["num_ancestors"] = len(AlgoTree.utils.ancestors(node))
+            if not args.no_payload:
+               node_dict['payload'] = node.payload
+            
+            # let id be the enumaration of the nodes
+            id = len(stats)
+            stats[id] = node_dict
+
+            for child in node.children:
+                walk(child)
+
+        walk(t.root)
+        if args.json:
+            console.print(JSON(json.dumps(stats, indent=2)))
+        else:
+            print_json_as_table(stats, table_title=conv['title'])
+
+    elif args.command == "tree":
+        convs = load_conversations(args.libdir)
+        if args.index >= len(convs):
+            console.debug(f"[red]Error: Index {index} out of range.[/red]")
+            sys.exit(1)
+        conv = convs[args.index]
+        tree_map = conv.get("mapping", {})
+        t = AlgoTree.FlatForest(tree_map)
+
+        paths = []
+        for field in args.label_fields:
+            paths.append(field.split('.'))
+
+        def get_label(node):
+            results = []
+            for path in paths:
+                value = path_value(node.payload, path)
+                value = value[:args.truncate]
+                results.append(value)
+
+            label = " ".join(results)
+            return label\
+
+        console.print(AlgoTree.pretty_tree(t, node_name=get_label))
+
+    elif args.command == "purge":
+        print("TODO: Implement purge command. This swill remove any local files that are dead links in the library.")
+
+    elif args.command == "conv":
 
         if args.node is not None and len(args.indices) >1:
             console.print("[red]Error: If you specify a node, you can only print one conversation at a time.[/red]")
             sys.exit(1)
 
-        conversations = load_conversations(args.libdir)
+        convs = load_conversations(args.libdir)
+        json_obj = []
+
+        for idx in args.indices:                
+            if idx >= len(convs):
+                console.debug(f"[red]Error: Index {idx} in indices out of range.[/red]. Skipping.")
+                continue
+
+            if args.json:
+                json_obj.append(convs[idx])
+            else:
+                pretty_print_conversation(
+                    convs[idx],
+                    terminal_node = args.node,
+                    msg_limit = args.msg_limit,
+                    msg_roles = args.msg_roles,
+                    msg_start_index = args.msg_start_index,
+                    msg_end_index = args.msg_end_index)
+
         if args.json:
-            obj = []
-            for index in args.indices:
-                if index >= len(conversations):
-                    continue
-                conv = conversations[index]
-                obj.append(conv)
-            console.print(JSON(json.dumps(obj, indent=2)))
-        else:
-            for index in args.indices:                
-                if index >= len(conversations):
-                    console.debug(f"[red]Error: Index {index} out of range.[/red]")
-                    continue
-                conv = conversations[index]
-                pretty_print_conversation(conv, args.node)
+            console.print(JSON(json.dumps(json_obj, indent=2)))
+
+    elif args.command == "web":
+        convs = load_conversations(args.libdir)
+        
+        import webbrowser
+
+        for idx in args.index:
+            if idx < 0 or idx >= len(convs):
+                console.debug(f"[red]Error: Index {idx} out of range.[/red]. Skipping.")
+                continue
+        
+            conv = convs[idx]
+            link = f"https://chat.openai.com/c/{conv['id']}"
+            webbrowser.open_new_tab(link)
 
     elif args.command == "merge":
         ensure_libdir_structure(args.output)
-        result = load_conversations(args.libdirs[0])
-        for d in args.libdirs:
-            part = load_conversations(d)
-            if args.operation == "union":
-                result = union_data(result, part)
-            elif args.operation == "intersection":
-                result = intersect_data(result, part)
-            elif args.operation == "difference":
-                result = diff_data(result, part)
-            else:
-                raise ValueError(f"Unknown merge operation: {args.operation}")
-        
-        save_conversations(args.output, result)
-        print(f"Merged {len(args.libdirs)} libs into {args.output}")
+        if args.operation == "union":
+            union_libs(args.libdirs, args.output)
+            logger.debug(f"Merged {len(args.libdirs)} libs into {args.output}")
+        elif args.operation == "intersection":
+            intersect_libs(args.libdirs, args.output)
+            logger.debug(f"Merged {len(args.libdirs)} libs into {args.output}")
+        elif args.operation == "difference":
+            diff_libs(args.libdirs, args.output)
+            logger.debug(f"Merged {len(args.libdirs)} libs into {args.output}")
+        logger.debug(f"Merged {len(args.libdirs)} libs into {args.output}")
+
+    elif args.command == "dash":
+        launch_streamlit_dashboard(args.libdir)
+
+    elif args.command == "viz":
+        convs = load_conversations(args.libdir)
+        net = generate_url_graph(convs, args.limit)
+        if args.output_format == 'png':
+            visualize_graph_png(net, 'graph.png')
+        elif args.output_format == 'html':
+            visualize_graph_pyvis(net, 'graph.html')
+        elif args.output_format == 'json':
+            display_graph_stats(net)
 
     else:
         parser.print_help()
