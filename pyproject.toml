@@ -3,9 +3,9 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ctk"                  # The package name as it will appear on PyPI
-version = "0.1.0"
-description = "A CLI tool and library for managing and analyzing chat logs."
+name = "conversation-tk"
+version = "0.4.0"
+description = "A CLI tool and library for managing and analyzing LLM chats."
 readme = "README.md"
 requires-python = ">=3.7"
 
@@ -29,3 +29,4 @@ ctk = "ctk.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ctk*"]
+

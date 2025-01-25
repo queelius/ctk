@@ -17,40 +17,25 @@ def display_dashboard(convs: list):
     """
     Displays the main dashboard with advanced filtering and a compact UI layout using tabs.
     """
-    # Convert metadata list to DataFrame
     df = pd.DataFrame(convs)
-    logger.debug("Converted metadata list to DataFrame.")
-
-    # Sanitize DataFrame
     df = sanitize_dataframe(df)
-    logger.debug("Sanitized DataFrame.")
-
-    # Apply Filters
     filtered_df = create_filters(df)
-    logger.debug("Applied filters to DataFrame.")
 
     # Create Tabs
-    tabs = st.tabs(["📚 Conversations", "📊 Statistics", "Advanced Search", "📖 Table", "📝 Instructions"])
-    
+    tabs = st.tabs(["📚 Conversations", "Advanced Search", "📖 Table", "📝 Instructions"])
 
     with tabs[0]:
-        pass
-        # Display Books
-        #display_conversation_tab(filtered_df, cover_images, ebook_files)
+        display_conversation_tab(filtered_df)
 
     with tabs[1]:
-        # Display Statistics
-        display_statistics_tab(filtered_df)
-
-    with tabs[2]:
         # Display Advanced Search
         display_advanced_search_tab(convs)
 
-    with tabs[3]:
+    with tabs[2]:
         # Display Table
         display_table_view_tab(filtered_df)
 
-    with tabs[4]:
+    with tabs[3]:
         # Display Instructions
         st.header("📝 Instructions")
         st.markdown("""

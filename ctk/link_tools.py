@@ -1,32 +1,46 @@
+from urllib.parse import urlparse
+import logging
+import requests
+from requests.adapters import HTTPAdapter
+from bs4 import BeautifulSoup
 from rich.progress import Progress, SpinnerColumn, BarColumn, TimeElapsedColumn
 import logging
 import networkx as nx
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-import matplotlib.pyplot as plt
-from urllib.parse import urlparse
-from pyvis.network import Network
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from rich.table import Table
-from rich.console import Console
 
-console = Console()
-
-def extract_urls(html_content):
+def extract_urls_from_markdown(content):
     """
-    Extract a lURLs from the HTML content.
+    Extract URLs from Markdown content.
+    :param content: The Markdown content to extract URLs from.
+    :return: A set of URLs extracted from the content.
+    """
+    urls = set()
+    lines = content.split('\n')
+    for line in lines:
+        if line.startswith('http://') or line.startswith('https://'):
+            urls.add(line.strip())
+        elif '](' in line:
+            url = line.split('](')[1].split(')')[0]
+            if url.startswith(('http://', 'https://')):
+                urls.add(url)
+    return urls
+
+def extract_urls_from_html(content):
+    """
+    Extract a URLs from the HTML content.
     :param html_content: The HTML content to extract URLs from.
     :return: A set of URLs extracted from the content.
     """
     try:
-        soup = BeautifulSoup(html_content, 'lxml')
+        soup = BeautifulSoup(content, 'lxml')
     except Exception as e:
         logging.warning(f"lxml parser failed: {e}. Falling back to 'html.parser'.")
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            soup = BeautifulSoup(content, 'html.parser')
         except Exception as e:
             logging.error(f"html.parser also failed: {e}. Skipping this content.")
             return set()
@@ -96,16 +110,16 @@ def is_valid_url(url):
     parsed = urlparse(url)
     return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
 
-def generate_url_graph(conversations, limit, ignore_ssl=False):
+def generate_url_graph(convs, limit, ignore_ssl=False):
     """
     Generate a NetworkX graph based on URL mentions in conversation trees.
     """
     G = nx.DiGraph()
-    total = min(len(conversations), limit)
+    total = min(len(convs), limit)
     logging.debug(f"Generating graph from {total} conversations.")
     
-    # Create a set of all bookmark URLs for quick lookup
-    bookmark_urls = set(b['url'] for b in bookmarks[:total])
+    # Create a set of all URLs for quick lookup
+    urls = set(c['safe_urls'] for c in convs[:total])
     
     session = get_session()  # Assuming get_session is defined elsewhere
     
@@ -120,13 +134,13 @@ def generate_url_graph(conversations, limit, ignore_ssl=False):
         TimeElapsedColumn(),
         transient=True,
     ) as progress:
-        task = progress.add_task("Processing bookmarks...", total=total)
+        task = progress.add_task("Processing conversations...", total=total)
         
         # Use ThreadPoolExecutor for concurrent fetching
         with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_bookmark = {
+            future_to_url = {
                 executor.submit(fetch_html, bookmark['url'], verify_ssl=not ignore_ssl, session=session): bookmark 
-                for bookmark in bookmarks[:total]
+                for url in urls[:total]
             }
             for future in as_completed(future_to_bookmark):
                 bookmark = future_to_bookmark[future]
@@ -155,82 +169,7 @@ def generate_url_graph(conversations, limit, ignore_ssl=False):
         logging.warning(f"Detected {len(self_loops)} self-loop(s). Removing them.")
         G.remove_edges_from(self_loops)
     
-    logging.info(f"Graph generated with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
-    logging.info(f"Successfully processed {success_count} bookmarks.")
-    logging.info(f"Failed to process {failure_count} bookmarks.")
+    # logging.info(f"Graph generated with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges.")
+    # logging.info(f"Successfully processed {success_count} bookmarks.")
+    # logging.info(f"Failed to process {failure_count} bookmarks.")
     return G
-
-def visualize_graph_pyvis(graph, output_file):
-    """Visualize the graph using pyvis and save as an HTML file."""
-    net = Network(height='750px', width='100%', directed=True)
-    net.from_nx(graph)
-    net.show_buttons(filter_=['physics'])
-
-    try:
-        # Use write_html to save the HTML file without attempting to open it
-        net.write_html(output_file)
-        logging.info(f"Interactive graph visualization saved to '{output_file}'.")
-    except Exception as e:
-        logging.error(f"Failed to save interactive graph visualization: {e}")
-
-def visualize_graph_png(graph, output_file):
-    # Fallback to matplotlib if not HTML
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(graph, k=0.05, iterations=30)
-    nx.draw_networkx_nodes(graph, pos, node_size=10, node_color='blue', alpha=0.5)
-    nx.draw_networkx_edges(graph, pos, arrows=False, alpha=0.75)
-    plt.title("Bookmark URL Mention Graph")
-    plt.axis('off')
-    plt.tight_layout()
-    try:
-        plt.savefig(output_file, format='PNG')
-        logging.info(f"Graph visualization saved to '{output_file}'.")
-    except Exception as e:
-        logging.error(f"Failed to save graph visualization: {e}")
-    plt.close()
-
-def display_graph_stats(graph, top_n=5):
-    """Compute and display detailed statistics of the NetworkX graph."""
-    stats = {}
-    stats['Number of Nodes'] = graph.number_of_nodes()
-    stats['Number of Edges'] = graph.number_of_edges()
-    stats['Density'] = nx.density(graph)
-    stats['Average Degree'] = sum(dict(graph.degree()).values()) / graph.number_of_nodes() if graph.number_of_nodes() > 0 else 0
-    stats['Connected Components'] = nx.number_connected_components(graph.to_undirected())
-    stats['Graph Diameter'] = nx.diameter(graph.to_undirected()) if nx.is_connected(graph.to_undirected()) else 'N/A'
-    stats['Clustering Coefficient'] = nx.average_clustering(graph.to_undirected())
-    
-    # Calculate centrality measures
-    try:
-        degree_centrality = nx.degree_centrality(graph)
-        betweenness_centrality = nx.betweenness_centrality(graph)
-        stats['Degree Centrality (avg)'] = sum(degree_centrality.values()) / len(degree_centrality) if degree_centrality else 0
-        stats['Betweenness Centrality (avg)'] = sum(betweenness_centrality.values()) / len(betweenness_centrality) if betweenness_centrality else 0
-    except Exception as e:
-        logging.warning(f"Could not compute centrality measures: {e}")
-        stats['Degree Centrality (avg)'] = 'N/A'
-        stats['Betweenness Centrality (avg)'] = 'N/A'
-    
-    # Identify top N nodes by Degree Centrality
-    try:
-        top_degree = sorted(degree_centrality.items(), key=lambda x: x[1], reverse=True)[:top_n]
-        stats['Top Degree Centrality'] = ', '.join([f"{url} ({centrality:.4f})" for url, centrality in top_degree])
-    except:
-        stats['Top Degree Centrality'] = 'N/A'
-    
-    # Identify top N nodes by Betweenness Centrality
-    try:
-        top_betweenness = sorted(betweenness_centrality.items(), key=lambda x: x[1], reverse=True)[:top_n]
-        stats['Top Betweenness Centrality'] = ', '.join([f"{url} ({centrality:.4f})" for url, centrality in top_betweenness])
-    except:
-        stats['Top Betweenness Centrality'] = 'N/A'
-    
-    # Display the statistics using Rich
-    table = Table(title="Graph Statistics", show_header=True, header_style="bold magenta")
-    table.add_column("Statistic", style="cyan", no_wrap=True)
-    table.add_column("Value", style="green")
-    
-    for key, value in stats.items():
-        table.add_row(key, str(value))
-    
-    console.print(table)

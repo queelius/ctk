@@ -18,10 +18,12 @@ from  .utils import ( load_conversations, save_conversations, pretty_print_conve
                     query_conversations_search, query_conversations_jmespath, path_value,
                     list_conversations, ensure_libdir_structure, print_json_as_table)
 from .merge import union_libs, intersect_libs, diff_libs
-
+from importlib.metadata import version
+import webbrowser
 
 from .llm import query_llm
-from .vis import generate_url_graph, visualize_graph_pyvis, visualize_graph_png, display_graph_stats
+from .vis import generate_url_graph, visualize_graph_pyvis, visualize_graph_png
+from .stats import graph_stats
 import logging
 
 # Set up logging
@@ -58,6 +60,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="ctk: A command-line tool for chat log management and analysis."
     )
+    parser.add_argument("--version", action="version", version=version("conversation-tk"))
+
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
 
     # Subcommand: search
@@ -101,14 +105,14 @@ def main():
     # Subcommand: share
     share_parser = subparsers.add_parser("export", help="Export a conversation from the ctk lib")
     share_parser.add_argument("libdir", help="Path to the conversation library directory")
-    share_parser.add_argument("indices", type=int, nargs="+", default=None, help="Indices of conversations to export. Default: all")
+    share_parser.add_argument("--indices", type=int, nargs="+", default=None, help="Indices of conversations to export. Default: all")
     share_parser.add_argument("--format", choices=["json", "markdown", "hugo", "zip"], default="json", help="Output format")
 
     # Subcommand: list
-    list_parser = subparsers.add_parser("list", help="List all conversations in the ctk lib")
-    list_parser.add_argument("libdir", help="Path to the conversation library directory")
+    list_parser = subparsers.add_parser("list", help="List conversations in the ctk lib")
+    list_parser.add_argument("libdir", help="Path to the ctk library")
     list_parser.add_argument("--indices", nargs="+", default=None, type=int, help="Indices of conversations to list. Default: all")
-    list_parser.add_argument("--fields", nargs="+", default=["title", "update_time"], help="Path fields to include in the output")
+    list_parser.add_argument("--fields", nargs="+", default=["title", "create_time"], help="Path fields to include in the output")
 
     # Subcommand: merge (union, intersection, difference)
     merge_parser = subparsers.add_parser("merge", help="Merge multiple ctk libs into one")
@@ -135,8 +139,15 @@ def main():
     # Subcommand: viz
     viz_parser = subparsers.add_parser('viz', help='Visualize the conversation library as a complex network')
     viz_parser.add_argument('libdir', type=str, help='Directory of the ctk library to visualize')
-    viz_parser.add_argument('output_format', type=str, help='Output format: html, png, json')
+    viz_parser.add_argument('output_format', type=str, help='Output format: html, png')
     viz_parser.add_argument('--limit', type=int, default=5000, help='Limit the number of conversations to visualize')
+
+    # Subcommand: graph-stats
+    graph_stats_parser = subparsers.add_parser('graph-stats', help='Display shared URL statistics about the ctk library')
+    graph_stats_parser.add_argument('libdir', type=str, help='Directory of the ctk library to analyze')
+    graph_stats_parser.add_argument('output_format', type=str, help='Output format: json, table')
+    graph_stats_parser.add_argument('--limit', type=int, default=10000, help='Limit the number of conversations to analyze')
+    graph_stats_parser.add_argument('--top-n', type=int, default=10, help='Number of top nodes to display')
 
     # Subcommand: purge
     purge_parser = subparsers.add_parser('purge', help='Purge dead links from the conversation library')
@@ -146,6 +157,9 @@ def main():
     visit_parser = subparsers.add_parser('web', help='View a conversation in the OpenAI chat interface')
     visit_parser.add_argument('libdir', type=str, help='Directory of the ctk library to visit')
     visit_parser.add_argument('index', type=int, nargs='+', help='Indices of the conversations to view in the browser')
+    
+    # Subcommand: about
+    about_parser = subparsers.add_parser('about', help='Print information about ctk')
 
     args = parser.parse_args()
 
@@ -169,7 +183,26 @@ def main():
         logger.debug(f"Removed {len(args.indices)} conversations")
 
     elif args.command == "export":
-        print("TODO: Implement export command")
+        conversations = load_conversations(args.libdir)
+        if args.indices is None:
+            indices = range(len(conversations))
+        else:
+            indices = args.indices
+        conversations = [conversations[i] for i in indices if i < len(conversations)]
+
+        if args.format == "zip":
+            import zipfile
+            with zipfile.ZipFile("conversations.zip", "w") as zf:
+                # write all conversations to the zip file in a single json file
+                zf.writestr("conversations.json", json.dumps(conversations, indent=2))
+                # now we copy the directory of the libdir, which contains the conversations.json, with the exception of copying the conversations.json file
+                for root, dirs, files in os.walk(args.libdir):
+                    for file in files:
+                        if file == "conversations.json":
+                            continue
+                        # write the file to the zip file in the zip file, replicating the same structure
+                        arcname = os.path.relpath(os.path.join(root, file), start=args.libdir)
+                        zf.write(os.path.join(root, file), arcname=arcname)
 
     elif args.command == 'llm':
         lib_dir = args.lib_dir
@@ -306,11 +339,25 @@ def main():
         if args.json:
             console.print(JSON(json.dumps(json_obj, indent=2)))
 
+    elif args.command == "about":
+        console.print("[bold cyan]ctk[/bold cyan]: A command-line toolkit for working with conversation trees, "
+                    "typically derived from exported LLM interaction data.\n")
+        console.print("[dim]Developed by:[/dim] [bold white]Alex Towell[/bold white]  \n"
+                    "[dim]Contact:[/dim] [link=mailto:lex@metafunctor.com]lex@metafunctor.com[/link]  \n"
+                    "[dim]Source Code:[/dim] [link=https://github.com/queelius/ctk]https://github.com/queelius/ctk[/link]\n")
+        console.print("[bold]Features:[/bold]")
+        console.print("• Parse and analyze LLM conversation trees.")
+        console.print("• Export, transform, and query structured conversation data.")
+        console.print("• Visualize conversation trees and relationships.")
+        console.print("• Query conversation trees using JMESPath.")
+        console.print("• Query conversation trees using an LLM.")
+        console.print("• Launch a Streamlit dashboard for interactive exploration.")
+        console.print("• Lightweight and designed for command-line efficiency.")
+        console.print("\n[bold green]Usage:[/bold green] Run `ctk --help` for available commands.")
+
+
     elif args.command == "web":
         convs = load_conversations(args.libdir)
-        
-        import webbrowser
-
         for idx in args.index:
             if idx < 0 or idx >= len(convs):
                 console.debug(f"[red]Error: Index {idx} out of range.[/red]. Skipping.")
@@ -343,8 +390,21 @@ def main():
             visualize_graph_png(net, 'graph.png')
         elif args.output_format == 'html':
             visualize_graph_pyvis(net, 'graph.html')
-        elif args.output_format == 'json':
-            display_graph_stats(net)
+        else:
+            print("Invalid output format. Please choose 'png' or 'html'.")
+            sys.exit(1)
+
+    elif args.command == "graph-stats":
+        convs = load_conversations(args.libdir)
+        net = generate_url_graph(convs, args.limit)
+        stats = graph_stats(net, args.top_n)
+        if args.output_format == 'json':
+            console.print(JSON(json.dumps(stats, indent=2)))
+        elif args.output_format == 'table':
+            print_json_as_table(stats)
+        else:
+            print("Invalid output format. Please choose 'json' or 'table'.")
+            sys.exit(1)
 
     else:
         parser.print_help()

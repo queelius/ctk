@@ -1,4 +1,3 @@
-```markdown
 # `ctk`: Conversation Tree Toolkit
 
 **`ctk`** (Conversation Tree Toolkit) is a powerful command-line tool designed to manage, analyze, and engage with conversation logs exported from OpenAI's platforms (e.g., ChatGPT). Whether you're looking to filter conversations, perform advanced queries, merge multiple conversation libraries, or leverage Large Language Models (LLMs) for deeper insights, `ctk` provides a comprehensive suite of tools to streamline your workflow.
