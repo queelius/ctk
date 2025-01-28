@@ -3,6 +3,7 @@ from rich.console import Console
 
 console = Console()
 
+
 def union_libs(libdirs, output_dir, conflict_resolution="skip"):
     """
     @brief Take the union of multiple conversation libraries.
@@ -25,19 +26,24 @@ def union_libs(libdirs, output_dir, conflict_resolution="skip"):
                     continue
                 elif conflict_resolution == "overwrite-old":
                     # keep the one with the newest update_time or if that doesn't exist, the newest create_time
-                    latest_time_lib = max(conv.get("update_time", 0), conv.get("create_time", 0))
-                    latest_time_union = max(union_conv.get("update_time", 0), union_conv.get("create_time", 0))
+                    latest_time_lib = max(
+                        conv.get("update_time", 0), conv.get("create_time", 0))
+                    latest_time_union = max(union_conv.get(
+                        "update_time", 0), union_conv.get("create_time", 0))
                     if latest_time_lib > latest_time_union:
                         union_lib[conv["id"]] = conv
-                        console.print(f"Overwriting with newer id {conv['id']}")
+                        console.print(
+                            f"Overwriting with newer id {conv['id']}")
                     else:
                         console.print(f"Keeping existing id {conv['id']}")
                 elif conflict_resolution == "error":
-                    raise ValueError(f"Duplicate id {conv['id']} found in libraries")
+                    raise ValueError(
+                        f"Duplicate id {conv['id']} found in libraries")
             else:
                 union_lib.append(conv)
 
     save_conversations(output_dir, union_lib)
+
 
 def intersect_libs(libdirs, output_dir, conflict_resolution="skip"):
     """
@@ -60,19 +66,24 @@ def intersect_libs(libdirs, output_dir, conflict_resolution="skip"):
                     continue
                 elif conflict_resolution == "overwrite-old":
                     # keep the one with the newest update_time or if that doesn't exist, the newest create_time
-                    latest_time_lib = max(conv.get("update_time", 0), conv.get("create_time", 0))
-                    latest_time_union = max(union_conv.get("update_time", 0), union_conv.get("create_time", 0))
+                    latest_time_lib = max(
+                        conv.get("update_time", 0), conv.get("create_time", 0))
+                    latest_time_union = max(union_conv.get(
+                        "update_time", 0), union_conv.get("create_time", 0))
                     if latest_time_lib > latest_time_union:
                         intersection_lib[conv["id"]] = conv
-                        console.print(f"Overwriting with newer id {conv['id']}")
+                        console.print(
+                            f"Overwriting with newer id {conv['id']}")
                     else:
                         console.print(f"Keeping existing id {conv['id']}")
                 elif conflict_resolution == "error":
-                    raise ValueError(f"Duplicate id {conv['id']} found in libraries")
+                    raise ValueError(
+                        f"Duplicate id {conv['id']} found in libraries")
             else:
                 intersection_lib.append(conv)
 
     save_conversations(output_dir, intersection_lib)
+
 
 def diff_libs(libdirs, output_dir):
     """

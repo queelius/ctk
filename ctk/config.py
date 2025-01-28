@@ -30,5 +30,5 @@ def load_ctkrc_config():
             "Please make sure your [llm] section in ~/.ctkrc "
             "includes 'endpoint', 'api_key', and 'model' keys."
         )
-    
+
     return endpoint, api_key, model

@@ -6,6 +6,7 @@ from rich.console import Console
 
 console = Console()
 
+
 def chat_llm(lib_dir):
     """
     Instantiates a chatbot at the endpoint in the ctkrc config file.
@@ -25,16 +26,16 @@ def chat_llm(lib_dir):
         "Authorization": f"Bearer {api_key}"
     }
 
-    file_instr_path = os.path.join(os.path.dirname(__file__), "llm-instructions.md")    
+    file_instr_path = os.path.join(
+        os.path.dirname(__file__), "llm-instructions.md")
 
     # Read the markdown file
     with open(file_instr_path, "r") as f:
         template = Template(f.read())
 
-    data = {
+    instructions = template.safe_substitute({
         "libdir": lib_dir
-    }
-    instructions = template.safe_substitute(data)
+    })
 
     while True:
 
@@ -47,12 +48,13 @@ def chat_llm(lib_dir):
         }
 
         try:
-            response = requests.post(endpoint, headers=headers, json=data)
-            response.raise_for_status()
+            resp = requests.post(endpoint, headers=headers, json=data)
+            resp.raise_for_status()
         except requests.RequestException as e:
             raise SystemError(f"Error calling LLM endpoint: {e}")
-        
-        console.print("assistant: ", response.json()["choices"][0]["message"]["content"])
+
+        console.print("assistant: ", resp.json()[
+                      "choices"][0]["message"]["content"])
 
 
 def query_llm(lib_dir, prompt):
@@ -64,36 +66,41 @@ def query_llm(lib_dir, prompt):
     :return: The JSON response from the endpoint.
     """
     endpoint, api_key, model = load_ctkrc_config()
+    print(f"{endpoint}, {api_key}, {model}")
 
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}"
     }
 
-    file_instr_path = os.path.join(os.path.dirname(__file__), "llm-instructions.md")    
+    file_instr_path = os.path.join(
+        os.path.dirname(__file__), "llm-instructions.md")
 
     # Read the markdown file
     with open(file_instr_path, "r") as f:
         template = Template(f.read())
 
-    data = {
+    instructions = template.safe_substitute({
         "libdir": lib_dir
-    }
-
-    instructions = template.safe_substitute(data)
+    })
+    print(instructions)
     prompt = instructions + "\n\nQuestion: " + prompt
 
     data = {
         "model": model,
         "prompt": prompt,
-        "stream": False,
-        "format": "json"
+        #"stream": False,
+        #"format": "json"
     }
 
     try:
-        response = requests.post(endpoint, headers=headers, json=data)
-        response.raise_for_status()
+        resp = requests.post(endpoint, headers=headers, json=data)
+        print(resp)
+        resp.raise_for_status()
     except requests.RequestException as e:
         raise SystemError(f"Error calling LLM endpoint: {e}")
 
-    return response.json()
+    print("test")
+
+
+    return resp.json()

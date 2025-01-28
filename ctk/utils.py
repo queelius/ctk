@@ -11,13 +11,14 @@ from rich.text import Text
 
 console = Console()
 
+
 def path_value(data, path):
 
     for p in path:
         data = data.get(p)
         if data is None:
             break
-    
+
     last = path[-1].lower()
     if last == "create_time":
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(data))
@@ -29,6 +30,7 @@ def path_value(data, path):
         return "N/A"
     else:
         return data
+
 
 def load_conversations(libdir):
     """
@@ -43,6 +45,7 @@ def load_conversations(libdir):
     with open(conv_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_conversations(libdir, conversations):
     """
     @brief Save conversation data to `<libdir>/conversations.json`.
@@ -55,6 +58,7 @@ def save_conversations(libdir, conversations):
             if "id" not in conv:
                 raise ValueError("Conversation missing 'id' field")
 
+
 def ensure_libdir_structure(libdir):
     """
     @brief Ensure that the specified library directory contains expected structure.
@@ -63,6 +67,7 @@ def ensure_libdir_structure(libdir):
     """
     if not os.path.isdir(libdir):
         os.makedirs(libdir)
+
 
 def list_conversations(libdir, path_fields, indices=None, json_output=False):
     """
@@ -95,14 +100,14 @@ def list_conversations(libdir, path_fields, indices=None, json_output=False):
     for i, conv in enumerate(conversations):
         if i not in indices:
             continue
-        #path_values = [jmespath.search(p, conv) for p in path_fields]
-        path_values = [str(jmespath.search(p, conv)) if not isinstance(jmespath.search(p, conv), (int, float)) 
-               else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(jmespath.search(p, conv)))
-               for p in path_fields]
+        # path_values = [jmespath.search(p, conv) for p in path_fields]
+        path_values = [str(jmespath.search(p, conv)) if not isinstance(jmespath.search(p, conv), (int, float))
+                       else time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(jmespath.search(p, conv)))
+                       for p in path_fields]
 
         table.add_row(str(i), *path_values)
     console.print(table)
-        
+
 
 def query_conversations_jmespath(libdir, expression):
     """
@@ -114,6 +119,7 @@ def query_conversations_jmespath(libdir, expression):
     """
     conversations = load_conversations(libdir)
     return jmespath.search(expression, conversations)
+
 
 def query_conversations_search(libdir, expression, fields):
     """
@@ -148,37 +154,39 @@ def query_conversations_search(libdir, expression, fields):
 
     return results
 
+
 def pretty_print_conversation(conv, terminal_node=None, msg_limit=None, msg_roles=['user', 'assistant'], msg_start_index=0, msg_end_index=-1):
     # Basic metadata
     title = conv.get("title", "Untitled")
     created = conv.get("create_time")
-    #updated = conv.get("update_time")
+    # updated = conv.get("update_time")
     model = conv.get("default_model_slug")
     safe_urls = conv.get("safe_urls", [])
     conversation_id = conv.get("id")
     openai_link = f"https://chat.openai.com/c/{conversation_id}"
     safe_urls.append(openai_link)
 
-
-    print(f"args: {msg_limit=}, {msg_roles=}, {msg_start_index=}, {msg_end_index=}")
+    print(
+        f"args: {msg_limit=}, {msg_roles=}, {msg_start_index=}, {msg_end_index=}")
 
     if created is not None:
         created = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(created))
-    #if updated is not None:
+    # if updated is not None:
     #    updated = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(updated))
 
     # Create a table for overall conversation metadata
     table = Table(title=f"[bold green]{title}[/bold green]")
     table.add_column("Created", justify="right")
-    #table.add_column("Updated", justify="right")
+    # table.add_column("Updated", justify="right")
     table.add_column("Model", justify="right")
     table.add_column("Links", justify="right")
 
     # Build a clickable list of safe URLs
-    pretty_safe_urls = "\n".join(f"[bold blue][link={url}]{url}[/link][/bold blue]" for url in safe_urls)
+    pretty_safe_urls = "\n".join(
+        f"[bold blue][link={url}]{url}[/link][/bold blue]" for url in safe_urls)
     table.add_row(
         created or "N/A",
-        #updated or "N/A",
+        # updated or "N/A",
         f"[purple]{model}[/purple]" if model else "N/A",
         pretty_safe_urls if safe_urls else "N/A",
     )
@@ -195,15 +203,20 @@ def pretty_print_conversation(conv, terminal_node=None, msg_limit=None, msg_role
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return
-    msgs = [node.payload.get('message') for node in ancestors] + [n.payload.get('message')]
+    msgs = [node.payload.get('message')
+            for node in ancestors] + [n.payload.get('message')]
     if msg_end_index < 0:
         msg_end_index += len(msgs)
     if msg_start_index < 0:
         msg_start_index += len(msgs)
-    msgs = [msg for i, msg in enumerate(msgs) if i >= msg_start_index and i < msg_end_index and msg is not None]
-    msgs = [msg for msg in msgs if msg.get("author", {}).get("role", "") in msg_roles]
-    msgs = [msg for msg in msgs if msg.get("content", {}).get("content_type") == "text"]
-    msgs = [msg for msg in msgs if "".join(msg.get("content", {}).get("parts", [])).strip() != ""]
+    msgs = [msg for i, msg in enumerate(
+        msgs) if i >= msg_start_index and i < msg_end_index and msg is not None]
+    msgs = [msg for msg in msgs if msg.get(
+        "author", {}).get("role", "") in msg_roles]
+    msgs = [msg for msg in msgs if msg.get(
+        "content", {}).get("content_type") == "text"]
+    msgs = [msg for msg in msgs if "".join(
+        msg.get("content", {}).get("parts", [])).strip() != ""]
     msgs = msgs[:msg_limit]
 
     for i, msg in enumerate(msgs):
@@ -215,7 +228,8 @@ def pretty_print_conversation(conv, terminal_node=None, msg_limit=None, msg_role
 
             subtitle = ""
             if create_time is not None:
-                created_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(create_time))
+                created_str = time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.localtime(create_time))
                 subtitle = f"{subtitle} - Created: {created_str}"
             if name is not None:
                 subtitle = f"{name}, {subtitle}"
@@ -228,7 +242,8 @@ def pretty_print_conversation(conv, terminal_node=None, msg_limit=None, msg_role
                 show_edge=True,
                 highlight=True
             )
-            combined_text = "".join([part for part in msg.get('content', {}).get("parts", [])])
+            combined_text = "".join(
+                [part for part in msg.get('content', {}).get("parts", [])])
             message_table.add_row(Markdown(combined_text))
             console.print(message_table)
             console.print()
@@ -236,6 +251,7 @@ def pretty_print_conversation(conv, terminal_node=None, msg_limit=None, msg_role
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             continue
+
 
 def print_json_as_table(data, table_title=None, indent=0):
     """
@@ -247,13 +263,15 @@ def print_json_as_table(data, table_title=None, indent=0):
         indent: Indentation level for nested tables
     """
     if isinstance(data, dict):
-        table = Table(show_header=True, header_style="bold magenta", show_lines=True)
+        table = Table(show_header=True,
+                      header_style="bold magenta", show_lines=True)
         table.add_column("Field", style="dim", no_wrap=True)
         table.add_column("Value")
-        
+
         if table_title:
-            console.print(Text(table_title, style="bold underline"), end="\n\n")
-        
+            console.print(
+                Text(table_title, style="bold underline"), end="\n\n")
+
         for key, value in data.items():
             if isinstance(value, dict):
                 # Create an inner table for the nested dictionary
@@ -261,17 +279,20 @@ def print_json_as_table(data, table_title=None, indent=0):
                 table.add_row(str(key), nested_table)
             elif isinstance(value, list):
                 # Handle lists by creating a bullet list or another suitable representation
-                list_text = "\n".join(f"- {item}" if not isinstance(item, dict) else f"- {create_nested_table(item, key='')}" for item in value)
+                list_text = "\n".join(f"- {item}" if not isinstance(
+                    item, dict) else f"- {create_nested_table(item, key='')}" for item in value)
                 table.add_row(str(key), list_text)
             else:
                 table.add_row(str(key), str(value))
-        
+
         console.print(table)
     elif isinstance(data, list):
         for index, item in enumerate(data, start=1):
-            print_json_as_table(item, table_title=f"Item {index}", indent=indent)
+            print_json_as_table(
+                item, table_title=f"Item {index}", indent=indent)
     else:
         console.print(data)
+
 
 def create_nested_table(data, title=""):
     """
@@ -286,20 +307,34 @@ def create_nested_table(data, title=""):
     """
     if not isinstance(data, dict):
         return str(data)
-    
+
     table = Table(show_header=True, header_style="bold green", show_lines=True)
     table.add_column("Field", style="dim", no_wrap=True)
     table.add_column("Value")
-    
+
     for key, value in data.items():
         if isinstance(value, dict):
             nested_table = create_nested_table(value, key)
             table.add_row(str(key), nested_table)
         elif isinstance(value, list):
-            list_text = "\n".join(f"- {item}" if not isinstance(item, dict) else f"- {create_nested_table(item, key='')}" for item in value)
+            list_text = "\n".join(f"- {item}" if not isinstance(item, dict)
+                                  else f"- {create_nested_table(item, key='')}" for item in value)
             table.add_row(str(key), list_text)
         else:
             table.add_row(str(key), str(value))
-    
+
     return table
 
+
+def generate_unique_filename(preferred_name):
+    """
+    Generate a unique filename by appending an integer suffix if the file already exists
+    such that `preferred_name_n` is used if `preferred_name`, `preferred_name_2`, ...,
+    `preferred_name_{n-1}` already exist.
+    """
+    base, ext = os.path.splitext(preferred_name)
+    n = 1
+    while os.path.exists(preferred_name):
+        preferred_name = f"{base}_{n}{ext}"
+        n += 1
+    return preferred_name
