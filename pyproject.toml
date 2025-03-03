@@ -19,7 +19,7 @@ dependencies = [
 
 # Optional: authors/maintainers
 authors = [
-  { name="Alex Example", email="alex@example.com" }
+  { name="Alex Towell", email="lex@metafunctor.com" }
 ]
 
 # Entry points let you define console commands that map to Python functions.

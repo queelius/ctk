@@ -69,6 +69,8 @@ def ensure_libdir_structure(libdir):
         os.makedirs(libdir)
 
 
+
+
 def list_conversations(libdir, path_fields, indices=None, json_output=False):
     """
     @brief List all conversations found in `<libdir>/conversations.json`.
@@ -107,7 +109,6 @@ def list_conversations(libdir, path_fields, indices=None, json_output=False):
 
         table.add_row(str(i), *path_values)
     console.print(table)
-
 
 def query_conversations_jmespath(libdir, expression):
     """

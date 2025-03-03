@@ -18,6 +18,7 @@ from importlib.metadata import version
 import webbrowser
 import logging
 import zipfile
+import networkx as nx
 
 from .utils import (load_conversations, save_conversations, pretty_print_conversation,
                     query_conversations_search, query_conversations_jmespath, path_value,
@@ -25,8 +26,10 @@ from .utils import (load_conversations, save_conversations, pretty_print_convers
                     generate_unique_filename)
 from .merge import union_libs, intersect_libs, diff_libs
 from .llm import query_llm, chat_llm
-from .vis import generate_url_graph, visualize_graph_pyvis, visualize_graph_png
+#from ..dev.vis import generate_url_graph, visualize_graph_pyvis, visualize_graph_png
+#from ..dev.complex_net import add_nodes, add_url_edges, add_embedding_edges, add_hybrid_edges, output_network
 from .stats import graph_stats
+
 
 
 # Set up logging
@@ -233,6 +236,24 @@ def main():
     # Subcommand: about
     about_parser = subparsers.add_parser(
         'about', help='Print information about ctk')
+    
+    # Subcommand: generate-network
+    generate_network_parser = subparsers.add_parser(
+        'generate-network', help='Generate network data from conversations')
+    generate_network_parser.add_argument(
+        'libdir', type=str, help='Directory of the ctk library to analyze')
+    generate_network_parser.add_argument(
+        '--method', choices=['url', 'embedding', 'hybrid'], default='url', help='Method to generate the network')
+    generate_network_parser.add_argument(
+        '--threshold', type=float, default=0.8, help='Similarity threshold for embedding method')
+    generate_network_parser.add_argument(
+        '--output', default='network.json', help='Output file path')
+    generate_network_parser.add_argument(
+        '--format', choices=['json', 'graphml', 'gml'], default='json', help='Output format')
+    generate_network_parser.add_argument(
+        '--embeddings', default='embeddings.json', help='Path to the embeddings file')
+    generate_network_parser.add_argument(
+        '--lambda', type=float, default=0.5, help='Lambda value for hybrid url-embedding method')
 
     args = parser.parse_args()
 
@@ -290,20 +311,18 @@ def main():
 
         while True:
             try:
-                print("Submitting query to LLM: ", args.query)
                 results = query_llm(lib_dir, args.query)
-                print(results)
-                break
-                
-                results = json.loads(results['response'])
-                
-
-                cmd = results["command"]
-                arglist = results["args"]
-                proc = ["ctk"] + [cmd] + arglist
-                console.print(
-                    f"[bold green]Executing:[/bold green] {' '.join(proc)}")
-                subprocess.run(proc, check=True)
+                resp = results["response"]
+                console.print(f"[bold cyan]Response:[/bold cyan]")
+                print(type(resp))
+                console.print(resp)
+                #cmd = results["command"]
+                #arglist = results["args"]
+                #proc = ["ctk"] + [cmd] + arglist
+                #console.print(
+                #    f"[bold green]Executing:[/bold green] {' '.join(proc)}")
+                #subprocess.run(proc, check=True)
+                #console.print(JSON(results))
                 break
             # catch any exceptions and continue
             except Exception as e:
@@ -495,28 +514,58 @@ def main():
     elif args.command == "dash":
         launch_streamlit_dashboard(args.libdir)
 
-    elif args.command == "viz":
-        convs = load_conversations(args.libdir)
-        net = generate_url_graph(convs, args.limit)
-        if args.output_format == 'png':
-            visualize_graph_png(net, 'graph.png')
-        elif args.output_format == 'html':
-            visualize_graph_pyvis(net, 'graph.html')
-        else:
-            print("Invalid output format. Please choose 'png' or 'html'.")
-            sys.exit(1)
+    # elif args.command == "viz":
+    #     convs = load_conversations(args.libdir)
+    #     net = generate_url_graph(convs, args.limit)
+    #     if args.output_format == 'png':
+    #         visualize_graph_png(net, 'graph.png')
+    #     elif args.output_format == 'html':
+    #         visualize_graph_pyvis(net, 'graph.html')
+    #     else:
+    #         print("Invalid output format. Please choose 'png' or 'html'.")
+    #         sys.exit(1)
 
-    elif args.command == "graph-stats":
-        convs = load_conversations(args.libdir)
-        net = generate_url_graph(convs, args.limit)
-        stats = graph_stats(net, args.top_n)
-        if args.output_format == 'json':
-            console.print(JSON(json.dumps(stats, indent=2)))
-        elif args.output_format == 'table':
-            print_json_as_table(stats)
-        else:
-            print("Invalid output format. Please choose 'json' or 'table'.")
-            sys.exit(1)
+    # elif args.command == "graph-stats":
+    #     convs = load_conversations(args.libdir)
+    #     net = generate_url_graph(convs, args.limit)
+    #     stats = graph_stats(net, args.top_n)
+    #     if args.output_format == 'json':
+    #         console.print(JSON(json.dumps(stats, indent=2)))
+    #     elif args.output_format == 'table':
+    #         print_json_as_table(stats)
+    #     else:
+    #         print("Invalid output format. Please choose 'json' or 'table'.")
+    #         sys.exit(1)
+
+    # elif args.command == "generate-network":
+
+    #     convs = load_conversations(args.libdir)
+    #     G = nx.Graph()
+    #     add_nodes(G, convs)
+
+    #     if args.method == "url":
+    #         add_url_edges(G, convs, args.threshold)
+    #     elif args.method == "embedding":
+    #         embeddings_path = os.path.join(args.libdir, "embeddings.json")
+
+    #         if not os.path.exists(embeddings_path):
+    #             console.print(
+    #                 "[red]Error: Embeddings not found. Run 'ctk embed' first.[/red]")
+    #             sys.exit(1)
+
+    #         embeddings_data = None
+    #         with open(embeddings_path, "r") as f:
+    #             embeddings_data = json.load(f)
+
+    #         add_embedding_edges(G, convs, embeddings_data, args.threshold)
+    #     elif args.method == "hybrid":
+    #         add_hybrid_edges(G, convs, embeddings, args.threshold, args.lambda)
+    #     else:
+    #         console.print("[red]Invalid method specified.[/red]")
+    #         sys.exit(1)
+
+    #     output_network(G, args.output, args.format)
+
 
     else:
         parser.print_help()

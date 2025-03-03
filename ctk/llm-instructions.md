@@ -251,7 +251,7 @@ This command will display detailed information about the `list` command, includi
 
 ---
 
-## Structure of `{libdir}/conversations.json`
+## Structure of `$libdir/conversations.json`
 
 In the ctk library stored in the directory `$libdir`, we have a number of files, but the main file of interest is `converseations.json`.
 The `converations.json` file contains structured data for ChatGPT chat sessions (conversation trees).
