@@ -1,0 +1,43 @@
+{
+  "providers": {
+    "ollama": {
+      "base_url": "http://localhost:11434",
+      "default_model": "llama2",
+      "timeout": 30
+    },
+    "openai": {
+      "base_url": "https://api.openai.com",
+      "default_model": "gpt-3.5-turbo",
+      "timeout": 30,
+      "api_key": "your-api-key-here-or-use-env-var"
+    },
+    "anthropic": {
+      "base_url": "https://api.anthropic.com",
+      "default_model": "claude-3-haiku-20240307",
+      "timeout": 30
+    },
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api",
+      "default_model": "meta-llama/llama-3-8b-instruct",
+      "timeout": 30
+    },
+    "local": {
+      "base_url": "http://localhost:8080",
+      "default_model": "local-model",
+      "timeout": 30
+    }
+  },
+  "database": {
+    "default_path": "~/.ctk/conversations.db"
+  },
+  "tagging": {
+    "auto_tag": true,
+    "default_provider": "tfidf",
+    "max_tags": 10,
+    "use_tfidf": true
+  },
+  "export": {
+    "default_format": "jsonl",
+    "sanitize_secrets": false
+  }
+}
