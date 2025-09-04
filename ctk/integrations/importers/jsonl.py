@@ -35,7 +35,7 @@ class JSONLImporter(ImporterPlugin):
                     # Single message per line format
                     if 'role' in first_line and 'content' in first_line:
                         return True
-                except:
+                except (json.JSONDecodeError, TypeError, KeyError):
                     pass
         
         # Also support list of message dicts
@@ -89,7 +89,7 @@ class JSONLImporter(ImporterPlugin):
         """Parse a single JSONL line"""
         try:
             return json.loads(line)
-        except:
+        except (json.JSONDecodeError, TypeError):
             return None
     
     def _extract_messages(self, data: Any) -> List[List[Dict]]:
@@ -271,13 +271,13 @@ class JSONLImporter(ImporterPlugin):
         if isinstance(timestamp, (int, float)):
             try:
                 return datetime.fromtimestamp(timestamp)
-            except:
+            except (ValueError, OSError, OverflowError):
                 return None
         
         if isinstance(timestamp, str):
             try:
                 return datetime.fromisoformat(timestamp)
-            except:
+            except (ValueError, TypeError):
                 return None
         
         return None

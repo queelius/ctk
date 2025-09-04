@@ -147,7 +147,7 @@ Return ONLY valid JSON, nothing else."""
                             if clean_tag and len(clean_tag) > 1:
                                 clean_tags.append(clean_tag)
                     return clean_tags[:15]  # Limit to 15 tags
-        except:
+        except (json.JSONDecodeError, TypeError, KeyError, AttributeError):
             pass
         
         # Fallback: extract comma-separated values
@@ -175,7 +175,7 @@ Return ONLY valid JSON, nothing else."""
                 end = response.rindex('}') + 1
                 json_str = response[start:end]
                 return json.loads(json_str)
-        except:
+        except (json.JSONDecodeError, ValueError, TypeError):
             pass
         
         return {}

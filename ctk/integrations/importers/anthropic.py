@@ -27,7 +27,7 @@ class AnthropicImporter(ImporterPlugin):
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 return False
         
         if isinstance(data, list) and data:
@@ -84,7 +84,7 @@ class AnthropicImporter(ImporterPlugin):
                 if timestamp > 1e10:
                     timestamp = timestamp / 1000
                 return datetime.fromtimestamp(timestamp)
-            except:
+            except (ValueError, OSError, OverflowError):
                 return None
         
         if isinstance(timestamp, str):
@@ -98,7 +98,7 @@ class AnthropicImporter(ImporterPlugin):
             for fmt in formats:
                 try:
                     return datetime.strptime(timestamp, fmt)
-                except:
+                except (ValueError, TypeError):
                     continue
         
         return None
