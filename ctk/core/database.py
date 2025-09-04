@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, select, and_, or_, func, text
 from sqlalchemy.orm import Session, sessionmaker, scoped_session
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
 
 from .db_models import Base, ConversationModel, MessageModel, TagModel, PathModel, RoleEnum, conversation_tags
 from .models import ConversationTree, Message, MessageContent, MessageRole, ConversationMetadata
@@ -67,8 +68,21 @@ class ConversationDB:
         try:
             yield session
             session.commit()
-        except Exception:
+        except IntegrityError as e:
             session.rollback()
+            logger.error(f"Database integrity error: {e}")
+            raise
+        except OperationalError as e:
+            session.rollback()
+            logger.error(f"Database operational error: {e}")
+            raise
+        except SQLAlchemyError as e:
+            session.rollback()
+            logger.error(f"Database error: {e}")
+            raise
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Unexpected error in database transaction: {e}")
             raise
         finally:
             session.close()

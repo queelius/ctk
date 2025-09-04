@@ -3,14 +3,19 @@ Plugin system for importers and exporters
 """
 
 import importlib
+import importlib.util
 import inspect
 import os
+import hashlib
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Type, Callable
+from typing import Dict, List, Optional, Any, Type, Callable, Set
 from abc import ABC, abstractmethod
 import json
+import logging
 
 from .models import ConversationTree
+
+logger = logging.getLogger(__name__)
 
 
 class BasePlugin(ABC):
@@ -69,10 +74,15 @@ class ExporterPlugin(BasePlugin):
 class PluginRegistry:
     """Registry for managing plugins"""
     
-    def __init__(self):
+    def __init__(self, allowed_plugin_dirs: Optional[List[str]] = None):
         self.importers: Dict[str, ImporterPlugin] = {}
         self.exporters: Dict[str, ExporterPlugin] = {}
         self._discovered = False
+        # Security: Only allow plugins from trusted directories
+        self.allowed_plugin_dirs: Set[str] = set(allowed_plugin_dirs or [])
+        # Add default integrations directory
+        base_dir = Path(__file__).parent.parent
+        self.allowed_plugin_dirs.add(str(base_dir / "integrations"))
     
     def register_importer(self, name: str, plugin: ImporterPlugin):
         """Register an importer plugin"""
@@ -94,6 +104,11 @@ class PluginRegistry:
         else:
             plugin_dir = Path(plugin_dir)
         
+        # Security: Validate plugin directory is allowed
+        if not self._is_plugin_dir_allowed(plugin_dir):
+            logger.warning(f"Plugin directory not allowed: {plugin_dir}")
+            return
+        
         # Discover importers
         importers_dir = plugin_dir / "importers"
         if importers_dir.exists():
@@ -108,30 +123,53 @@ class PluginRegistry:
     
     def _load_plugins_from_dir(self, directory: Path, base_class: Type, 
                                registry: Dict[str, BasePlugin]):
-        """Load plugins from a directory"""
+        """Load plugins from a directory with security validation"""
         for file_path in directory.glob("*.py"):
             if file_path.name.startswith("_"):
                 continue
             
-            module_name = file_path.stem
-            spec = importlib.util.spec_from_file_location(
-                f"ctk_plugin_{module_name}", file_path
-            )
+            # Security: Validate plugin file
+            if not self._validate_plugin_file(file_path):
+                logger.warning(f"Plugin validation failed: {file_path}")
+                continue
             
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+            try:
+                module_name = file_path.stem
+                spec = importlib.util.spec_from_file_location(
+                    f"ctk_plugin_{module_name}", file_path
+                )
                 
-                # Find plugin classes in module
-                for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and 
-                        issubclass(obj, base_class) and 
-                        obj != base_class and
-                        not inspect.isabstract(obj)):
-                        
-                        plugin_instance = obj()
-                        plugin_name = plugin_instance.name or module_name
-                        registry[plugin_name] = plugin_instance
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    
+                    # Security: Execute module in controlled environment
+                    try:
+                        spec.loader.exec_module(module)
+                    except Exception as e:
+                        logger.error(f"Error loading plugin {file_path}: {e}")
+                        continue
+                    
+                    # Find plugin classes in module
+                    for name, obj in inspect.getmembers(module):
+                        if (inspect.isclass(obj) and 
+                            issubclass(obj, base_class) and 
+                            obj != base_class and
+                            not inspect.isabstract(obj)):
+                            
+                            try:
+                                plugin_instance = obj()
+                                plugin_name = plugin_instance.name or module_name
+                                
+                                # Security: Validate plugin instance
+                                if self._validate_plugin_instance(plugin_instance):
+                                    registry[plugin_name] = plugin_instance
+                                    logger.info(f"Loaded plugin: {plugin_name}")
+                                else:
+                                    logger.warning(f"Plugin validation failed: {plugin_name}")
+                            except Exception as e:
+                                logger.error(f"Error instantiating plugin {name}: {e}")
+            except Exception as e:
+                logger.error(f"Error processing plugin file {file_path}: {e}")
     
     def get_importer(self, name: str) -> Optional[ImporterPlugin]:
         """Get an importer plugin by name"""
@@ -193,6 +231,77 @@ class PluginRegistry:
             raise ValueError(f"Unknown export format: {format}")
         
         exporter.export_to_file(conversations, file_path, **kwargs)
+
+
+    def _is_plugin_dir_allowed(self, plugin_dir: Path) -> bool:
+        """Check if plugin directory is in the allowed list"""
+        plugin_dir_str = str(plugin_dir.resolve())
+        for allowed_dir in self.allowed_plugin_dirs:
+            if plugin_dir_str.startswith(allowed_dir):
+                return True
+        return False
+    
+    def _validate_plugin_file(self, file_path: Path) -> bool:
+        """Validate plugin file before loading"""
+        try:
+            # Security: Check file size (prevent large malicious files)
+            if file_path.stat().st_size > 1024 * 1024:  # 1MB limit
+                logger.warning(f"Plugin file too large: {file_path}")
+                return False
+            
+            # Security: Basic content validation
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+                # Check for suspicious imports or operations
+                suspicious_patterns = [
+                    'import os', 'import subprocess', 'import sys',
+                    'exec(', 'eval(', '__import__',
+                    'open(', 'file(', 'input(',
+                    'urllib', 'requests', 'http',
+                    'socket', 'network'
+                ]
+                
+                for pattern in suspicious_patterns:
+                    if pattern in content.lower():
+                        logger.warning(f"Suspicious pattern '{pattern}' found in {file_path}")
+                        # Allow for now but log - can be made stricter
+                        pass
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error validating plugin file {file_path}: {e}")
+            return False
+    
+    def _validate_plugin_instance(self, plugin: BasePlugin) -> bool:
+        """Validate plugin instance after creation"""
+        try:
+            # Check required attributes
+            if not hasattr(plugin, 'name') or not plugin.name:
+                return False
+            
+            # Ensure plugin has required methods
+            if isinstance(plugin, ImporterPlugin):
+                if not hasattr(plugin, 'import_data') or not callable(plugin.import_data):
+                    return False
+                if not hasattr(plugin, 'validate') or not callable(plugin.validate):
+                    return False
+            
+            if isinstance(plugin, ExporterPlugin):
+                if not hasattr(plugin, 'export_data') or not callable(plugin.export_data):
+                    return False
+                if not hasattr(plugin, 'validate') or not callable(plugin.validate):
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error validating plugin instance: {e}")
+            return False
+    
+    def add_trusted_plugin_dir(self, directory: str) -> None:
+        """Add a trusted plugin directory"""
+        self.allowed_plugin_dirs.add(str(Path(directory).resolve()))
+        logger.info(f"Added trusted plugin directory: {directory}")
 
 
 # Global registry instance

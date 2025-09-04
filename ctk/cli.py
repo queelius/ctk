@@ -336,5 +336,53 @@ def main():
     return commands[args.command](args)
 
 
+def _setup_import_parser(subparsers):
+    """Setup the import command parser"""
+    import_parser = subparsers.add_parser('import', help='Import conversations')
+    import_parser.add_argument('input', help='Input file path')
+    import_parser.add_argument('--format', '-f', help='Input format (auto-detect if not specified)')
+    import_parser.add_argument('--db', '-d', help='Database path to save to')
+    import_parser.add_argument('--output', '-o', help='Output file path (for conversion)')
+    import_parser.add_argument('--output-format', help='Output format for conversion')
+    import_parser.add_argument('--tags', '-t', help='Comma-separated tags to add')
+    import_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
+    import_parser.add_argument('--path-selection', default='longest', 
+                               choices=['longest', 'first', 'last'],
+                               help='Path selection strategy for tree conversations')
+    return import_parser
+
+
+def _setup_export_parser(subparsers):
+    """Setup the export command parser"""
+    export_parser = subparsers.add_parser('export', help='Export conversations')
+    export_parser.add_argument('output', help='Output file path')
+    export_parser.add_argument('--db', '-d', required=True, help='Database path')
+    export_parser.add_argument('--format', '-f', default='jsonl', help='Export format')
+    export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
+    export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations')
+    export_parser.add_argument('--filter-source', help='Filter by source')
+    export_parser.add_argument('--filter-model', help='Filter by model')
+    export_parser.add_argument('--filter-tag', help='Filter by tag')
+    export_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
+    export_parser.add_argument('--path-selection', default='longest',
+                               choices=['longest', 'first', 'last'],
+                               help='Path selection strategy')
+    export_parser.add_argument('--include-metadata', action='store_true', 
+                               help='Include metadata in export')
+    return export_parser
+
+
+def _get_command_handlers():
+    """Get mapping of command names to handler functions"""
+    return {
+        'import': cmd_import,
+        'export': cmd_export,
+        'list': cmd_list,
+        'search': cmd_search,
+        'stats': cmd_stats,
+        'plugins': cmd_plugins,
+    }
+
+
 if __name__ == '__main__':
     sys.exit(main())

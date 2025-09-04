@@ -75,8 +75,14 @@ class Config:
                     user_config = json.load(f)
                 # Merge with defaults (user config takes precedence)
                 return self._deep_merge(self.DEFAULTS.copy(), user_config)
+            except json.JSONDecodeError as e:
+                print(f"Invalid JSON in config file: {e}, using defaults")
+                return self.DEFAULTS.copy()
+            except (IOError, OSError) as e:
+                print(f"Error reading config file: {e}, using defaults")
+                return self.DEFAULTS.copy()
             except Exception as e:
-                print(f"Error loading config: {e}, using defaults")
+                print(f"Unexpected error loading config: {e}, using defaults")
                 return self.DEFAULTS.copy()
         else:
             # Create default config file

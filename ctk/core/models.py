@@ -354,29 +354,35 @@ class ConversationTree:
     
     def get_all_paths(self) -> List[List[Message]]:
         """Get all possible conversation paths from root to leaf"""
-        paths = []
+        all_paths = []
         
-        def traverse(message_id: str, current_path: List[Message]):
-            message = self.message_map.get(message_id)
-            if not message:
-                return
-            
-            current_path = current_path + [message]
-            children = self.get_children(message_id)
-            
-            if not children:
-                # Leaf node - add path
-                paths.append(current_path)
-            else:
-                # Continue traversing
-                for child in children:
-                    traverse(child.id, current_path)
-        
-        # Start from each root
         for root_id in self.root_message_ids:
-            traverse(root_id, [])
+            paths_from_root = self._get_paths_from_message(root_id)
+            all_paths.extend(paths_from_root)
         
-        return paths
+        return all_paths
+    
+    def _get_paths_from_message(self, message_id: str) -> List[List[Message]]:
+        """Get all paths starting from a specific message"""
+        message = self.message_map.get(message_id)
+        if not message:
+            return []
+        
+        children = self.get_children(message_id)
+        
+        if not children:
+            # Leaf node - return single path with just this message
+            return [[message]]
+        
+        # Get paths from all children and prepend this message
+        all_paths = []
+        for child in children:
+            child_paths = self._get_paths_from_message(child.id)
+            for child_path in child_paths:
+                complete_path = [message] + child_path
+                all_paths.append(complete_path)
+        
+        return all_paths
     
     def get_longest_path(self) -> List[Message]:
         """Get the longest conversation path (most messages)"""
