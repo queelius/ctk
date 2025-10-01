@@ -29,16 +29,29 @@ class AnthropicImporter(ImporterPlugin):
                 data = json.loads(data)
             except (json.JSONDecodeError, TypeError, ValueError):
                 return False
-        
+
         if isinstance(data, list) and data:
             sample = data[0]
         elif isinstance(data, dict):
             sample = data
         else:
             return False
-        
+
         # Check for Anthropic format markers
-        return ('uuid' in sample or 'messages' in sample) and 'sender' in str(sample)
+        # Look for uuid and either messages or chat_messages
+        has_uuid = 'uuid' in sample
+        has_messages = 'messages' in sample or 'chat_messages' in sample
+
+        # Also check in the content of messages if available
+        has_sender = False
+        if 'chat_messages' in sample and sample['chat_messages']:
+            has_sender = any('sender' in msg for msg in sample['chat_messages'])
+        elif 'messages' in sample and sample['messages']:
+            has_sender = any('sender' in msg for msg in sample['messages'])
+        else:
+            has_sender = 'sender' in str(sample)
+
+        return has_uuid and (has_messages or has_sender)
     
     def _detect_model(self, conv_data: Dict) -> str:
         """Detect the Claude model used"""
@@ -129,10 +142,11 @@ class AnthropicImporter(ImporterPlugin):
                 model=model,
                 created_at=self._parse_timestamp(conv_data.get('created_at')) or datetime.now(),
                 updated_at=self._parse_timestamp(conv_data.get('updated_at')) or datetime.now(),
-                tags=['anthropic', 'claude', model.lower().replace(' ', '-')],
+                tags=['anthropic', 'claude'] + ([model.lower().replace(' ', '-')] if model.lower() != 'claude' else []),
                 custom_data={
                     'project_uuid': conv_data.get('project_uuid'),
-                    'account_uuid': conv_data.get('account_uuid'),
+                    'account_uuid': conv_data.get('account', {}).get('uuid') if isinstance(conv_data.get('account'), dict) else conv_data.get('account_uuid'),
+                    'summary': conv_data.get('summary'),
                 }
             )
             
@@ -143,8 +157,8 @@ class AnthropicImporter(ImporterPlugin):
                 metadata=metadata
             )
             
-            # Process messages
-            messages = conv_data.get('messages', [])
+            # Process messages - handle both 'messages' and 'chat_messages' fields
+            messages = conv_data.get('messages', conv_data.get('chat_messages', []))
             parent_id = None
             
             for idx, msg_data in enumerate(messages):

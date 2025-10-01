@@ -41,7 +41,7 @@ def temp_db():
         if os.path.exists(db_path):
             os.unlink(db_path)
 
-@pytest.fixture(scope="session") 
+@pytest.fixture(scope="session")
 def sample_jsonl_file():
     """Create sample JSONL file for import testing"""
     with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
@@ -58,11 +58,16 @@ def sample_jsonl_file():
         for item in sample_data:
             json.dump(item, f)
             f.write('\n')
-        
-        yield f.name
-    
-    if os.path.exists(f.name):
-        os.unlink(f.name)
+
+        # Store the filename before closing
+        temp_filename = f.name
+
+    # File is now closed and flushed
+    yield temp_filename
+
+    # Cleanup
+    if os.path.exists(temp_filename):
+        os.unlink(temp_filename)
 
 
 class TestCLIIntegration:
@@ -79,12 +84,11 @@ class TestCLIIntegration:
 
     def test_cli_no_command(self):
         """Test CLI with no command shows help"""
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', ['ctk']):
-                main()
-        
-        # Should exit with code 1 (error)
-        assert exc_info.value.code == 1
+        with patch('sys.argv', ['ctk']):
+            result = main()
+
+        # Should return 1 (error)
+        assert result == 1
 
     def test_import_command(self, sample_jsonl_file, temp_db):
         """Test import command functionality"""
@@ -352,7 +356,7 @@ class TestCLIErrorHandling:
         assert result != 0
 
 
-@pytest.mark.integration 
+@pytest.mark.integration
 class TestCLIWorkflows:
     """Test complete CLI workflows"""
     

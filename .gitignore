@@ -66,6 +66,11 @@ sample_export.*
 test_export.*
 *.jsonl
 
+# Development and test files
+/dev/
+export/
+htmlcov/
+
 # Logs
 *.log
 logs/

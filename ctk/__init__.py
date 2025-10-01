@@ -18,7 +18,22 @@ from .core.models import (
 from .core.database import ConversationDB
 from .core.plugin import PluginRegistry
 
+# Fluent API
+from .api import (
+    CTK,
+    ConversationBuilder,
+    ConversationLoader,
+    ExportBuilder,
+    ImportBuilder,
+    SearchBuilder,
+    QueryBuilder,
+    conversation,
+    load,
+    from_db,
+)
+
 __all__ = [
+    # Core models
     'Message',
     'MessageRole',
     'MessageContent',
@@ -29,4 +44,15 @@ __all__ = [
     'ContentType',
     'ConversationDB',
     'PluginRegistry',
+    # Fluent API
+    'CTK',
+    'ConversationBuilder',
+    'ConversationLoader',
+    'ExportBuilder',
+    'ImportBuilder',
+    'SearchBuilder',
+    'QueryBuilder',
+    'conversation',
+    'load',
+    'from_db',
 ]

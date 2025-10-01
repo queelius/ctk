@@ -53,10 +53,16 @@ class FilesystemCodingImporter(ImporterPlugin):
     def validate(self, data: Any) -> bool:
         """Check if data is a filesystem path with coding agent data"""
         if isinstance(data, str):
-            path = Path(data).expanduser()
-            if path.exists() and path.is_dir():
-                # Check for known patterns
-                return self._detect_agent_type(path) is not None
+            # Only check path if string is reasonable length for a path
+            if len(data) < 4096:  # Max path length on most systems
+                try:
+                    path = Path(data).expanduser()
+                    if path.exists() and path.is_dir():
+                        # Check for known patterns
+                        return self._detect_agent_type(path) is not None
+                except (OSError, ValueError):
+                    # Path is invalid or too long
+                    pass
         return False
     
     def _detect_agent_type(self, path: Path) -> Optional[str]:

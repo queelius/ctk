@@ -92,32 +92,54 @@ class JSONLImporter(ImporterPlugin):
         except (json.JSONDecodeError, TypeError):
             return None
     
-    def _extract_messages(self, data: Any) -> List[List[Dict]]:
-        """Extract messages from various JSONL formats"""
+    def _extract_messages(self, data: Any) -> List[tuple]:
+        """Extract messages from various JSONL formats
+
+        Returns:
+            List of tuples (messages_list, metadata_dict)
+        """
         conversations = []
-        
+
         if isinstance(data, str):
             lines = data.strip().split('\n')
             current_conv = []
-            
+            current_metadata = {}
+
             for line in lines:
                 if not line.strip():
                     if current_conv:
-                        conversations.append(current_conv)
+                        conversations.append((current_conv, current_metadata))
                         current_conv = []
+                        current_metadata = {}
                     continue
-                
+
                 obj = self._parse_jsonl_line(line)
                 if not obj:
                     continue
-                
+
+                # Check for conversation break marker
+                if obj.get('conversation_break', False):
+                    if current_conv:
+                        conversations.append((current_conv, current_metadata))
+                        current_conv = []
+                        current_metadata = {}
+                    continue
+
+                # Check for metadata line
+                if 'metadata' in obj and len(obj) == 1:
+                    # Pure metadata line
+                    current_metadata.update(obj['metadata'])
+                    continue
+
                 # Handle different formats
                 if 'messages' in obj:
                     # Full conversation in one line
-                    conversations.append(obj['messages'])
+                    metadata = {k: v for k, v in obj.items() if k != 'messages'}
+                    conversations.append((obj['messages'], metadata))
                 elif 'conversations' in obj:
                     # Alternative naming
-                    conversations.append(obj['conversations'])
+                    metadata = {k: v for k, v in obj.items() if k != 'conversations'}
+                    conversations.append((obj['conversations'], metadata))
                 elif 'role' in obj and 'content' in obj:
                     # Single message per line
                     current_conv.append(obj)
@@ -128,16 +150,19 @@ class JSONLImporter(ImporterPlugin):
                         conv.append({'role': 'system', 'content': obj['system']})
                     conv.append({'role': 'user', 'content': obj['instruction']})
                     conv.append({'role': 'assistant', 'content': obj['response']})
-                    conversations.append(conv)
+                    metadata = {k: v for k, v in obj.items() if k not in ['system', 'instruction', 'response']}
+                    conversations.append((conv, metadata))
                 elif 'prompt' in obj and 'completion' in obj:
                     # Completion format
-                    conversations.append([
+                    conv = [
                         {'role': 'user', 'content': obj['prompt']},
                         {'role': 'assistant', 'content': obj['completion']}
-                    ])
-            
+                    ]
+                    metadata = {k: v for k, v in obj.items() if k not in ['prompt', 'completion']}
+                    conversations.append((conv, metadata))
+
             if current_conv:
-                conversations.append(current_conv)
+                conversations.append((current_conv, current_metadata))
         
         elif isinstance(data, list):
             # Already a list, check format
@@ -146,49 +171,55 @@ class JSONLImporter(ImporterPlugin):
                     # List of conversation objects
                     for item in data:
                         if 'messages' in item:
-                            conversations.append(item['messages'])
+                            metadata = {k: v for k, v in item.items() if k != 'messages'}
+                            conversations.append((item['messages'], metadata))
                 elif 'role' in data[0]:
                     # Single conversation as list of messages
-                    conversations.append(data)
-        
+                    conversations.append((data, {}))
+
         return conversations
     
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         """Import JSONL conversation data"""
         conversations_data = self._extract_messages(data)
         model = self._detect_model(data)
-        
+
         conversations = []
-        
-        for idx, messages_data in enumerate(conversations_data):
+
+        for idx, (messages_data, conv_metadata) in enumerate(conversations_data):
             if not messages_data:
                 continue
-            
+
             # Create conversation ID and title
             conv_id = f"jsonl_{idx}_{uuid.uuid4().hex[:8]}"
-            
-            # Try to generate a title from the first user message
-            title = "Untitled Conversation"
-            for msg in messages_data:
-                if msg.get('role') in ['user', 'human']:
-                    content = msg.get('content', '')
-                    if content:
-                        # Take first 50 chars as title
-                        title = content[:50] + ('...' if len(content) > 50 else '')
-                        break
-            
+
+            # Try to generate a title from the first user message or metadata
+            title = conv_metadata.get('title', "Untitled Conversation")
+            if title == "Untitled Conversation":
+                for msg in messages_data:
+                    if msg.get('role') in ['user', 'human']:
+                        content = msg.get('content', '')
+                        if content:
+                            # Take first 50 chars as title
+                            title = content[:50] + ('...' if len(content) > 50 else '')
+                            break
+
+            # Use model from metadata if available, otherwise detect
+            conv_model = conv_metadata.get('model', model)
+
             # Create metadata
             metadata = ConversationMetadata(
                 version="2.0.0",
                 format="jsonl",
                 source="Local",
-                model=model,
+                model=conv_model,
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
-                tags=['local', 'jsonl', model.lower().replace(' ', '-')],
-                custom={
+                tags=['local', 'jsonl', conv_model.lower().replace(' ', '-')],
+                custom_data={
                     'import_index': idx,
-                    'message_count': len(messages_data)
+                    'message_count': len(messages_data),
+                    **{k: v for k, v in conv_metadata.items() if k not in ['title', 'model']}
                 }
             )
             
@@ -259,7 +290,7 @@ class JSONLImporter(ImporterPlugin):
                 )
                 
                 # Add to tree
-                tree.add_message(message, parent_id=parent_id)
+                tree.add_message(message)
                 parent_id = msg_id
             
             conversations.append(tree)

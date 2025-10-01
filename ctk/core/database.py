@@ -36,7 +36,10 @@ class ConversationDB:
         
         # Create parent directory if needed
         if isinstance(self.db_path, Path):
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e:
+                raise ValueError(f"Cannot create database directory: {e}") from e
             connection_string = f"sqlite:///{self.db_path}"
             # Use StaticPool for SQLite to avoid connection issues in tests
             self.engine = create_engine(
@@ -128,29 +131,45 @@ class ConversationDB:
             # Handle tags
             self._update_tags(session, conv_model, conversation.metadata.tags)
             
-            # Save messages
+            # Save messages with unique IDs
+            # Create a mapping of old IDs to new IDs
+            id_mapping = {}
             for msg_id, message in conversation.message_map.items():
-                msg_model = MessageModel(
-                    id=message.id,
-                    conversation_id=conversation.id,
-                    role=RoleEnum(message.role.value),
-                    content_json=message.content.to_dict(),
-                    parent_id=message.parent_id,
-                    timestamp=message.timestamp,
-                    metadata_json=message.metadata
-                )
-                session.add(msg_model)
+                # Create unique ID by combining conversation ID and message ID
+                unique_id = f"{conversation.id}_{message.id}"
+                id_mapping[message.id] = unique_id
+
+                # Map parent_id to new unique ID
+                unique_parent_id = None
+                if message.parent_id:
+                    unique_parent_id = f"{conversation.id}_{message.parent_id}"
+
+                # Check if this message already exists
+                existing_msg = session.query(MessageModel).filter_by(id=unique_id).first()
+                if not existing_msg:
+                    msg_model = MessageModel(
+                        id=unique_id,
+                        conversation_id=conversation.id,
+                        role=RoleEnum(message.role.value),
+                        content_json=message.content.to_dict(),
+                        parent_id=unique_parent_id,
+                        timestamp=message.timestamp,
+                        metadata_json=message.metadata
+                    )
+                    session.add(msg_model)
             
-            # Save paths
+            # Save paths with updated message IDs
             paths = conversation.get_all_paths()
             for idx, path in enumerate(paths):
+                # Map message IDs to their unique database IDs
+                unique_message_ids = [f"{conversation.id}_{msg.id}" for msg in path]
                 path_model = PathModel(
                     conversation_id=conversation.id,
                     name=f"path_{idx}",
-                    message_ids_json=[msg.id for msg in path],
+                    message_ids_json=unique_message_ids,
                     is_primary=(idx == 0),  # First path is primary
                     length=len(path),
-                    leaf_message_id=path[-1].id if path else None
+                    leaf_message_id=f"{conversation.id}_{path[-1].id}" if path else None
                 )
                 session.add(path_model)
             
@@ -194,19 +213,35 @@ class ConversationDB:
                 metadata=metadata
             )
             
-            # Load messages
+            # Load messages and strip conversation ID prefix
             messages = session.query(MessageModel).filter_by(
                 conversation_id=conversation_id
             ).all()
-            
+
+            # Create mapping from unique IDs to original IDs
+            id_mapping = {}
+            for msg_model in messages:
+                # Strip conversation ID prefix to get original message ID
+                original_id = msg_model.id
+                if original_id.startswith(f"{conversation_id}_"):
+                    original_id = original_id[len(conversation_id) + 1:]
+                id_mapping[msg_model.id] = original_id
+
             for msg_model in messages:
                 content = MessageContent.from_dict(msg_model.content_json)
+
+                # Get original IDs
+                original_id = id_mapping.get(msg_model.id, msg_model.id)
+                original_parent_id = None
+                if msg_model.parent_id:
+                    original_parent_id = id_mapping.get(msg_model.parent_id, msg_model.parent_id)
+
                 message = Message(
-                    id=msg_model.id,
+                    id=original_id,
                     role=MessageRole.from_string(msg_model.role.value),
                     content=content,
                     timestamp=msg_model.timestamp,
-                    parent_id=msg_model.parent_id,
+                    parent_id=original_parent_id,
                     metadata=msg_model.metadata_json or {}
                 )
                 conversation.add_message(message)
@@ -252,46 +287,161 @@ class ConversationDB:
             
             return [conv.to_dict() for conv in conversations]
     
-    def search_conversations(self, 
-                           query_text: str, 
-                           limit: int = 100) -> List[Dict[str, Any]]:
+    def search_conversations(self,
+                           query_text: str = None,
+                           limit: int = 100,
+                           offset: int = 0,
+                           title_only: bool = False,
+                           content_only: bool = False,
+                           date_from: datetime = None,
+                           date_to: datetime = None,
+                           source: str = None,
+                           model: str = None,
+                           tags: List[str] = None,
+                           min_messages: int = None,
+                           max_messages: int = None,
+                           has_branches: bool = None,
+                           order_by: str = 'updated_at',
+                           ascending: bool = False) -> List[Dict[str, Any]]:
         """
-        Search conversations by text
-        
+        Advanced search with multiple filters
+
         Args:
-            query_text: Search query
+            query_text: Text to search for
             limit: Maximum number of results
-            
+            offset: Number of results to skip
+            title_only: Search only in titles
+            content_only: Search only in message content
+            date_from: Filter by created after date
+            date_to: Filter by created before date
+            source: Filter by source platform
+            model: Filter by model used
+            tags: Filter by tags (any match)
+            min_messages: Minimum number of messages
+            max_messages: Maximum number of messages
+            has_branches: Filter by branching conversations
+            order_by: Field to order by (created_at, updated_at, title, message_count)
+            ascending: Sort order
+
         Returns:
             List of conversation metadata dictionaries
         """
         with self.session_scope() as session:
-            # Search in conversation titles
-            title_query = session.query(ConversationModel).filter(
-                ConversationModel.title.ilike(f"%{query_text}%")
-            )
-            
-            # Search in message content (JSON field search)
-            # Note: This is database-specific. SQLite uses JSON extract, PostgreSQL uses JSONB operators
-            if "sqlite" in str(self.engine.url):
-                # SQLite JSON search
-                message_query = session.query(ConversationModel).join(
-                    MessageModel
-                ).filter(
-                    text(f"json_extract(messages.content_json, '$.text') LIKE :query")
-                ).params(query=f"%{query_text}%")
-            else:
-                # PostgreSQL JSONB search
-                message_query = session.query(ConversationModel).join(
-                    MessageModel
-                ).filter(
-                    MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
+            # Base query with message count
+            query = session.query(
+                ConversationModel,
+                func.count(MessageModel.id).label('message_count')
+            ).outerjoin(MessageModel)
+
+            # Text search
+            if query_text:
+                if title_only:
+                    query = query.filter(
+                        ConversationModel.title.ilike(f"%{query_text}%")
+                    )
+                elif content_only:
+                    if "sqlite" in str(self.engine.url):
+                        query = query.filter(
+                            text("json_extract(messages.content_json, '$.text') LIKE :query")
+                        ).params(query=f"%{query_text}%")
+                    else:
+                        query = query.filter(
+                            MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
+                        )
+                else:
+                    # Search both title and content
+                    if "sqlite" in str(self.engine.url):
+                        query = query.filter(
+                            or_(
+                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                text("json_extract(messages.content_json, '$.text') LIKE :query")
+                            )
+                        ).params(query=f"%{query_text}%")
+                    else:
+                        query = query.filter(
+                            or_(
+                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
+                            )
+                        )
+
+            # Date filters
+            if date_from:
+                query = query.filter(ConversationModel.created_at >= date_from)
+            if date_to:
+                query = query.filter(ConversationModel.created_at <= date_to)
+
+            # Source and model filters
+            if source:
+                query = query.filter(ConversationModel.source == source)
+            if model:
+                query = query.filter(ConversationModel.model.ilike(f"%{model}%"))
+
+            # Tag filters
+            if tags:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
                 )
-            
-            # Combine queries and get unique results
-            results = title_query.union(message_query).limit(limit).all()
-            
-            return [conv.to_dict() for conv in results]
+
+            # Group by for message count
+            query = query.group_by(ConversationModel.id)
+
+            # Message count filters
+            if min_messages is not None:
+                query = query.having(func.count(MessageModel.id) >= min_messages)
+            if max_messages is not None:
+                query = query.having(func.count(MessageModel.id) <= max_messages)
+
+            # Branching filter (requires subquery)
+            if has_branches is not None:
+                branch_subquery = session.query(
+                    PathModel.conversation_id,
+                    func.count(PathModel.id).label('path_count')
+                ).group_by(PathModel.conversation_id).subquery()
+
+                query = query.outerjoin(
+                    branch_subquery,
+                    ConversationModel.id == branch_subquery.c.conversation_id
+                )
+
+                if has_branches:
+                    query = query.filter(branch_subquery.c.path_count > 1)
+                else:
+                    query = query.filter(
+                        or_(branch_subquery.c.path_count == 1,
+                            branch_subquery.c.path_count.is_(None))
+                    )
+
+            # Ordering
+            if order_by == 'message_count':
+                # Special case for message count ordering
+                if ascending:
+                    query = query.order_by(text('message_count ASC'))
+                else:
+                    query = query.order_by(text('message_count DESC'))
+            else:
+                order_field = {
+                    'created_at': ConversationModel.created_at,
+                    'updated_at': ConversationModel.updated_at,
+                    'title': ConversationModel.title,
+                }.get(order_by, ConversationModel.updated_at)
+
+                if ascending:
+                    query = query.order_by(order_field.asc())
+                else:
+                    query = query.order_by(order_field.desc())
+
+            # Apply pagination
+            results = query.offset(offset).limit(limit).all()
+
+            # Convert to dictionaries
+            output = []
+            for conv, msg_count in results:
+                conv_dict = conv.to_dict()
+                conv_dict['message_count'] = msg_count
+                output.append(conv_dict)
+
+            return output
     
     def delete_conversation(self, conversation_id: str) -> bool:
         """
@@ -376,9 +526,12 @@ class ConversationDB:
         """Update tags for a conversation"""
         # Clear existing tags
         conv_model.tags = []
-        
+
+        # Deduplicate tag names
+        unique_tag_names = list(set(tag_names))
+
         # Add new tags
-        for tag_name in tag_names:
+        for tag_name in unique_tag_names:
             # Get or create tag
             tag = session.query(TagModel).filter_by(name=tag_name).first()
             if not tag:
@@ -386,17 +539,123 @@ class ConversationDB:
                 category = None
                 if ':' in tag_name:
                     category = tag_name.split(':')[0]
-                
+
                 tag = TagModel(name=tag_name, category=category)
                 session.add(tag)
-            
-            conv_model.tags.append(tag)
+
+            # Only add if not already in tags (shouldn't happen after clear, but safe)
+            if tag not in conv_model.tags:
+                conv_model.tags.append(tag)
     
-    def get_all_tags(self) -> List[Dict[str, Any]]:
+    def get_all_tags(self, with_counts: bool = True) -> List[Dict[str, Any]]:
         """Get all tags with usage counts"""
         with self.session_scope() as session:
-            tags = session.query(TagModel).all()
-            return [tag.to_dict() for tag in tags]
+            if with_counts:
+                # Get tags with usage counts - proper join sequence
+                results = session.query(
+                    TagModel,
+                    func.count(ConversationModel.id).label('usage_count')
+                ).select_from(TagModel).outerjoin(
+                    conversation_tags,
+                    TagModel.id == conversation_tags.c.tag_id
+                ).outerjoin(
+                    ConversationModel,
+                    conversation_tags.c.conversation_id == ConversationModel.id
+                ).group_by(TagModel.id).all()
+
+                tags = []
+                for tag, count in results:
+                    tag_dict = tag.to_dict()
+                    tag_dict['usage_count'] = count
+                    tags.append(tag_dict)
+                return tags
+            else:
+                tags = session.query(TagModel).all()
+                return [tag.to_dict() for tag in tags]
+
+    def get_models(self) -> List[Dict[str, int]]:
+        """Get all unique models with conversation counts"""
+        with self.session_scope() as session:
+            results = session.query(
+                ConversationModel.model,
+                func.count(ConversationModel.id).label('count')
+            ).filter(
+                ConversationModel.model.isnot(None)
+            ).group_by(
+                ConversationModel.model
+            ).order_by(
+                text('count DESC')
+            ).all()
+
+            return [{'model': model, 'count': count} for model, count in results]
+
+    def get_sources(self) -> List[Dict[str, int]]:
+        """Get all unique sources with conversation counts"""
+        with self.session_scope() as session:
+            results = session.query(
+                ConversationModel.source,
+                func.count(ConversationModel.id).label('count')
+            ).filter(
+                ConversationModel.source.isnot(None)
+            ).group_by(
+                ConversationModel.source
+            ).order_by(
+                text('count DESC')
+            ).all()
+
+            return [{'source': source, 'count': count} for source, count in results]
+
+    def get_conversation_timeline(self,
+                                  granularity: str = 'day',
+                                  limit: int = 30) -> List[Dict[str, Any]]:
+        """Get conversation counts over time"""
+        with self.session_scope() as session:
+            # SQLite-specific date formatting
+            if "sqlite" in str(self.engine.url):
+                if granularity == 'day':
+                    date_format = "date(created_at)"
+                elif granularity == 'week':
+                    date_format = "strftime('%Y-%W', created_at)"
+                elif granularity == 'month':
+                    date_format = "strftime('%Y-%m', created_at)"
+                elif granularity == 'year':
+                    date_format = "strftime('%Y', created_at)"
+                else:
+                    date_format = "date(created_at)"
+
+                results = session.execute(
+                    text(f"""
+                        SELECT {date_format} as period, COUNT(id) as count
+                        FROM conversations
+                        GROUP BY {date_format}
+                        ORDER BY {date_format} DESC
+                        LIMIT :limit
+                    """),
+                    {"limit": limit}
+                ).fetchall()
+            else:
+                # PostgreSQL date formatting
+                if granularity == 'day':
+                    date_trunc = func.date_trunc('day', ConversationModel.created_at)
+                elif granularity == 'week':
+                    date_trunc = func.date_trunc('week', ConversationModel.created_at)
+                elif granularity == 'month':
+                    date_trunc = func.date_trunc('month', ConversationModel.created_at)
+                elif granularity == 'year':
+                    date_trunc = func.date_trunc('year', ConversationModel.created_at)
+                else:
+                    date_trunc = func.date_trunc('day', ConversationModel.created_at)
+
+                results = session.query(
+                    date_trunc.label('period'),
+                    func.count(ConversationModel.id).label('count')
+                ).group_by(
+                    date_trunc
+                ).order_by(
+                    date_trunc.desc()
+                ).limit(limit).all()
+
+            return [{'period': str(period), 'count': count} for period, count in results]
     
     def close(self):
         """Close database connection"""

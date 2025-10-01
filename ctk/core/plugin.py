@@ -264,7 +264,7 @@ class PluginRegistry:
                 
                 for pattern in suspicious_patterns:
                     if pattern in content.lower():
-                        logger.warning(f"Suspicious pattern '{pattern}' found in {file_path}")
+                        logger.debug(f"Security check: pattern '{pattern}' found in {file_path}")
                         # Allow for now but log - can be made stricter
                         pass
             

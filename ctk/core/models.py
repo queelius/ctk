@@ -87,7 +87,23 @@ class MediaContent:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        data = {}
+        if self.type:
+            # Convert ContentType enum to string
+            data['type'] = self.type.value if isinstance(self.type, ContentType) else self.type
+        if self.url is not None:
+            data['url'] = self.url
+        if self.path is not None:
+            data['path'] = self.path
+        if self.data is not None:
+            data['data'] = self.data
+        if self.mime_type is not None:
+            data['mime_type'] = self.mime_type
+        if self.caption is not None:
+            data['caption'] = self.caption
+        if self.metadata:
+            data['metadata'] = self.metadata
+        return data
 
 
 @dataclass
@@ -218,6 +234,9 @@ class MessageContent:
             data['parts'] = self.parts
         if self.metadata:
             data['metadata'] = self.metadata
+        # Don't include type field if it's the default ContentType enum
+        if self.type and not isinstance(self.type, ContentType):
+            data['type'] = self.type
         return data
     
     @classmethod

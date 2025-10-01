@@ -37,8 +37,17 @@ class JSONLExporter(ExporterPlugin):
             sanitizer = Sanitizer(enabled=True)
         
         for conv in conversations:
-            # Get the linear path
-            messages = conv.to_linear_conversation(path_selection)
+            # Get the linear path based on selection
+            if path_selection == 'longest':
+                messages = conv.get_longest_path()
+            elif path_selection == 'first':
+                paths = conv.get_all_paths()
+                messages = paths[0] if paths else []
+            elif path_selection == 'last':
+                paths = conv.get_all_paths()
+                messages = paths[-1] if paths else []
+            else:
+                messages = conv.get_longest_path()
             
             if format_type == 'messages':
                 # Standard messages format
@@ -140,3 +149,7 @@ class JSONLExporter(ExporterPlugin):
         if sanitizer and sanitizer.enabled:
             return sanitizer.sanitize_text(text)
         return text
+
+
+# Register the exporter
+exporter = JSONLExporter()

@@ -3,11 +3,14 @@ OpenAI/ChatGPT conversation importer
 """
 
 import json
+import logging
 from typing import List, Any, Dict, Optional
 from datetime import datetime
 import re
 
 from ctk.core.plugin import ImporterPlugin
+
+logger = logging.getLogger(__name__)
 from ctk.core.models import (
     ConversationTree, Message, MessageContent, MessageRole, ConversationMetadata,
     ToolCall, MediaContent, ContentType
@@ -114,8 +117,13 @@ class OpenAIImporter(ImporterPlugin):
             data = [data]
         
         conversations = []
-        
+
         for conv_data in data:
+            # Skip invalid entries
+            if not conv_data or not isinstance(conv_data, dict):
+                logger.warning(f"Skipping invalid conversation data: {type(conv_data)}")
+                continue
+
             # Extract basic info
             conv_id = conv_data.get('conversation_id') or conv_data.get('id', '')
             title = conv_data.get('title', 'Untitled Conversation')
@@ -181,9 +189,13 @@ class OpenAIImporter(ImporterPlugin):
                                 # This is an image or other media asset
                                 asset_url = part.get('asset_pointer')
                                 if asset_url:
+                                    # Safely get nested metadata
+                                    metadata = part.get('metadata') or {}
+                                    dalle_data = metadata.get('dalle') if isinstance(metadata, dict) else {}
+                                    prompt = dalle_data.get('prompt') if isinstance(dalle_data, dict) else None
                                     content.add_image(
                                         url=asset_url,
-                                        caption=part.get('metadata', {}).get('dalle', {}).get('prompt')
+                                        caption=prompt
                                     )
                             elif 'image_url' in part:
                                 # Direct image URL
