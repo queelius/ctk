@@ -29,7 +29,7 @@ class HTML5Exporter(ExporterPlugin):
         If embed=True, creates a single HTML file with data embedded.
         If embed=False (default), creates index.html + conversations.jsonl
         """
-        embed = kwargs.get('embed', False)
+        embed = kwargs.pop('embed', False)  # Remove from kwargs to avoid duplicate
 
         if embed:
             # Single file export with embedded data
