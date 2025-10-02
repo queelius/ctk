@@ -38,19 +38,19 @@ class HTML5Exporter(ExporterPlugin):
                 f.write(html_content)
         else:
             # Multi-file export: index.html + conversations.jsonl
-            # Treat file_path as directory or output prefix
             if file_path.endswith('.html'):
-                # Remove .html extension to get base path
-                base_path = file_path[:-5]
+                # Specific HTML filename provided - use its directory
+                output_dir = os.path.dirname(file_path) or '.'
+                html_path = file_path
             else:
-                base_path = file_path
+                # Directory name provided - create it and put files inside
+                output_dir = file_path
+                html_path = os.path.join(output_dir, 'index.html')
 
-            # Ensure parent directory exists
-            parent_dir = os.path.dirname(base_path) or '.'
-            os.makedirs(parent_dir, exist_ok=True)
+            # Create output directory
+            os.makedirs(output_dir, exist_ok=True)
 
-            html_path = f"{base_path}.html" if not base_path.endswith('/') else f"{base_path}index.html"
-            jsonl_path = os.path.join(os.path.dirname(html_path) or '.', 'conversations.jsonl')
+            jsonl_path = os.path.join(output_dir, 'conversations.jsonl')
 
             # Generate HTML without embedded data
             html_content = self.export_conversations(conversations, embed=False, **kwargs)
