@@ -217,6 +217,8 @@ def cmd_export(args):
             export_kwargs['group_by'] = args.group_by
         if hasattr(args, 'show_tree'):
             export_kwargs['show_tree'] = args.show_tree
+        if hasattr(args, 'embed'):
+            export_kwargs['embed'] = args.embed
 
         exporter.export_to_file(conversations, args.output, **export_kwargs)
         print(f"Exported to {args.output}")
@@ -561,7 +563,9 @@ def main():
                                help='Grouping strategy for HTML export (default: date)')
     export_parser.add_argument('--show-tree', action='store_true', default=True,
                                help='Show conversation tree structure in HTML export')
-    
+    export_parser.add_argument('--embed', action='store_true',
+                               help='Embed data in HTML file (html5 only). Default: separate index.html + conversations.jsonl')
+
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
     list_parser.add_argument('--db', '-d', required=True, help='Database path')

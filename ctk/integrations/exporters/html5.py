@@ -3,6 +3,7 @@ HTML5 Advanced Exporter - Interactive browser-based conversation viewer with loc
 """
 
 import json
+import os
 from datetime import datetime
 from typing import List, Dict, Any
 from ctk.core.models import ConversationTree
@@ -20,26 +21,56 @@ class HTML5Exporter(ExporterPlugin):
         """HTML5 is an export-only format"""
         return False
 
+    def export_to_file(self, conversations: List[ConversationTree],
+                      file_path: str, **kwargs) -> None:
+        """
+        Export to file(s)
+
+        If embed=True, creates a single HTML file with data embedded.
+        If embed=False (default), creates index.html + conversations.jsonl
+        """
+        embed = kwargs.get('embed', False)
+
+        if embed:
+            # Single file export with embedded data
+            html_content = self.export_conversations(conversations, embed=True, **kwargs)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+        else:
+            # Multi-file export: index.html + conversations.jsonl
+            # Treat file_path as directory or output prefix
+            if file_path.endswith('.html'):
+                # Remove .html extension to get base path
+                base_path = file_path[:-5]
+            else:
+                base_path = file_path
+
+            # Ensure parent directory exists
+            parent_dir = os.path.dirname(base_path) or '.'
+            os.makedirs(parent_dir, exist_ok=True)
+
+            html_path = f"{base_path}.html" if not base_path.endswith('/') else f"{base_path}index.html"
+            jsonl_path = os.path.join(os.path.dirname(html_path) or '.', 'conversations.jsonl')
+
+            # Generate HTML without embedded data
+            html_content = self.export_conversations(conversations, embed=False, **kwargs)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+            # Generate JSONL data
+            conv_data, stats = self._prepare_data(conversations)
+            with open(jsonl_path, 'w', encoding='utf-8') as f:
+                for conv in conv_data:
+                    f.write(json.dumps(conv, ensure_ascii=False) + '\n')
+                # Write stats as last line with special marker
+                f.write(json.dumps({'__stats__': stats}, ensure_ascii=False) + '\n')
+
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export conversations to HTML5"""
         return self.export_conversations(conversations, **kwargs)
 
-    def export_conversations(
-        self,
-        conversations: List[ConversationTree],
-        include_metadata: bool = True,
-        theme: str = 'auto',
-        **kwargs
-    ) -> str:
-        """
-        Export conversations to advanced HTML5 application
-
-        Args:
-            conversations: List of conversations to export
-            include_metadata: Include conversation metadata
-            theme: Theme (light, dark, auto)
-        """
-        # Prepare conversation data
+    def _prepare_data(self, conversations: List[ConversationTree]):
+        """Prepare conversation data and stats"""
         conv_data = []
         stats = {
             'total_conversations': len(conversations),
@@ -103,17 +134,53 @@ class HTML5Exporter(ExporterPlugin):
         if stats['date_range']['latest']:
             stats['date_range']['latest'] = stats['date_range']['latest'].isoformat()
 
-        return self._generate_html(conv_data, stats, theme)
+        return conv_data, stats
 
-    def _generate_html(self, conversations: List[Dict], stats: Dict, theme: str) -> str:
+    def export_conversations(
+        self,
+        conversations: List[ConversationTree],
+        include_metadata: bool = True,
+        theme: str = 'auto',
+        embed: bool = True,
+        **kwargs
+    ) -> str:
+        """
+        Export conversations to advanced HTML5 application
+
+        Args:
+            conversations: List of conversations to export
+            include_metadata: Include conversation metadata
+            theme: Theme (light, dark, auto)
+            embed: Whether to embed data in HTML (True) or load from external JSONL (False)
+        """
+        conv_data, stats = self._prepare_data(conversations)
+        return self._generate_html(conv_data, stats, theme, embed)
+
+    def _generate_html(self, conversations: List[Dict], stats: Dict, theme: str, embed: bool = True) -> str:
         """Generate complete HTML5 document"""
 
-        conv_json = json.dumps(conversations, ensure_ascii=False, indent=2)
-        stats_json = json.dumps(stats, ensure_ascii=False, indent=2)
+        if embed:
+            # Embed data directly in HTML
+            conv_json = json.dumps(conversations, ensure_ascii=False, indent=2)
+            stats_json = json.dumps(stats, ensure_ascii=False, indent=2)
+            # Escape for safe embedding
+            conv_json = conv_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
+            stats_json = stats_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
+            data_script = f"""
+        const CONVERSATIONS = {conv_json};
+        const STATS = {stats_json};
+        {self._get_javascript()}
+"""
+        else:
+            # Load data from external JSONL file
+            data_script = f"""
+        let CONVERSATIONS = [];
+        let STATS = {{}};
 
-        # Escape for safe embedding
-        conv_json = conv_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
-        stats_json = stats_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
+        // Load data from conversations.jsonl
+        {self._get_jsonl_loader()}
+        {self._get_javascript()}
+"""
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -346,9 +413,7 @@ class HTML5Exporter(ExporterPlugin):
     </div>
 
     <script>
-        const CONVERSATIONS = {conv_json};
-        const STATS = {stats_json};
-        {self._get_javascript()}
+{data_script}
     </script>
 </body>
 </html>"""
@@ -2382,3 +2447,83 @@ function copyConversation(convId) {
     });
 }
 """
+
+
+    def _get_jsonl_loader(self) -> str:
+        """Get JavaScript code to load conversations from JSONL file"""
+        return """
+// Show loading indicator
+const loadingDiv = document.createElement('div');
+loadingDiv.id = 'loading-indicator';
+loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-primary); padding: 2rem; border-radius: 8px; box-shadow: var(--shadow); z-index: 10000; text-align: center;';
+loadingDiv.innerHTML = '<div style="font-size: 1.5rem; margin-bottom: 1rem;">Loading conversations...</div><div id="loading-progress">0 loaded</div>';
+document.body.appendChild(loadingDiv);
+
+// Load conversations from JSONL
+fetch('conversations.jsonl')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to load conversations.jsonl: ${response.status} ${response.statusText}`);
+        }
+        return response.text();
+    })
+    .then(text => {
+        const lines = text.trim().split('\n');
+        const progressDiv = document.getElementById('loading-progress');
+
+        lines.forEach((line, index) => {
+            if (!line.trim()) return;
+
+            try {
+                const obj = JSON.parse(line);
+
+                // Check if this is the stats object
+                if (obj.__stats__) {
+                    STATS = obj.__stats__;
+                } else {
+                    CONVERSATIONS.push(obj);
+
+                    // Update progress every 100 conversations
+                    if (CONVERSATIONS.length % 100 === 0) {
+                        progressDiv.textContent = `${CONVERSATIONS.length} loaded`;
+                    }
+                }
+            } catch (e) {
+                console.error('Error parsing JSON line', index + 1, ':', e);
+            }
+        });
+
+        // Remove loading indicator
+        loadingDiv.remove();
+
+        // Initialize the app now that data is loaded
+        document.addEventListener('DOMContentLoaded', init);
+        if (document.readyState === 'loading') {
+            // DOM not ready yet, event listener will fire
+        } else {
+            // DOM already loaded, call init directly
+            init();
+        }
+    })
+    .catch(error => {
+        console.error('Error loading conversations:', error);
+        loadingDiv.innerHTML = `
+            <div style="color: var(--danger); font-size: 1.2rem; margin-bottom: 1rem;">⚠️ Error Loading Data</div>
+            <div style="margin-bottom: 1rem;">${error.message}</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">
+                <p>This HTML file needs to load data from <code>conversations.jsonl</code>.</p>
+                <p style="margin-top: 0.5rem;">Make sure:</p>
+                <ul style="text-align: left; margin-top: 0.5rem;">
+                    <li>Both files are in the same directory</li>
+                    <li>You're viewing this via a web server (not file://)</li>
+                </ul>
+                <p style="margin-top: 1rem;">To serve locally, run: <code>python -m http.server</code></p>
+            </div>
+        `;
+    });
+"""
+
+
+# Register the exporter
+exporter = HTML5Exporter()
+
