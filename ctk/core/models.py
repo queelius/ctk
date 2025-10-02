@@ -218,8 +218,9 @@ class MessageContent:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         data = {}
-        if self.text:
-            data['text'] = self.text
+        # Always include text field, using get_text() to extract from parts if needed
+        text_content = self.get_text()
+        data['text'] = text_content  # Always include, even if empty
         if self.images:
             data['images'] = [img.to_dict() for img in self.images]
         if self.audio:

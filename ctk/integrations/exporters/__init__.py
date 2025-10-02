@@ -4,5 +4,7 @@
 from . import jsonl
 from . import markdown
 from . import json
+from . import html
+from . import html5
 
-__all__ = ['jsonl', 'markdown', 'json']
+__all__ = ['jsonl', 'markdown', 'json', 'html', 'html5']

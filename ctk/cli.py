@@ -209,7 +209,15 @@ def cmd_export(args):
             'path_selection': args.path_selection,
             'include_metadata': args.include_metadata,
         }
-        
+
+        # Add HTML-specific options if present
+        if hasattr(args, 'theme'):
+            export_kwargs['theme'] = args.theme
+        if hasattr(args, 'group_by'):
+            export_kwargs['group_by'] = args.group_by
+        if hasattr(args, 'show_tree'):
+            export_kwargs['show_tree'] = args.show_tree
+
         exporter.export_to_file(conversations, args.output, **export_kwargs)
         print(f"Exported to {args.output}")
         
@@ -517,33 +525,42 @@ def main():
     
     # Import command
     import_parser = subparsers.add_parser('import', help='Import conversations')
-    import_parser.add_argument('input', help='Input file path')
-    import_parser.add_argument('--format', '-f', help='Input format (auto-detect if not specified)')
+    import_parser.add_argument('input', help='Input file path (or "auto" for auto-search with copilot/claude_code/cursor)')
+    import_parser.add_argument('--format', '-f',
+                               help='Input format: openai, anthropic, copilot, gemini, jsonl, filesystem_coding (auto-detect if not specified)')
     import_parser.add_argument('--db', '-d', help='Database path to save to')
     import_parser.add_argument('--output', '-o', help='Output file path (for conversion)')
-    import_parser.add_argument('--output-format', help='Output format for conversion')
+    import_parser.add_argument('--output-format', help='Output format for conversion: json, markdown, jsonl')
     import_parser.add_argument('--tags', '-t', help='Comma-separated tags to add')
     import_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
-    import_parser.add_argument('--path-selection', default='longest', 
+    import_parser.add_argument('--path-selection', default='longest',
                                choices=['longest', 'first', 'last'],
-                               help='Path selection strategy for tree conversations')
-    
+                               help='Path selection strategy for tree conversations (default: longest)')
+
     # Export command
     export_parser = subparsers.add_parser('export', help='Export conversations')
     export_parser.add_argument('output', help='Output file path')
     export_parser.add_argument('--db', '-d', required=True, help='Database path')
-    export_parser.add_argument('--format', '-f', default='jsonl', help='Export format')
+    export_parser.add_argument('--format', '-f', default='jsonl',
+                               help='Export format: json, markdown, jsonl, html, html5 (default: jsonl)')
     export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
-    export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations')
-    export_parser.add_argument('--filter-source', help='Filter by source')
-    export_parser.add_argument('--filter-model', help='Filter by model')
+    export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations (default: 1000)')
+    export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
+    export_parser.add_argument('--filter-model', help='Filter by model (e.g., gpt-4, claude-3)')
     export_parser.add_argument('--filter-tags', help='Filter by tags (comma-separated)')
     export_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
     export_parser.add_argument('--path-selection', default='longest',
                                choices=['longest', 'first', 'last'],
-                               help='Path selection strategy')
-    export_parser.add_argument('--include-metadata', action='store_true', 
+                               help='Path selection strategy for tree conversations (default: longest)')
+    export_parser.add_argument('--include-metadata', action='store_true',
                                help='Include metadata in export')
+    # HTML-specific options
+    export_parser.add_argument('--theme', default='auto', choices=['light', 'dark', 'auto'],
+                               help='Theme for HTML export (default: auto)')
+    export_parser.add_argument('--group-by', default='date', choices=['date', 'source', 'model', 'tag'],
+                               help='Grouping strategy for HTML export (default: date)')
+    export_parser.add_argument('--show-tree', action='store_true', default=True,
+                               help='Show conversation tree structure in HTML export')
     
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
@@ -652,42 +669,6 @@ def main():
             return 1
 
     return commands[args.command](args)
-
-
-def _setup_import_parser(subparsers):
-    """Setup the import command parser"""
-    import_parser = subparsers.add_parser('import', help='Import conversations')
-    import_parser.add_argument('input', help='Input file path')
-    import_parser.add_argument('--format', '-f', help='Input format (auto-detect if not specified)')
-    import_parser.add_argument('--db', '-d', help='Database path to save to')
-    import_parser.add_argument('--output', '-o', help='Output file path (for conversion)')
-    import_parser.add_argument('--output-format', help='Output format for conversion')
-    import_parser.add_argument('--tags', '-t', help='Comma-separated tags to add')
-    import_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
-    import_parser.add_argument('--path-selection', default='longest', 
-                               choices=['longest', 'first', 'last'],
-                               help='Path selection strategy for tree conversations')
-    return import_parser
-
-
-def _setup_export_parser(subparsers):
-    """Setup the export command parser"""
-    export_parser = subparsers.add_parser('export', help='Export conversations')
-    export_parser.add_argument('output', help='Output file path')
-    export_parser.add_argument('--db', '-d', required=True, help='Database path')
-    export_parser.add_argument('--format', '-f', default='jsonl', help='Export format')
-    export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
-    export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations')
-    export_parser.add_argument('--filter-source', help='Filter by source')
-    export_parser.add_argument('--filter-model', help='Filter by model')
-    export_parser.add_argument('--filter-tag', help='Filter by tag')
-    export_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
-    export_parser.add_argument('--path-selection', default='longest',
-                               choices=['longest', 'first', 'last'],
-                               help='Path selection strategy')
-    export_parser.add_argument('--include-metadata', action='store_true', 
-                               help='Include metadata in export')
-    return export_parser
 
 
 def _get_command_handlers():
