@@ -232,38 +232,45 @@ class HTML5Exporter(ExporterPlugin):
         <!-- Browse Tab -->
         <div class="tab-content" data-content="browse">
             <div class="browse-view">
-                <aside class="sidebar">
-                    <div class="sidebar-controls">
-                        <input type="search" id="filterSearch" placeholder="Filter..." class="filter-input">
-
-                        <details class="filter-section" open>
-                            <summary>Filters</summary>
-                            <label>Source: <select id="filterSource"><option value="">All</option></select></label>
-                            <label>Model: <select id="filterModel"><option value="">All</option></select></label>
-                            <label>Tag: <select id="filterTag"><option value="">All</option></select></label>
-                            <label><input type="checkbox" id="filterFavorites"> ⭐ Favorites only</label>
-                            <label><input type="checkbox" id="filterUnread"> 📖 Unread only</label>
-                            <label><input type="checkbox" id="filterAnnotated"> 📝 With notes</label>
-                        </details>
-
-                        <details class="filter-section">
-                            <summary>Sort</summary>
-                            <label><input type="radio" name="sort" value="date" checked> Latest first</label>
-                            <label><input type="radio" name="sort" value="date-asc"> Oldest first</label>
-                            <label><input type="radio" name="sort" value="title"> Title A-Z</label>
-                            <label><input type="radio" name="sort" value="messages"> Most messages</label>
-                            <label><input type="radio" name="sort" value="rating"> Highest rated</label>
-                        </details>
+                <!-- Top Filter Bar -->
+                <div class="filter-bar">
+                    <div class="filter-bar-row">
+                        <input type="search" id="filterSearch" placeholder="🔍 Filter conversations..." class="filter-search">
+                        <select id="filterSource" class="filter-select">
+                            <option value="">All Sources</option>
+                        </select>
+                        <select id="filterModel" class="filter-select">
+                            <option value="">All Models</option>
+                        </select>
+                        <select id="filterTag" class="filter-select">
+                            <option value="">All Tags</option>
+                        </select>
+                        <label class="filter-checkbox"><input type="checkbox" id="filterFavorites"> ⭐ Favorites</label>
+                        <label class="filter-checkbox"><input type="checkbox" id="filterUnread"> 📖 Unread</label>
+                        <label class="filter-checkbox"><input type="checkbox" id="filterAnnotated"> 📝 Notes</label>
+                        <select id="sortSelect" class="filter-select">
+                            <option value="date">Latest first</option>
+                            <option value="date-asc">Oldest first</option>
+                            <option value="title">Title A-Z</option>
+                            <option value="messages">Most messages</option>
+                            <option value="rating">Highest rated</option>
+                        </select>
                     </div>
-                    <div id="favoritesDropZone" class="drop-zone">
-                        ⭐ Drop here to favorite
-                    </div>
-                    <div id="conversationList" class="conversation-list"></div>
-                </aside>
+                </div>
 
-                <main class="main-content">
-                    <div id="conversationView"></div>
-                </main>
+                <!-- Two Column Layout -->
+                <div class="browse-columns">
+                    <aside class="conversation-sidebar">
+                        <div id="favoritesDropZone" class="drop-zone">
+                            ⭐ Drop here to favorite
+                        </div>
+                        <div id="conversationList" class="conversation-list"></div>
+                    </aside>
+
+                    <main class="conversation-content">
+                        <div id="conversationView"></div>
+                    </main>
+                </div>
             </div>
         </div>
 
@@ -627,66 +634,90 @@ body {
 /* Browse View */
 .browse-view {
     display: flex;
+    flex-direction: column;
     height: 100%;
 }
 
-.sidebar {
-    width: 350px;
+/* Top Filter Bar */
+.filter-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1rem;
+}
+
+.filter-bar-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-search {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.filter-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.filter-checkbox:hover {
+    background: var(--bg-tertiary);
+}
+
+.filter-checkbox input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* Two Column Layout */
+.browse-columns {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.conversation-sidebar {
+    width: 400px;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
-.sidebar-controls {
-    padding: 1rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.filter-input {
-    width: 100%;
-    padding: 0.5rem;
-    margin-bottom: 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-}
-
-.filter-section {
-    margin-bottom: 0.75rem;
-}
-
-.filter-section summary {
-    cursor: pointer;
-    font-weight: 600;
-    padding: 0.5rem;
-    border-radius: 4px;
-}
-
-.filter-section summary:hover { background: var(--bg-tertiary); }
-
-.filter-section label {
-    display: block;
-    padding: 0.4rem 1rem;
-    font-size: 0.9rem;
-}
-
-.filter-section select,
-.filter-section input[type="number"] {
-    width: 100%;
-    padding: 0.25rem;
-    margin-top: 0.25rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
+.conversation-content {
+    flex: 1;
+    overflow-y: auto;
 }
 
 .conversation-list {
     flex: 1;
     overflow-y: auto;
     padding: 0.5rem;
+    min-height: 40vh;
 }
 
 .conversation-item {
@@ -787,9 +818,7 @@ body {
     border-radius: 3px;
 }
 
-.main-content {
-    flex: 1;
-    overflow-y: auto;
+#conversationView {
     padding: 2rem;
 }
 
@@ -1176,16 +1205,36 @@ body {
 }
 
 @media (max-width: 768px) {
-    .sidebar { width: 100%; max-width: none; }
-    .browse-view { flex-direction: column; }
-    .message.user, .message.assistant { margin-left: 0; margin-right: 0; }
+    .filter-bar-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-search, .filter-select, .filter-checkbox {
+        width: 100%;
+    }
+
+    .browse-columns {
+        flex-direction: column;
+    }
+
+    .conversation-sidebar {
+        width: 100%;
+        max-height: 50vh;
+    }
+
+    .message.user, .message.assistant {
+        margin-left: 0;
+        margin-right: 0;
+    }
 }
 
 @media print {
     /* Hide UI elements */
     .header,
     .tabs,
-    .sidebar,
+    .filter-bar,
+    .conversation-sidebar,
     .btn,
     .modal,
     .conversation-actions,
@@ -1216,7 +1265,11 @@ body {
         display: block;
     }
 
-    .main-content {
+    .browse-columns {
+        display: block;
+    }
+
+    .conversation-content {
         width: 100%;
         max-width: none;
     }
@@ -1479,11 +1532,9 @@ function setupEventListeners() {
     document.getElementById('filterAnnotated').addEventListener('change', applyFilters);
 
     // Sort
-    document.querySelectorAll('input[name="sort"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            state.sort = e.target.value;
-            renderConversationList();
-        });
+    document.getElementById('sortSelect').addEventListener('change', (e) => {
+        state.sort = e.target.value;
+        renderConversationList();
     });
 
     // Timeline
@@ -2468,7 +2519,7 @@ fetch('conversations.jsonl')
         return response.text();
     })
     .then(text => {
-        const lines = text.trim().split('\n');
+        const lines = text.trim().split('\\n');
         const progressDiv = document.getElementById('loading-progress');
 
         lines.forEach((line, index) => {
