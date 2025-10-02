@@ -188,28 +188,40 @@ class HTML5Exporter(ExporterPlugin):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Conversation Browser Plus</title>
+
+    <!-- KaTeX for LaTeX math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+
+    <!-- Highlight.js for code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
+
     <style>{self._get_css()}</style>
 </head>
 <body data-theme="{theme}">
     <div class="app">
-        <!-- Header -->
+        <!-- Header with Tabs -->
         <header class="header">
-            <h1>💬 Conversation Browser <span class="plus">Plus</span></h1>
+            <div class="app-icon" title="Conversation Browser Plus">💬</div>
+            <div class="tabs">
+                <button class="tab active" data-tab="search">🔍 Search</button>
+                <button class="tab" data-tab="browse">📚 Browse</button>
+                <button class="tab" data-tab="timeline">📅 Timeline</button>
+                <button class="tab" data-tab="collections">⭐ Collections</button>
+                <button class="tab" data-tab="snippets">💾 Code Snippets</button>
+            </div>
             <div class="header-actions">
-                <button id="statsBtn" class="btn btn-secondary">📊 Stats</button>
-                <button id="settingsBtn" class="btn btn-secondary">⚙️</button>
-                <button id="themeBtn" class="btn btn-secondary">🌓</button>
+                <button id="statsBtn" class="btn btn-secondary" title="Statistics">📊</button>
+                <button id="settingsBtn" class="btn btn-secondary" title="Settings">⚙️</button>
+                <button id="themeBtn" class="btn btn-secondary" title="Toggle theme">🌓</button>
             </div>
         </header>
-
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab active" data-tab="search">🔍 Search</button>
-            <button class="tab" data-tab="browse">📚 Browse</button>
-            <button class="tab" data-tab="timeline">📅 Timeline</button>
-            <button class="tab" data-tab="collections">⭐ Collections</button>
-            <button class="tab" data-tab="snippets">💾 Code Snippets</button>
-        </div>
 
         <!-- Search Tab -->
         <div class="tab-content active" data-content="search">
@@ -477,14 +489,18 @@ body {
 .header {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
-    padding: 1rem 1.5rem;
+    padding: 0.75rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1rem;
 }
 
-.header h1 { font-size: 1.5rem; }
-.header h1 .plus { color: var(--accent); font-weight: 700; }
+.app-icon {
+    font-size: 1.5rem;
+    cursor: default;
+    user-select: none;
+}
 
 .header-actions { display: flex; gap: 0.5rem; }
 
@@ -506,26 +522,30 @@ body {
 
 .tabs {
     display: flex;
-    background: var(--bg-secondary);
-    border-bottom: 2px solid var(--border);
-    padding: 0 1.5rem;
+    flex: 1;
+    gap: 0.25rem;
+    justify-content: center;
 }
 
 .tab {
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem;
     border: none;
     background: none;
     color: var(--text-secondary);
     cursor: pointer;
-    font-size: 0.95rem;
-    border-bottom: 3px solid transparent;
+    font-size: 0.9rem;
+    border-radius: 6px;
     transition: all 0.2s;
 }
 
-.tab:hover { color: var(--text-primary); }
+.tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
 .tab.active {
     color: var(--accent);
-    border-bottom-color: var(--accent);
+    background: var(--bg-tertiary);
     font-weight: 600;
 }
 
@@ -1205,6 +1225,26 @@ body {
 }
 
 @media (max-width: 768px) {
+    .header {
+        flex-wrap: wrap;
+        padding: 0.5rem 1rem;
+    }
+
+    .tabs {
+        order: 3;
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 0.5rem;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .tab {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
     .filter-bar-row {
         flex-direction: column;
         align-items: stretch;
@@ -1371,6 +1411,122 @@ body {
         text-shadow: none !important;
     }
 }
+
+/* ==================== Code Highlighting & Math ==================== */
+
+/* Syntax highlighting theme switching */
+body[data-theme="light"] .hljs {
+    background: #f6f8fa !important;
+    color: #24292f !important;
+}
+
+body[data-theme="dark"] .hljs {
+    background: #161b22 !important;
+    color: #e6edf3 !important;
+}
+
+/* Code blocks */
+.message-content pre {
+    margin: 1rem 0;
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.message-content pre code {
+    background: transparent !important;
+    padding: 0 !important;
+    display: block;
+    font-size: 0.9em;
+    line-height: 1.5;
+}
+
+/* Inline code */
+.message-content code:not(pre code) {
+    background: rgba(127, 127, 127, 0.15);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-family: 'Courier New', Consolas, Monaco, monospace;
+    font-size: 0.9em;
+}
+
+/* KaTeX math */
+.katex-display {
+    margin: 1rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.katex {
+    font-size: 1.1em;
+}
+
+/* Markdown elements in messages */
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.message-content h1 { font-size: 1.6em; }
+.message-content h2 { font-size: 1.4em; }
+.message-content h3 { font-size: 1.2em; }
+.message-content h4 { font-size: 1.1em; }
+
+.message-content ul,
+.message-content ol {
+    margin: 0.75rem 0;
+    padding-left: 2rem;
+}
+
+.message-content li {
+    margin: 0.25rem 0;
+}
+
+.message-content blockquote {
+    border-left: 4px solid var(--border);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.message-content a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.message-content a:hover {
+    text-decoration: underline;
+}
+
+.message-content table {
+    border-collapse: collapse;
+    margin: 1rem 0;
+    width: 100%;
+}
+
+.message-content th,
+.message-content td {
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.message-content th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+}
+
+.message-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
 """
 
     def _get_javascript(self) -> str:
@@ -1479,6 +1635,96 @@ class AppState {
 }
 
 const state = new AppState();
+
+// ==================== Content Processing ====================
+
+// Configure marked.js
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            try {
+                return hljs.highlight(code, { language: lang }).value;
+            } catch (err) {
+                console.error('Highlight error:', err);
+            }
+        }
+        return hljs.highlightAuto(code).value;
+    }
+});
+
+/**
+ * Process message content with markdown and LaTeX rendering
+ * @param {string} text - Raw message text
+ * @returns {string} - HTML with rendered markdown and math
+ */
+function processMessageContent(text) {
+    if (!text) return '';
+
+    // Protect LaTeX blocks from markdown processing
+    const mathBlocks = [];
+    let processedText = text;
+
+    // Extract display math blocks ($$...$$, \\[...\\])
+    processedText = processedText.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, (match, content) => {
+        const index = mathBlocks.length;
+        mathBlocks.push({type: 'display', content: match});
+        return `___MATH_BLOCK_${index}___`;
+    });
+
+    processedText = processedText.replace(/\\\\\\[([\\s\\S]+?)\\\\\\]/g, (match, content) => {
+        const index = mathBlocks.length;
+        mathBlocks.push({type: 'display', content: match});
+        return `___MATH_BLOCK_${index}___`;
+    });
+
+    // Extract inline math ($...$, \\(...\\))
+    processedText = processedText.replace(/\\$([^\\$\\n]+?)\\$/g, (match, content) => {
+        const index = mathBlocks.length;
+        mathBlocks.push({type: 'inline', content: match});
+        return `___MATH_BLOCK_${index}___`;
+    });
+
+    processedText = processedText.replace(/\\\\\\(([^\\)]+?)\\\\\\)/g, (match, content) => {
+        const index = mathBlocks.length;
+        mathBlocks.push({type: 'inline', content: match});
+        return `___MATH_BLOCK_${index}___`;
+    });
+
+    // Now render markdown
+    let html = marked.parse(processedText);
+
+    // Restore math blocks
+    mathBlocks.forEach((block, index) => {
+        html = html.replace(`___MATH_BLOCK_${index}___`, block.content);
+    });
+
+    return html;
+}
+
+/**
+ * Render LaTeX math in an element after it's been added to the DOM
+ * @param {HTMLElement} element - The element containing math expressions
+ */
+function renderMath(element) {
+    if (typeof renderMathInElement !== 'undefined') {
+        try {
+            renderMathInElement(element, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '\\\\[', right: '\\\\]', display: true},
+                    {left: '\\\\(', right: '\\\\)', display: false},
+                    {left: '$', right: '$', display: false}
+                ],
+                throwOnError: false,
+                strict: false
+            });
+        } catch (err) {
+            console.error('KaTeX render error:', err);
+        }
+    }
+}
 
 // ==================== Init ====================
 document.addEventListener('DOMContentLoaded', init);
@@ -2096,8 +2342,11 @@ function createMessageElement(conv, msg) {
 
     const content = document.createElement('div');
     content.className = 'message-content';
-    content.textContent = msg.content;
+    content.innerHTML = processMessageContent(msg.content);
     div.appendChild(content);
+
+    // Render LaTeX math after content is in DOM
+    setTimeout(() => renderMath(content), 0);
 
     // Show annotation if exists
     const annotationKey = `${conv.id}:${msg.id}`;
