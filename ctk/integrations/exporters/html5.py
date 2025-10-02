@@ -188,6 +188,9 @@ class HTML5Exporter(ExporterPlugin):
                             <label><input type="radio" name="sort" value="rating"> Highest rated</label>
                         </details>
                     </div>
+                    <div id="favoritesDropZone" class="drop-zone">
+                        ⭐ Drop here to favorite
+                    </div>
                     <div id="conversationList" class="conversation-list"></div>
                 </aside>
 
@@ -281,6 +284,61 @@ class HTML5Exporter(ExporterPlugin):
                     <div class="modal-actions">
                         <button id="saveAnnotation" class="btn">Save Note</button>
                         <button id="deleteAnnotation" class="btn btn-danger">Delete Note</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="keyboardModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⌨️ Keyboard Shortcuts</h2>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="shortcuts-grid">
+                        <div class="shortcut-group">
+                            <h3>Navigation</h3>
+                            <div class="shortcut-item">
+                                <kbd>/</kbd>
+                                <span>Focus search</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Ctrl</kbd> + <kbd>K</kbd>
+                                <span>Quick search</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>j</kbd> / <kbd>k</kbd>
+                                <span>Navigate conversations</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Enter</kbd>
+                                <span>Open conversation</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>Esc</kbd>
+                                <span>Close modal / Clear search</span>
+                            </div>
+                        </div>
+                        <div class="shortcut-group">
+                            <h3>Actions</h3>
+                            <div class="shortcut-item">
+                                <kbd>f</kbd>
+                                <span>Toggle favorite</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>c</kbd>
+                                <span>Copy conversation</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>1</kbd> - <kbd>5</kbd>
+                                <span>Rate conversation</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>?</kbd>
+                                <span>Show this help</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -606,6 +664,35 @@ body {
     height: 8px;
     background: var(--accent);
     border-radius: 50%;
+}
+
+.conversation-item.dragging {
+    opacity: 0.5;
+    cursor: move;
+}
+
+.drop-zone {
+    border: 2px dashed var(--border);
+    background: var(--bg-secondary);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+    text-align: center;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.drop-zone.drag-over {
+    border-color: var(--primary);
+    background: var(--accent);
+    color: var(--primary);
+    transform: scale(1.02);
+}
+
+.collection-card.drag-over {
+    border-color: var(--primary);
+    background: var(--accent);
+    transform: scale(1.02);
 }
 
 .conv-title {
@@ -981,6 +1068,42 @@ body {
     margin-top: 1rem;
 }
 
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+.shortcut-group h3 {
+    margin-bottom: 1rem;
+    color: var(--primary);
+}
+
+.shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+
+.shortcut-item kbd {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 2px 0 var(--border);
+}
+
+.shortcut-item span {
+    color: var(--text-secondary);
+}
+
 .help-text {
     font-size: 0.85rem;
     color: var(--text-secondary);
@@ -991,6 +1114,144 @@ body {
     .sidebar { width: 100%; max-width: none; }
     .browse-view { flex-direction: column; }
     .message.user, .message.assistant { margin-left: 0; margin-right: 0; }
+}
+
+@media print {
+    /* Hide UI elements */
+    .header,
+    .tabs,
+    .sidebar,
+    .btn,
+    .modal,
+    .conversation-actions,
+    .message-actions,
+    .rating,
+    .search-view,
+    .timeline-view,
+    .collections-view,
+    .snippets-view {
+        display: none !important;
+    }
+
+    /* Show only the main conversation content */
+    body {
+        background: white;
+        color: black;
+    }
+
+    .app {
+        display: block;
+    }
+
+    .tab-content[data-content="browse"] {
+        display: block !important;
+    }
+
+    .browse-view {
+        display: block;
+    }
+
+    .main-content {
+        width: 100%;
+        max-width: none;
+    }
+
+    #conversationView {
+        display: block;
+    }
+
+    /* Conversation header */
+    .conversation-header {
+        border-bottom: 2px solid black;
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+        page-break-after: avoid;
+    }
+
+    .conversation-title {
+        font-size: 24pt;
+        font-weight: bold;
+        color: black;
+    }
+
+    .conversation-meta {
+        color: #666;
+        font-size: 10pt;
+        margin-top: 0.5rem;
+    }
+
+    /* Messages */
+    .message {
+        page-break-inside: avoid;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 0;
+    }
+
+    .message-header {
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .message-role {
+        font-weight: bold;
+        font-size: 12pt;
+        color: black;
+    }
+
+    .message-timestamp {
+        color: #666;
+        font-size: 9pt;
+    }
+
+    .message-content {
+        color: black;
+        font-size: 11pt;
+        line-height: 1.6;
+    }
+
+    /* Code blocks */
+    pre {
+        background: #f5f5f5 !important;
+        border: 1px solid #ccc;
+        padding: 0.5rem;
+        overflow-x: visible;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        page-break-inside: avoid;
+    }
+
+    code {
+        background: #f5f5f5;
+        color: black;
+        font-family: 'Courier New', monospace;
+        font-size: 10pt;
+    }
+
+    /* Links */
+    a {
+        color: black;
+        text-decoration: underline;
+    }
+
+    a[href]:after {
+        content: " (" attr(href) ")";
+        font-size: 9pt;
+        color: #666;
+    }
+
+    /* Page breaks */
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+
+    /* Remove shadows and backgrounds */
+    * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
 }
 """
 
@@ -1129,6 +1390,9 @@ function setupTabs() {
             document.querySelector(`[data-content="${tabName}"]`).classList.add('active');
             state.currentTab = tabName;
 
+            // Update URL hash
+            updateHash(tabName);
+
             if (tabName === 'timeline') renderTimeline();
             if (tabName === 'collections') renderCollections();
             if (tabName === 'snippets') renderSnippets();
@@ -1199,6 +1463,173 @@ function setupEventListeners() {
             renderSnippets();
         }
     });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcut);
+
+    // Hash navigation (History API)
+    window.addEventListener('hashchange', handleHashChange);
+    handleHashChange(); // Handle initial hash on page load
+
+    // Drag and drop zones
+    setupDropZones();
+}
+
+function setupDropZones() {
+    const favoritesZone = document.getElementById('favoritesDropZone');
+
+    favoritesZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        favoritesZone.classList.add('drag-over');
+    });
+
+    favoritesZone.addEventListener('dragleave', () => {
+        favoritesZone.classList.remove('drag-over');
+    });
+
+    favoritesZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        favoritesZone.classList.remove('drag-over');
+        const convId = e.dataTransfer.getData('text/plain');
+        if (convId) {
+            state.toggleFavorite(convId);
+            renderConversationList();
+        }
+    });
+}
+
+function handleHashChange() {
+    const hash = window.location.hash.slice(1); // Remove '#'
+    if (!hash) return;
+
+    const parts = hash.split('/');
+    const type = parts[0];
+
+    if (type === 'conv' && parts[1]) {
+        // Navigate to specific conversation: #conv/abc123
+        const convId = parts[1];
+        const conv = CONVERSATIONS.find(c => c.id === convId);
+        if (conv) {
+            document.querySelector('[data-tab="browse"]').click();
+            setTimeout(() => showConversation(conv), 100);
+        }
+    } else if (['search', 'browse', 'timeline', 'collections', 'snippets'].includes(type)) {
+        // Navigate to specific tab: #timeline, #collections, etc.
+        const tabButton = document.querySelector(`[data-tab="${type}"]`);
+        if (tabButton) tabButton.click();
+    }
+}
+
+function updateHash(path) {
+    if (window.location.hash.slice(1) !== path) {
+        window.history.pushState(null, '', '#' + path);
+    }
+}
+
+function handleKeyboardShortcut(e) {
+    // Ignore if typing in input/textarea
+    if (e.target.matches('input, textarea') && !['Escape'].includes(e.key)) {
+        // Allow Ctrl+K even in inputs
+        if (!(e.key === 'k' && (e.ctrlKey || e.metaKey))) {
+            return;
+        }
+    }
+
+    const key = e.key.toLowerCase();
+    const ctrl = e.ctrlKey || e.metaKey;
+
+    // Ctrl+K or /: Focus search
+    if ((key === 'k' && ctrl) || key === '/') {
+        e.preventDefault();
+        if (state.currentTab !== 'search') {
+            document.querySelector('[data-tab="search"]').click();
+        }
+        document.getElementById('mainSearch').focus();
+        return;
+    }
+
+    // ?: Show keyboard shortcuts
+    if (key === '?' && !ctrl) {
+        e.preventDefault();
+        document.getElementById('keyboardModal').classList.add('active');
+        return;
+    }
+
+    // Escape: Close modals or clear search
+    if (key === 'escape') {
+        const activeModal = document.querySelector('.modal.active');
+        if (activeModal) {
+            activeModal.classList.remove('active');
+        } else {
+            const searchInput = document.getElementById('mainSearch');
+            if (searchInput.value) {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        }
+        return;
+    }
+
+    // Don't handle other shortcuts if modal is open
+    if (document.querySelector('.modal.active')) return;
+
+    // j/k: Navigate conversations
+    if ((key === 'j' || key === 'k') && state.currentTab === 'browse') {
+        e.preventDefault();
+        const items = Array.from(document.querySelectorAll('.conversation-item'));
+        const activeIndex = items.findIndex(item => item.classList.contains('active'));
+
+        let nextIndex;
+        if (key === 'j') {
+            nextIndex = activeIndex < items.length - 1 ? activeIndex + 1 : activeIndex;
+        } else {
+            nextIndex = activeIndex > 0 ? activeIndex - 1 : 0;
+        }
+
+        if (nextIndex >= 0 && nextIndex < items.length) {
+            items[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            items[nextIndex].click();
+        }
+        return;
+    }
+
+    // Enter: Open selected conversation (in search results)
+    if (key === 'enter' && state.currentTab === 'search') {
+        const firstResult = document.querySelector('.search-result-item');
+        if (firstResult) {
+            firstResult.click();
+        }
+        return;
+    }
+
+    // Shortcuts that require a current conversation
+    if (state.currentConv) {
+        // f: Toggle favorite
+        if (key === 'f') {
+            e.preventDefault();
+            state.toggleFavorite(state.currentConv.id);
+            renderConversationList();
+            showConversation(state.currentConv);
+            return;
+        }
+
+        // c: Copy conversation
+        if (key === 'c' && !ctrl) {
+            e.preventDefault();
+            copyConversation(state.currentConv.id);
+            return;
+        }
+
+        // 1-5: Rate conversation
+        if (['1', '2', '3', '4', '5'].includes(key)) {
+            e.preventDefault();
+            const rating = parseInt(key);
+            state.setRating(state.currentConv.id, rating);
+            showConversation(state.currentConv);
+            renderConversationList();
+            return;
+        }
+    }
 }
 
 function populateFilters() {
@@ -1383,6 +1814,7 @@ function createConversationItem(conv) {
     const div = document.createElement('div');
     div.className = 'conversation-item';
     div.dataset.convId = conv.id;
+    div.draggable = true;
     if (state.favorites.has(conv.id)) div.classList.add('favorite');
     if (!state.readStatus.has(conv.id)) div.classList.add('unread');
     if (state.currentConv && state.currentConv.id === conv.id) div.classList.add('active');
@@ -1409,12 +1841,26 @@ function createConversationItem(conv) {
 
     div.addEventListener('click', () => showConversation(conv));
 
+    // Drag and drop handlers
+    div.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', conv.id);
+        e.dataTransfer.effectAllowed = 'move';
+        div.classList.add('dragging');
+    });
+
+    div.addEventListener('dragend', () => {
+        div.classList.remove('dragging');
+    });
+
     return div;
 }
 
 function showConversation(conv) {
     state.currentConv = conv;
     state.markAsRead(conv.id);
+
+    // Update URL hash for deep linking
+    updateHash(`conv/${conv.id}`);
 
     // Update active state - find the item by checking conversation ID
     document.querySelectorAll('.conversation-item').forEach(item => {
@@ -1765,6 +2211,27 @@ function renderCollections() {
     state.collections.forEach((collection, idx) => {
         const div = document.createElement('div');
         div.className = 'collection-card';
+        div.dataset.collectionIdx = idx;
+
+        // Make collection card a drop zone
+        div.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            div.classList.add('drag-over');
+        });
+
+        div.addEventListener('dragleave', () => {
+            div.classList.remove('drag-over');
+        });
+
+        div.addEventListener('drop', (e) => {
+            e.preventDefault();
+            div.classList.remove('drag-over');
+            const convId = e.dataTransfer.getData('text/plain');
+            if (convId) {
+                state.addToCollection(collection.name, [convId]);
+                renderCollections();
+            }
+        });
 
         // Collection header
         const header = document.createElement('div');
