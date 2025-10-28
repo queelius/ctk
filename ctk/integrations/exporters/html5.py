@@ -27,9 +27,10 @@ class HTML5Exporter(ExporterPlugin):
         Export to file(s)
 
         If embed=True, creates a single HTML file with data embedded.
-        If embed=False (default), creates index.html + conversations.jsonl
+        If embed=False (default), creates index.html + conversations.jsonl + media/
         """
         embed = kwargs.pop('embed', False)  # Remove from kwargs to avoid duplicate
+        db_dir = kwargs.pop('db_dir', None)  # Database directory for media files
 
         if embed:
             # Single file export with embedded data
@@ -37,7 +38,7 @@ class HTML5Exporter(ExporterPlugin):
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
         else:
-            # Multi-file export: index.html + conversations.jsonl
+            # Multi-file export: index.html + conversations.jsonl + media/
             if file_path.endswith('.html'):
                 # Specific HTML filename provided - use its directory
                 output_dir = os.path.dirname(file_path) or '.'
@@ -47,10 +48,23 @@ class HTML5Exporter(ExporterPlugin):
                 output_dir = file_path
                 html_path = os.path.join(output_dir, 'index.html')
 
-            # Create output directory
+            # Create output directory and media directory
             os.makedirs(output_dir, exist_ok=True)
+            media_output_dir = os.path.join(output_dir, 'media')
+            os.makedirs(media_output_dir, exist_ok=True)
 
             jsonl_path = os.path.join(output_dir, 'conversations.jsonl')
+
+            # Copy media files if db_dir is provided
+            if db_dir:
+                import shutil
+                from pathlib import Path
+                source_media = Path(db_dir) / 'media'
+                if source_media.exists():
+                    # Copy all media files
+                    for media_file in source_media.iterdir():
+                        if media_file.is_file():
+                            shutil.copy2(media_file, media_output_dir)
 
             # Generate HTML without embedded data
             html_content = self.export_conversations(conversations, embed=False, **kwargs)
@@ -93,6 +107,20 @@ class HTML5Exporter(ExporterPlugin):
                     if not stats['date_range']['latest'] or msg.timestamp > stats['date_range']['latest']:
                         stats['date_range']['latest'] = msg.timestamp
 
+                # Extract images if present
+                images = []
+                if hasattr(msg.content, 'images') and msg.content.images:
+                    for img in msg.content.images:
+                        img_data = {
+                            'url': img.url,
+                            'caption': img.caption,
+                            'mime_type': img.mime_type
+                        }
+                        # Include base64 data if embedded
+                        if img.data:
+                            img_data['data'] = img.data
+                        images.append(img_data)
+
                 msg_dict = {
                     'id': msg.id,
                     'role': msg.role.value if hasattr(msg.role, 'value') else str(msg.role),
@@ -100,7 +128,8 @@ class HTML5Exporter(ExporterPlugin):
                     'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
                     'parent_id': msg.parent_id,
                     'has_code': '```' in (msg.content.get_text() if hasattr(msg.content, 'get_text') else ''),
-                    'has_images': bool(msg.content.images) if hasattr(msg.content, 'images') else False,
+                    'has_images': bool(images),
+                    'images': images,
                     'has_tools': bool(msg.content.tool_calls) if hasattr(msg.content, 'tool_calls') else False
                 }
                 messages.append(msg_dict)
@@ -215,6 +244,7 @@ class HTML5Exporter(ExporterPlugin):
                 <button class="tab" data-tab="timeline">📅 Timeline</button>
                 <button class="tab" data-tab="collections">⭐ Collections</button>
                 <button class="tab" data-tab="snippets">💾 Code Snippets</button>
+                <button class="tab" data-tab="media">🖼️ Media</button>
             </div>
             <div class="header-actions">
                 <button id="statsBtn" class="btn btn-secondary" title="Statistics">📊</button>
@@ -328,6 +358,27 @@ class HTML5Exporter(ExporterPlugin):
             </div>
         </div>
 
+        <!-- Media Tab -->
+        <div class="tab-content" data-content="media">
+            <div class="media-view">
+                <div class="media-header">
+                    <h2>🖼️ Media Gallery</h2>
+                    <div class="media-controls">
+                        <input type="search" id="mediaSearch" placeholder="Filter media..." class="filter-search">
+                        <select id="mediaSort" class="filter-select">
+                            <option value="date">Latest first</option>
+                            <option value="date-asc">Oldest first</option>
+                            <option value="conversation">By conversation</option>
+                        </select>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="showCaptions" checked> Show captions
+                        </label>
+                    </div>
+                </div>
+                <div id="mediaGallery" class="media-gallery"></div>
+            </div>
+        </div>
+
         <!-- Modals -->
         <div id="statsModal" class="modal">
             <div class="modal-content">
@@ -427,6 +478,15 @@ class HTML5Exporter(ExporterPlugin):
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Lightbox -->
+        <div class="lightbox" id="lightbox">
+            <button class="lightbox-close" onclick="closeLightbox()">×</button>
+            <div class="lightbox-content">
+                <img id="lightboxImage" class="lightbox-image" src="" alt="">
+                <div id="lightboxCaption" class="lightbox-caption"></div>
             </div>
         </div>
     </div>
@@ -1116,6 +1176,106 @@ body {
     overflow-x: auto;
 }
 
+/* Media Gallery */
+.media-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.media-header {
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.media-header h2 {
+    margin-bottom: 1rem;
+}
+
+.media-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.media-gallery {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 300px);
+    grid-auto-rows: min-content;
+    gap: 1.5rem;
+    justify-content: center;
+}
+
+.media-item {
+    width: 300px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.media-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.media-item .media-item-image {
+    width: 300px;
+    height: 300px;
+    object-fit: cover;
+    background: var(--bg-tertiary);
+    display: block;
+}
+
+.media-item-info {
+    padding: 0.75rem;
+}
+
+.media-item-caption {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.media-item-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.media-item-conversation {
+    color: var(--link);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.media-item-conversation:hover {
+    text-decoration: underline;
+}
+
+.media-empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-secondary);
+    grid-column: 1 / -1;
+}
+
 /* Modal */
 .modal {
     display: none;
@@ -1527,6 +1687,136 @@ body[data-theme="dark"] .hljs {
     border-top: 1px solid var(--border);
     margin: 1.5rem 0;
 }
+
+/* ==================== Image Gallery ==================== */
+
+.message-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.message-image {
+    position: relative;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.message-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.message-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+    max-height: 300px;
+}
+
+.message-image.loading {
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.message-image-caption {
+    padding: 0.5rem;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    font-size: 0.85rem;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.message-image:hover .message-image-caption {
+    opacity: 1;
+}
+
+/* Lightbox */
+.lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.lightbox.active {
+    display: flex;
+}
+
+.lightbox-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    position: relative;
+}
+
+.lightbox-image {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+}
+
+.lightbox-caption {
+    color: white;
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 1rem;
+}
+
+.lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    font-size: 2rem;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.lightbox-close:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Loading spinner */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
 """
 
     def _get_javascript(self) -> str:
@@ -1760,6 +2050,7 @@ function setupTabs() {
             if (tabName === 'timeline') renderTimeline();
             if (tabName === 'collections') renderCollections();
             if (tabName === 'snippets') renderSnippets();
+            if (tabName === 'media') renderMediaGallery();
         });
     });
 }
@@ -1880,6 +2171,12 @@ function handleHashChange() {
         const tabButton = document.querySelector(`[data-tab="${type}"]`);
         if (tabButton) tabButton.click();
     }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function updateHash(path) {
@@ -2348,6 +2645,63 @@ function createMessageElement(conv, msg) {
     // Render LaTeX math after content is in DOM
     setTimeout(() => renderMath(content), 0);
 
+    // Render images if present
+    if (msg.images && msg.images.length > 0) {
+        const imagesContainer = document.createElement('div');
+        imagesContainer.className = 'message-images';
+
+        msg.images.forEach((imageData, index) => {
+            const imageWrapper = document.createElement('div');
+            imageWrapper.className = 'message-image loading';
+
+            const spinner = document.createElement('div');
+            spinner.className = 'spinner';
+            imageWrapper.appendChild(spinner);
+
+            const img = document.createElement('img');
+            img.loading = 'lazy';
+
+            // Handle both URL and base64 data
+            if (imageData.data) {
+                img.src = `data:${imageData.mime_type || 'image/png'};base64,${imageData.data}`;
+            } else if (imageData.url) {
+                img.src = imageData.url;
+            }
+
+            img.alt = imageData.caption || 'Image';
+
+            img.onload = () => {
+                imageWrapper.classList.remove('loading');
+                spinner.remove();
+            };
+
+            img.onerror = () => {
+                imageWrapper.classList.remove('loading');
+                spinner.remove();
+                imageWrapper.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">⚠️ Failed to load image</div>';
+            };
+
+            imageWrapper.appendChild(img);
+
+            // Add caption overlay if present
+            if (imageData.caption) {
+                const caption = document.createElement('div');
+                caption.className = 'message-image-caption';
+                caption.textContent = imageData.caption;
+                imageWrapper.appendChild(caption);
+            }
+
+            // Click to open in lightbox
+            imageWrapper.addEventListener('click', () => {
+                openLightbox(img.src, imageData.caption);
+            });
+
+            imagesContainer.appendChild(imageWrapper);
+        });
+
+        div.appendChild(imagesContainer);
+    }
+
     // Show annotation if exists
     const annotationKey = `${conv.id}:${msg.id}`;
     if (state.annotations[annotationKey]) {
@@ -2487,6 +2841,38 @@ function renderTimeline() {
 function toggleTheme() {
     const current = document.body.dataset.theme;
     document.body.dataset.theme = current === 'dark' ? 'light' : 'dark';
+}
+
+function openLightbox(src, caption) {
+    const lightbox = document.getElementById('lightbox');
+    const image = document.getElementById('lightboxImage');
+    const captionElement = document.getElementById('lightboxCaption');
+
+    image.src = src;
+    captionElement.textContent = caption || '';
+    lightbox.classList.add('active');
+
+    // Close on click outside image
+    lightbox.onclick = (e) => {
+        if (e.target === lightbox) {
+            closeLightbox();
+        }
+    };
+
+    // Close on Escape key
+    document.addEventListener('keydown', lightboxKeyHandler);
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById('lightbox');
+    lightbox.classList.remove('active');
+    document.removeEventListener('keydown', lightboxKeyHandler);
+}
+
+function lightboxKeyHandler(e) {
+    if (e.key === 'Escape') {
+        closeLightbox();
+    }
 }
 
 function showStats() {
@@ -2722,6 +3108,113 @@ function renderSnippets() {
         `;
         container.appendChild(div);
     });
+}
+
+// ==================== Media Gallery ====================
+function renderMediaGallery() {
+    const container = document.getElementById('mediaGallery');
+    const searchInput = document.getElementById('mediaSearch');
+    const sortSelect = document.getElementById('mediaSort');
+    const showCaptionsCheckbox = document.getElementById('showCaptions');
+
+    // Collect all media items from all conversations
+    const mediaItems = [];
+
+    CONVERSATIONS.forEach(conv => {
+        if (conv.messages) {
+            conv.messages.forEach(msg => {
+                if (msg.images && msg.images.length > 0) {
+                    msg.images.forEach(image => {
+                        mediaItems.push({
+                            url: image.url,
+                            caption: image.caption || '',
+                            conversationId: conv.id,
+                            conversationTitle: conv.title,
+                            messageId: msg.id,
+                            timestamp: msg.timestamp || conv.created_at
+                        });
+                    });
+                }
+            });
+        }
+    });
+
+    // Apply search filter
+    const searchTerm = searchInput.value.toLowerCase();
+    const filteredItems = searchTerm
+        ? mediaItems.filter(item =>
+            item.caption.toLowerCase().includes(searchTerm) ||
+            item.conversationTitle.toLowerCase().includes(searchTerm)
+          )
+        : mediaItems;
+
+    // Apply sorting
+    const sortBy = sortSelect.value;
+    filteredItems.sort((a, b) => {
+        if (sortBy === 'date') {
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        } else if (sortBy === 'date-asc') {
+            return new Date(a.timestamp) - new Date(b.timestamp);
+        } else if (sortBy === 'conversation') {
+            return a.conversationTitle.localeCompare(b.conversationTitle);
+        }
+        return 0;
+    });
+
+    // Render gallery
+    container.innerHTML = '';
+
+    if (filteredItems.length === 0) {
+        container.innerHTML = '<div class="media-empty">No media found</div>';
+        return;
+    }
+
+    const showCaptions = showCaptionsCheckbox.checked;
+
+    filteredItems.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'media-item';
+
+        const captionHtml = showCaptions && item.caption
+            ? `<div class="media-item-caption">${escapeHtml(item.caption)}</div>`
+            : '';
+
+        div.innerHTML = `
+            <img src="${item.url}" alt="${escapeHtml(item.caption)}" class="media-item-image">
+            <div class="media-item-info">
+                ${captionHtml}
+                <div class="media-item-meta">
+                    <a class="media-item-conversation" data-conv-id="${item.conversationId}">
+                        ${escapeHtml(item.conversationTitle.substring(0, 30))}${item.conversationTitle.length > 30 ? '...' : ''}
+                    </a>
+                    ${item.timestamp ? `<span>${new Date(item.timestamp).toLocaleDateString()}</span>` : ''}
+                </div>
+            </div>
+        `;
+
+        // Click to open in lightbox
+        div.querySelector('img').addEventListener('click', () => {
+            openLightbox(item.url, item.caption);
+        });
+
+        // Click conversation link to navigate
+        div.querySelector('.media-item-conversation').addEventListener('click', (e) => {
+            e.stopPropagation();
+            showConversation(item.conversationId);
+            // Switch to browse tab
+            document.querySelector('.tab[data-tab="browse"]').click();
+        });
+
+        container.appendChild(div);
+    });
+
+    // Setup event listeners for controls (only once)
+    if (!searchInput.dataset.listener) {
+        searchInput.addEventListener('input', renderMediaGallery);
+        sortSelect.addEventListener('change', renderMediaGallery);
+        showCaptionsCheckbox.addEventListener('change', renderMediaGallery);
+        searchInput.dataset.listener = 'true';
+    }
 }
 
 function copyMessage(msgId) {

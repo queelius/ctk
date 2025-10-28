@@ -312,6 +312,10 @@ class ConversationMetadata:
     tags: List[str] = field(default_factory=list)
     project: Optional[str] = None  # Project name for organization
     custom_data: Dict[str, Any] = field(default_factory=dict)  # Renamed from custom
+    # Organization fields
+    starred_at: Optional[datetime] = None
+    pinned_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -324,7 +328,10 @@ class ConversationMetadata:
             'model': self.model,
             'tags': self.tags,
             'project': self.project,
-            'custom_data': self.custom_data
+            'custom_data': self.custom_data,
+            'starred_at': self.starred_at.isoformat() if self.starred_at else None,
+            'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None
         }
     
     @classmethod
@@ -339,7 +346,62 @@ class ConversationMetadata:
             model=data.get('model'),
             tags=data.get('tags', []),
             project=data.get('project'),
-            custom_data=data.get('custom_data', data.get('custom', {}))  # Handle both names
+            custom_data=data.get('custom_data', data.get('custom', {})),  # Handle both names
+            starred_at=datetime.fromisoformat(data['starred_at']) if data.get('starred_at') else None,
+            pinned_at=datetime.fromisoformat(data['pinned_at']) if data.get('pinned_at') else None,
+            archived_at=datetime.fromisoformat(data['archived_at']) if data.get('archived_at') else None
+        )
+
+
+@dataclass
+class ConversationSummary:
+    """Lightweight conversation metadata (no messages loaded)"""
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+    source: Optional[str] = None
+    model: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
+    project: Optional[str] = None
+    starred_at: Optional[datetime] = None
+    pinned_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'message_count': self.message_count,
+            'source': self.source,
+            'model': self.model,
+            'tags': self.tags,
+            'project': self.project,
+            'starred_at': self.starred_at.isoformat() if self.starred_at else None,
+            'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ConversationSummary':
+        """Create from dictionary"""
+        return cls(
+            id=data['id'],
+            title=data.get('title', 'Untitled'),
+            created_at=datetime.fromisoformat(data['created_at']) if isinstance(data.get('created_at'), str) else data.get('created_at', datetime.now()),
+            updated_at=datetime.fromisoformat(data['updated_at']) if isinstance(data.get('updated_at'), str) else data.get('updated_at', datetime.now()),
+            message_count=data.get('message_count', 0),
+            source=data.get('source'),
+            model=data.get('model'),
+            tags=data.get('tags', []),
+            project=data.get('project'),
+            starred_at=datetime.fromisoformat(data['starred_at']) if isinstance(data.get('starred_at'), str) else data.get('starred_at'),
+            pinned_at=datetime.fromisoformat(data['pinned_at']) if isinstance(data.get('pinned_at'), str) else data.get('pinned_at'),
+            archived_at=datetime.fromisoformat(data['archived_at']) if isinstance(data.get('archived_at'), str) else data.get('archived_at'),
         )
 
 

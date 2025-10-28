@@ -7,6 +7,9 @@ import logging
 from typing import List, Any, Dict, Optional
 from datetime import datetime
 import re
+import os
+import glob
+import base64
 
 from ctk.core.plugin import ImporterPlugin
 
@@ -105,17 +108,97 @@ class OpenAIImporter(ImporterPlugin):
                     return datetime.strptime(timestamp, fmt)
                 except:
                     continue
-        
+
         return None
-    
+
+    def _resolve_and_copy_image(self, file_service_url: str) -> Optional[str]:
+        """
+        Resolve file-service:// or sediment:// URL to local file and copy to media directory
+
+        Args:
+            file_service_url: URL like "file-service://file-ABC123", "sediment://file_123", etc.
+
+        Returns:
+            Relative path like "media/uuid.png" or None if not found
+        """
+        if not self.source_dir or not self.media_dir:
+            logger.debug(f"source_dir or media_dir not provided, skipping image: {file_service_url}")
+            return None
+
+        # Skip sediment:// URLs as files don't exist in exports
+        if file_service_url.startswith('sediment://'):
+            logger.debug(f"Skipping sediment:// URL (files not in export): {file_service_url}")
+            return None
+
+        import uuid
+        import shutil
+        from pathlib import Path
+
+        # Extract file ID from URL
+        file_id = file_service_url.replace('file-service://', '')
+
+        # Search patterns:
+        # 1. Main directory: {uuid}-{filename}.{ext}
+        # 2. Main directory with file- prefix: file-{id}-{filename}.{ext}
+        # 3. dalle-generations: file-{id}-{uuid}.{ext}
+
+        source_path = None
+
+        # Try main directory patterns
+        for pattern in [f"{file_id}-*", f"file-{file_id}-*"]:
+            matches = glob.glob(str(Path(self.source_dir) / pattern))
+            if matches:
+                source_path = Path(matches[0])
+                break
+
+        # Try dalle-generations directory
+        if not source_path:
+            dalle_dir = Path(self.source_dir) / 'dalle-generations'
+            if dalle_dir.exists():
+                for pattern in [f"file-{file_id}-*", f"{file_id}-*"]:
+                    matches = glob.glob(str(dalle_dir / pattern))
+                    if matches:
+                        source_path = Path(matches[0])
+                        break
+
+        if not source_path or not source_path.exists():
+            logger.warning(f"Could not find image file for {file_service_url}")
+            return None
+
+        # Generate new UUID for media file
+        new_uuid = str(uuid.uuid4())
+        ext = source_path.suffix
+        dest_filename = f"{new_uuid}{ext}"
+        dest_path = Path(self.media_dir) / dest_filename
+
+        # Copy file
+        try:
+            shutil.copy2(source_path, dest_path)
+            logger.debug(f"Copied {source_path.name} -> {dest_filename}")
+            return f"media/{dest_filename}"
+        except Exception as e:
+            logger.error(f"Failed to copy image {source_path}: {e}")
+            return None
+
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
-        """Import OpenAI conversation data"""
+        """Import OpenAI conversation data
+
+        Args:
+            data: Conversation data (JSON string or dict/list)
+            **kwargs: Additional arguments
+                - source_dir: Directory containing the export (for resolving image paths)
+                - media_dir: Target directory for copying images (from ConversationDB)
+        """
         if isinstance(data, str):
             data = json.loads(data)
-        
+
         if not isinstance(data, list):
             data = [data]
-        
+
+        # Get source directory for images
+        self.source_dir = kwargs.get('source_dir')
+        self.media_dir = kwargs.get('media_dir')
+
         conversations = []
 
         for conv_data in data:
@@ -152,11 +235,20 @@ class OpenAIImporter(ImporterPlugin):
             
             # Process mapping
             mapping = conv_data.get('mapping', {})
-            
+
+            # First pass: identify structural nodes (no message content)
+            # These are conversation root placeholders like "client-created-root"
+            # They're part of OpenAI's tree structure but aren't actual messages
+            structural_nodes = set()
+            for node_id, node_data in mapping.items():
+                if not node_data or not node_data.get('message'):
+                    structural_nodes.add(node_id)
+
+            # Second pass: process actual messages
             for msg_id, msg_data in mapping.items():
                 if not msg_data or 'message' not in msg_data:
                     continue
-                
+
                 msg_info = msg_data['message']
                 if not msg_info:
                     continue
@@ -189,24 +281,42 @@ class OpenAIImporter(ImporterPlugin):
                                 # This is an image or other media asset
                                 asset_url = part.get('asset_pointer')
                                 if asset_url:
-                                    # Safely get nested metadata
-                                    metadata = part.get('metadata') or {}
-                                    dalle_data = metadata.get('dalle') if isinstance(metadata, dict) else {}
-                                    prompt = dalle_data.get('prompt') if isinstance(dalle_data, dict) else None
-                                    content.add_image(
-                                        url=asset_url,
-                                        caption=prompt
-                                    )
+                                    # Resolve and copy image to media directory
+                                    media_path = self._resolve_and_copy_image(asset_url)
+                                    if media_path:
+                                        # Safely get nested metadata
+                                        metadata = part.get('metadata') or {}
+                                        dalle_data = metadata.get('dalle') if isinstance(metadata, dict) else {}
+                                        prompt = dalle_data.get('prompt') if isinstance(dalle_data, dict) else None
+                                        content.add_image(
+                                            url=media_path,
+                                            caption=prompt
+                                        )
                             elif 'image_url' in part:
                                 # Direct image URL
                                 img_data = part['image_url']
                                 if isinstance(img_data, str):
-                                    content.add_image(url=img_data)
+                                    # Try to resolve if it's a file-service URL
+                                    if img_data.startswith('file-service://'):
+                                        media_path = self._resolve_and_copy_image(img_data)
+                                        if media_path:
+                                            content.add_image(url=media_path)
+                                    else:
+                                        content.add_image(url=img_data)
                                 elif isinstance(img_data, dict):
-                                    content.add_image(
-                                        url=img_data.get('url'),
-                                        caption=img_data.get('detail')
-                                    )
+                                    url = img_data.get('url')
+                                    if url and url.startswith('file-service://'):
+                                        media_path = self._resolve_and_copy_image(url)
+                                        if media_path:
+                                            content.add_image(
+                                                url=media_path,
+                                                caption=img_data.get('detail')
+                                            )
+                                    else:
+                                        content.add_image(
+                                            url=url,
+                                            caption=img_data.get('detail')
+                                        )
                             elif 'text' in part:
                                 text_parts.append(part['text'])
                             elif 'content' in part:
@@ -244,13 +354,19 @@ class OpenAIImporter(ImporterPlugin):
                 elif isinstance(content_data, str):
                     content.text = content_data
                 
+                # Determine parent_id
+                # If parent is a structural node (conversation root), set parent_id to None
+                # This correctly translates OpenAI's tree structure to our unified model
+                parent = msg_data.get('parent')
+                parent_id = None if (parent is None or parent in structural_nodes) else parent
+
                 # Create message
                 message = Message(
                     id=msg_id,
                     role=role,
                     content=content,
                     timestamp=self._parse_timestamp(msg_info.get('create_time')),
-                    parent_id=msg_data.get('parent'),
+                    parent_id=parent_id,
                     metadata={
                         'status': msg_info.get('status'),
                         'end_turn': msg_info.get('end_turn'),

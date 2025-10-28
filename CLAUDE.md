@@ -88,10 +88,19 @@ make clean
 Main commands:
 - `import`: Load conversations from various formats
 - `export`: Export conversations to different formats
-- `list`: Display conversations with filtering
-- `search`: Full-text search across all messages
+- `list`: Display conversations with filtering (supports --starred, --pinned, --archived)
+- `search`: Full-text search across all messages with Rich table output
+- `ask`: Natural language queries using LLM with tool calling
+- `show`: Display specific conversation (supports path selection)
+- `tree`: Visualize conversation tree structure
+- `paths`: List all paths in branching conversation
+- `star/pin/archive`: Organize conversations
+- `title`: Rename conversations
+- `tag`: Auto-tag with LLM
 - `stats`: Database statistics and analytics
 - `plugins`: List available plugins
+- `chat`: Launch interactive TUI
+- `merge/diff/filter`: Database operations
 
 ### Import/Export Flow
 
@@ -109,22 +118,51 @@ Exporters (`ctk/integrations/exporters/`):
 - Implements `export_conversations()` method
 - Available formats:
   - **JSONL**: For fine-tuning and data pipelines
-  - **JSON**: Native CTK format preserving tree structure
-  - **Markdown**: Human-readable with optional tree visualization
+  - **JSON**: Native CTK format, OpenAI, Anthropic, or generic JSON
+  - **Markdown**: Human-readable with tree visualization
+  - **HTML5**: Interactive HTML with browsing and search
 
-### New Export Formats
+### TUI Architecture (`ctk/integrations/chat/tui.py`)
 
-**Markdown Exporter** (`ctk/integrations/exporters/markdown.py`)
-- Human-readable format with emoji indicators
-- Tree structure visualization option
-- Support for multimodal content (images, tools)
-- Path selection strategies (longest, first, last, all)
+**Chat Terminal UI**:
+- Interactive conversation browsing with Rich tables
+- Live chat with LLM providers (Ollama, OpenAI, Anthropic)
+- Model Context Protocol (MCP) tool support
+- Conversation management (star, pin, archive, rename)
+- Natural language queries via `/ask` command
+- Tree navigation for branching conversations
+- Export to various formats from within TUI
 
-**JSON Exporter** (`ctk/integrations/exporters/json.py`)
-- Multiple format styles: ctk (native), openai, anthropic, generic
-- Preserves full tree structure in CTK format
-- Compatible with provider-specific formats
-- Pretty-print option for readability
+**Key TUI Commands**:
+- `/browse`: Browse conversations table
+- `/ask <query>`: Natural language query (LLM-powered)
+- `/search <query>`: Full-text search
+- `/show <id>`, `/tree <id>`, `/paths <id>`: View conversations
+- `/star`, `/pin`, `/archive`, `/title`: Organization
+- `/fork`, `/regenerate`, `/edit`: Chat operations
+- `/export`, `/tag`, `/help`, `/quit`: Utilities
+
+### LLM Integration (`ctk/integrations/llm/`)
+
+**Provider Abstraction** (`base.py`):
+- Abstract `LLMProvider` class for unified interface
+- Standard methods: `chat()`, `list_models()`, `format_tools_for_api()`
+- Supports streaming and tool calling
+- Provider implementations: Ollama, OpenAI, Anthropic
+
+**Tool Calling** (`ctk/core/helpers.py`):
+- `get_ask_tools()`: Returns tool definitions for database queries
+- `execute_ask_tool()`: Executes tools and returns formatted results
+- Tools: `search_conversations`, `get_conversation_by_id`
+- Supports both CLI and TUI contexts
+
+### Helper Functions (`ctk/core/helpers.py`)
+
+**Shared Utilities**:
+- `format_conversations_table()`: Rich table formatting for CLI/TUI
+- `list_conversations_helper()`: Unified conversation listing logic
+- `search_conversations_helper()`: Unified search logic
+- Tool schemas and execution for LLM queries
 
 ## Critical Notes
 
@@ -136,9 +174,10 @@ The codebase is undergoing refactoring per `TODO.md`:
 
 ### Known Issues
 - Test coverage needs improvement (target: >70%)
-- Database queries use LIKE instead of full-text search
+- Database queries use LIKE instead of full-text search (consider FTS5)
 - Plugin system needs additional security validation
-- CLI needs comprehensive integration tests
+- Complex-network-rag integration for similarity search (in progress)
+- Performance optimization needed for large databases (>100k conversations)
 
 ### Testing Approach
 - Unit tests in `tests/unit/` - test individual components
@@ -156,3 +195,47 @@ The codebase is undergoing refactoring per `TODO.md`:
 - No formal migration system currently implemented
 - Database schema changes require manual handling
 - Consider adding Alembic for future schema evolution
+
+## Feature Highlights
+
+### Natural Language Queries (Ask Command)
+The `ctk ask` command and TUI `/ask` command use LLM tool calling to interpret natural language queries:
+
+**Implementation** (`ctk/cli.py`, `ctk/core/helpers.py`):
+- System prompt with few-shot examples guides LLM behavior
+- Tools: `search_conversations`, `get_conversation_by_id`
+- Boolean filters (starred/pinned/archived) only included when explicitly mentioned
+- Direct tool output (no LLM reformatting to prevent hallucination)
+- Rich table output for readability
+
+**Critical Pattern** - Boolean filter handling:
+```python
+# Only include filter if explicitly present in tool call
+starred_val = tool_args.get('starred')
+starred = to_bool(starred_val) if starred_val is not None else None
+```
+
+### Rich Console Output
+All CLI list/search/ask commands use shared `format_conversations_table()` function:
+- Color-coded columns with emoji flags (⭐📌📦)
+- Truncated titles for readability
+- Consistent styling across commands
+- JSON output option for scripting
+
+### Organization Features
+Database schema supports starred_at, pinned_at, archived_at timestamps:
+- Star: Quick access to important conversations
+- Pin: Keep conversations at top of lists
+- Archive: Hide old conversations from default views
+- Multiple IDs supported for batch operations
+
+### Auto-tagging
+LLM-powered tagging extracts topics/themes from conversation content:
+- Analyzes conversation messages for key concepts
+- Generates relevant tags automatically
+- Available in both CLI and TUI
+
+### Database Operations
+- `merge`: Combine multiple databases (handles duplicates by ID)
+- `diff`: Compare databases to find unique/modified conversations
+- `filter`: Extract subset of conversations to new database

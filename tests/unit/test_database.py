@@ -85,21 +85,21 @@ class TestConversationDB:
                 metadata=ConversationMetadata(source="test")
             )
             temp_db.save_conversation(conv)
-        
+
         # List all
         conversations = temp_db.list_conversations()
         assert len(conversations) == 5
-        
+
         # List with limit
         limited = temp_db.list_conversations(limit=3)
         assert len(limited) == 3
-        
-        # Check fields
+
+        # Check fields - conversations are ConversationSummary objects
         first = conversations[0]
-        assert "id" in first
-        assert "title" in first
-        assert "created_at" in first
-        assert "updated_at" in first
+        assert hasattr(first, 'id')
+        assert hasattr(first, 'title')
+        assert hasattr(first, 'created_at')
+        assert hasattr(first, 'updated_at')
     
     @pytest.mark.unit
     def test_conversation_with_tags(self, temp_db):
@@ -193,17 +193,17 @@ class TestConversationDB:
         # Search for Python
         results = temp_db.search_conversations("Python")
         assert len(results) == 1
-        assert results[0]["id"] == "conv_python"
-        
+        assert results[0].id == "conv_python"
+
         # Search for JavaScript
         results = temp_db.search_conversations("JavaScript")
         assert len(results) == 1
-        assert results[0]["id"] == "conv_javascript"
-        
+        assert results[0].id == "conv_javascript"
+
         # Search in message content
         results = temp_db.search_conversations("neural network")
         assert len(results) == 1
-        assert results[0]["id"] == "conv_ml"
+        assert results[0].id == "conv_ml"
     
     @pytest.mark.unit
     def test_get_statistics(self, temp_db):

@@ -130,7 +130,7 @@ class MarkdownExporter(ExporterPlugin):
             output.write(f"### {role_emoji} {role_name}")
 
             if include_timestamps and msg.timestamp:
-                output.write(f" <sub>({msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')})</sub>")
+                output.write(f" _{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')}_")
 
             output.write("\n\n")
 

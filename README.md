@@ -6,17 +6,20 @@ A powerful, plugin-based system for managing AI conversations from multiple prov
 
 ```bash
 # Setup (one-time)
-make setup
-source .venv/bin/activate
+make install
+source venv/bin/activate
 
 # Import conversations
 ctk import chatgpt_export.json --db my_chats.db
 ctk import claude_export.json --db my_chats.db --format anthropic
 
-# View and search
-ctk list --db my_chats.db
-ctk search "python async" --db my_chats.db
-ctk stats --db my_chats.db
+# View and search with beautiful tables
+ctk list --db my_chats.db --starred
+ctk search "python async" --db my_chats.db --limit 10
+ctk ask "show me conversations about machine learning" --db my_chats.db
+
+# Interactive chat with LLM
+ctk chat --db my_chats.db  # Start TUI with conversation management
 
 # Export for fine-tuning
 ctk export training.jsonl --db my_chats.db --format jsonl
@@ -24,13 +27,24 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 
 ## 🌟 Key Features
 
+### Core Functionality
 - **🌳 Universal Tree Format**: All conversations stored as trees - linear chats are single-path trees, branching conversations preserve all paths
 - **🔌 Plugin Architecture**: Auto-discovers importers/exporters, easy to add new formats
 - **💾 SQLite Backend**: Fast, searchable local database with proper indexing
-- **🏷️ Rich Metadata**: Auto-tags by provider (OpenAI, Anthropic), model (GPT-4, Claude), language, etc.
 - **🔒 Privacy First**: Everything local, optional secret masking for API keys/passwords
-- **🔍 Full-Text Search**: Search across all conversations instantly
 - **🤖 Coding Agent Support**: Import from GitHub Copilot, Cursor, and other coding assistants
+
+### Search & Discovery
+- **🔍 Full-Text Search**: Search across all conversations instantly with Rich table output
+- **🤖 Natural Language Queries**: Use `/ask` or `ctk ask` for LLM-powered queries
+- **🏷️ Smart Tagging**: Auto-tags by provider, model, language; manual tags; LLM auto-tagging
+- **⭐ Organization**: Star, pin, and archive conversations for easy filtering
+
+### Interactive Features
+- **💬 Chat TUI**: Beautiful terminal UI with conversation browsing, editing, and chat
+- **🌐 MCP Integration**: Model Context Protocol support for tool calling
+- **🔄 Live Editing**: Fork conversations, navigate paths, edit trees in real-time
+- **📊 Rich Visualization**: Color-coded messages, tree views, path exploration
 
 ## 📦 Installation
 
@@ -97,11 +111,16 @@ done
 
 ### List Conversations
 ```bash
-# List all (newest first)
+# List all (newest first) with Rich tables
 ctk list --db chats.db
 
-# List with limit
-ctk list --db chats.db --limit 50
+# Filter by status
+ctk list --db chats.db --starred
+ctk list --db chats.db --pinned
+ctk list --db chats.db --archived
+
+# Combine filters
+ctk list --db chats.db --starred --pinned --limit 10
 
 # Output as JSON
 ctk list --db chats.db --json
@@ -109,11 +128,41 @@ ctk list --db chats.db --json
 
 ### Search
 ```bash
-# Search in content and titles
+# Search with Rich table output
 ctk search "machine learning" --db chats.db
 
-# Search with limit
-ctk search "async python" --db chats.db --limit 20
+# Advanced filtering
+ctk search "python" --db chats.db --source ChatGPT --model GPT-4
+ctk search "async" --db chats.db --tags "code,tutorial" --limit 20
+
+# Search with date ranges
+ctk search "AI" --db chats.db --date-from 2024-01-01 --date-to 2024-12-31
+```
+
+### Natural Language Queries
+```bash
+# Ask anything in plain English using LLM
+ctk ask "show me starred conversations" --db chats.db
+ctk ask "find discussions about async python" --db chats.db
+ctk ask "conversations from last week about AI" --db chats.db --debug
+
+# The LLM interprets your query and executes the right database operations
+```
+
+### View Conversations
+```bash
+# Show specific conversation (prefix matching)
+ctk show abc123 --db chats.db
+
+# Show with path selection
+ctk show abc123 --db chats.db --path longest
+ctk show abc123 --db chats.db --path latest
+
+# View tree structure
+ctk tree abc123 --db chats.db
+
+# List all paths in branching conversation
+ctk paths abc123 --db chats.db
 ```
 
 ### View Statistics
@@ -124,6 +173,9 @@ ctk stats --db chats.db
 # Database Statistics:
 #   Total conversations: 851
 #   Total messages: 25890
+#   Starred: 23
+#   Pinned: 5
+#   Archived: 142
 # Messages by role:
 #     assistant: 12388
 #     user: 9574
@@ -132,6 +184,135 @@ ctk stats --db chats.db
 #     ChatGPT: 423
 #     Claude: 287
 #     Copilot: 141
+```
+
+## 📋 Conversation Organization
+
+### Star/Unstar Conversations
+```bash
+# Star a conversation for quick access
+ctk star abc123 --db chats.db
+
+# Star multiple conversations
+ctk star abc123 def456 ghi789 --db chats.db
+
+# Unstar
+ctk star --unstar abc123 --db chats.db
+```
+
+### Pin/Unpin Conversations
+```bash
+# Pin important conversations to the top
+ctk pin abc123 --db chats.db
+
+# Unpin
+ctk pin --unpin abc123 --db chats.db
+```
+
+### Archive/Unarchive
+```bash
+# Archive old conversations
+ctk archive abc123 --db chats.db
+
+# Unarchive
+ctk archive --unarchive abc123 --db chats.db
+```
+
+### Rename Conversations
+```bash
+# Change conversation title
+ctk title abc123 "New descriptive title" --db chats.db
+```
+
+## 💬 Interactive Chat TUI
+
+Launch the terminal UI for interactive conversation management and chat:
+
+```bash
+ctk chat --db chats.db
+```
+
+### TUI Features
+
+**Navigation & Browsing:**
+- Browse conversations with filtering (starred, pinned, archived)
+- Rich table view with emoji flags (⭐📌📦)
+- Quick search and natural language queries
+- Tree view for branching conversations
+- Path navigation in multi-branch trees
+
+**Conversation Management:**
+- Create, rename, delete conversations
+- Star, pin, archive operations
+- Auto-tagging with LLM
+- Export to various formats
+
+**Live Chat:**
+- Chat with any LLM provider (Ollama, OpenAI, Anthropic)
+- Model Context Protocol (MCP) tool support
+- Fork conversations to explore alternatives
+- Edit and regenerate messages
+- Switch between conversation paths
+
+### TUI Commands
+
+```bash
+# Navigation
+/browse              # Browse conversations table
+/show <id>           # Show conversation
+/tree <id>           # View tree structure
+/paths <id>          # List all paths
+
+# Search & Query
+/search <query>      # Full-text search
+/ask <query>         # Natural language query (LLM-powered)
+
+# Organization
+/star <id>           # Star conversation
+/pin <id>            # Pin conversation
+/archive <id>        # Archive conversation
+/title <id> <title>  # Rename conversation
+
+# Chat Operations
+/fork                # Fork current conversation
+/regenerate          # Regenerate last message
+/edit <msg_id>       # Edit a message
+/model <name>        # Switch LLM model
+
+# Export & Tools
+/export <format>     # Export current conversation
+/tag                 # Auto-tag with LLM
+/help                # Show all commands
+/quit                # Exit TUI
+```
+
+## 🗄️ Database Operations
+
+### Merge Databases
+```bash
+# Combine multiple databases
+ctk merge source1.db source2.db --output merged.db
+
+# Automatically handles duplicates by conversation ID
+```
+
+### Database Diff
+```bash
+# Compare two databases
+ctk diff db1.db db2.db
+
+# Shows:
+# - Conversations only in db1
+# - Conversations only in db2
+# - Conversations with different content
+```
+
+### Filter and Extract
+```bash
+# Create filtered database
+ctk filter --db all_chats.db --output work_chats.db --tags "work"
+ctk filter --db all_chats.db --output starred.db --starred
+ctk filter --db all_chats.db --output recent.db --date-from 2024-01-01
 ```
 
 ## 📤 Export Examples
@@ -296,7 +477,9 @@ sanitizer.add_rule(SanitizationRule(
 
 ### Exporters
 - **jsonl** - JSONL for fine-tuning (multiple formats)
-- More coming soon!
+- **json** - Native CTK format, OpenAI, Anthropic, or generic JSON
+- **markdown** - Human-readable with tree visualization
+- **html5** - Interactive HTML with browsing and search
 
 ### List Available Plugins
 ```bash
@@ -361,26 +544,54 @@ CTK uses SQLite with the following structure:
 
 ## 🗺️ Roadmap
 
-- [ ] Web UI for browsing conversations
-- [ ] More export formats (Markdown, PDF, HTML)
-- [ ] Conversation merging and deduplication
+### Completed ✅
+- [x] Terminal UI with conversation management
+- [x] Rich console output with tables
+- [x] Natural language queries (ask command)
+- [x] Star/pin/archive organization
+- [x] Multiple export formats (JSONL, JSON, Markdown, HTML5)
+- [x] MCP tool integration
+- [x] Auto-tagging with LLM
+- [x] Database merge/diff operations
+
+### In Progress 🔨
+- [ ] Embeddings and similarity search (complex-network-rag integration)
+- [ ] Unit and integration test coverage
+- [ ] Performance optimization for large databases
+
+### Planned 📋
+- [ ] Web-based UI (complement to TUI)
+- [ ] Conversation deduplication utilities
 - [ ] LangChain/LlamaIndex integration
-- [ ] Embeddings and semantic search
-- [ ] Conversation analytics dashboard
+- [ ] Advanced analytics dashboard
+- [ ] Multi-user collaboration features
+- [ ] Cloud sync (optional, privacy-preserving)
 
 ## 🧪 Development
 
 ```bash
-# Run tests
-make dev
+# Run all tests
+make test
 
-# Format code
-make dev  # includes black, flake8, pytest
+# Run unit tests only
+make test-unit
 
-# Clean everything
+# Run integration tests only
+make test-integration
+
+# Run with coverage report
+make coverage
+
+# Format code (black + isort)
+make format
+
+# Lint code (flake8 + mypy)
+make lint
+
+# Clean build artifacts
 make clean
 
-# View Makefile options
+# View all Makefile targets
 make help
 ```
 
