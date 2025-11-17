@@ -9,18 +9,20 @@ from datetime import datetime
 from .database import ConversationDB
 
 
-def format_conversations_table(conversations: List, show_message_count: bool = False):
+def format_conversations_table(conversations: List, show_message_count: bool = False, console=None):
     """
     Format conversations as a Rich table.
 
     Args:
         conversations: List of conversation objects/dicts
         show_message_count: Whether to show message count column
+        console: Optional Console instance (creates new one if not provided)
     """
     from rich.console import Console
     from rich.table import Table
 
-    console = Console()
+    if console is None:
+        console = Console()
 
     # Create table
     table = Table(title=f"[bold cyan]{len(conversations)} conversation(s) found[/bold cyan]",

@@ -42,6 +42,7 @@ class SearchCommands:
             find -type f                - Find files (messages)
             find /starred -name "test"  - Find in starred conversations with "test" in title
             find -content "error" -i    - Case-insensitive content search
+            find -l                     - Long format with metadata table
 
         Options:
             -name <pattern>     - Match conversation title or message path
@@ -50,6 +51,7 @@ class SearchCommands:
             -type d|f           - Match type (d=directory/conversation, f=file/message)
             -i                  - Case-insensitive matching
             -limit <n>          - Limit results to n items
+            -l                  - Long format: show table with title, model, date
 
         Args:
             args: Command arguments
@@ -66,6 +68,7 @@ class SearchCommands:
         type_filter = None  # 'd' or 'f'
         case_insensitive = False
         limit = None
+        long_format = False
 
         i = 0
         while i < len(args):
@@ -86,6 +89,9 @@ class SearchCommands:
                     i += 2
                 elif arg == '-i':
                     case_insensitive = True
+                    i += 1
+                elif arg == '-l':
+                    long_format = True
                     i += 1
                 elif arg == '-limit' and i + 1 < len(args):
                     try:
@@ -155,6 +161,38 @@ class SearchCommands:
             if not results:
                 return CommandResult(success=True, output="")
 
+            # For long format, display rich table with metadata
+            if long_format and type_filter != 'f':
+                # Extract conversation IDs from paths
+                conv_ids = set()
+                for result_path in results:
+                    # Extract conversation ID from path like /chats/abc123/ or /chats/abc123/m1/m2
+                    parts = result_path.strip('/').split('/')
+                    if len(parts) >= 2 and parts[0] == 'chats':
+                        conv_ids.add(parts[1])
+
+                # Load conversation summaries from database
+                from ctk.core.helpers import format_conversations_table
+                all_summaries = self.db.list_conversations()
+
+                # Filter to only the matching conversations
+                conversations = [s for s in all_summaries if s.id in conv_ids]
+
+                # Display rich table
+                from rich.console import Console
+                console = Console()
+
+                # Capture table output to string
+                import io
+                buffer = io.StringIO()
+                temp_console = Console(file=buffer, force_terminal=True)
+
+                format_conversations_table(conversations, show_message_count=False, console=temp_console)
+                table_output = buffer.getvalue()
+
+                return CommandResult(success=True, output=table_output)
+
+            # Default format: just paths (good for piping)
             output_lines = []
             for result in results:
                 output_lines.append(result)

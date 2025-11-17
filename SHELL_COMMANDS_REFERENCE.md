@@ -40,13 +40,24 @@ find -type d                # Find directories (conversations)
 find -type f                # Find files (messages)
 find -i                     # Case-insensitive search
 find -limit <n>             # Limit results to n items
+find -l                     # Long format: rich table with title, model, date, tags
 
-# Examples
-find /chats -type d -limit 5           # First 5 conversations
-find -name '*test*'                    # Conversations with "test" in title
-find -content 'error' -i               # Messages containing "error" (case-insensitive)
-find -role user -limit 10              # First 10 user messages
-find /starred -content 'important'     # Search starred conversations
+# Examples - Default Format (paths for piping)
+find /chats -type d -limit 5
+# Output:
+# /chats/7c87af4c-5e10-4eb4-8aaa-41070f710e0f/
+# /chats/5dce9708-0f2d-4c73-a634-b1db3517e7c1/
+
+# Long Format (-l flag shows metadata table)
+find /chats -type d -limit 5 -l
+# Shows rich table with: #, ID (short), Title, Model, Updated, Tags
+# Includes visual flags: ⭐ (starred), 📌 (pinned), 📦 (archived)
+
+# Search and navigate workflow
+find -name '*API*'                     # Find by title
+find -content 'error' -limit 10        # Find in content
+cd $(find -name '*bug*' | head -1)     # Navigate to first match
+find /starred -content 'important' -l  # Search starred with metadata
 ```
 
 ## File Operations (5 commands)
