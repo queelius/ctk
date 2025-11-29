@@ -222,20 +222,25 @@ class ShellParser:
         # This will be expanded as we implement more commands
         shell_commands = {
             # Navigation
-            'cd', 'ls', 'pwd',
+            'cd', 'ls', 'pwd', 'goto-longest', 'goto-latest', 'where',
             # Unix commands
             'cat', 'head', 'tail', 'echo', 'grep',
             # File operations
             'ln', 'cp', 'mv', 'rm', 'mkdir',
             # Database operations
-            'star', 'pin', 'archive', 'title',
-            'search', 'ask', 'show', 'tree', 'paths', 'export',
+            'star', 'unstar', 'pin', 'unpin', 'archive', 'unarchive', 'title',
+            'search', 'find', 'ask', 'show', 'tree', 'paths', 'export',
             # LLM commands
-            'chat', 'complete', 'model',
+            'chat', 'complete', 'model', 'say', 'models', 'temp',
+            # MCP commands
+            'mcp',
             # System commands
-            'config', 'help', 'exit', 'clear', 'quit',
+            'config', 'help', 'exit', 'clear', 'quit', 'history',
+            # Session management
+            'new-chat', 'save', 'load', 'delete', 'list',
             # Additional
-            'browse', 'fork', 'regenerate', 'edit', 'tag', 'untag',
+            'browse', 'fork', 'fork-id', 'regenerate', 'edit', 'tag', 'untag',
+            'alternatives', 'context', 'rag',
         }
 
         # Parse to get first word

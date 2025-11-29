@@ -701,7 +701,7 @@ Available operations:
     return 1
 
 
-def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug: bool = False, use_rich: bool = True) -> str:
+def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug: bool = False, use_rich: bool = True, shell_executor=None) -> str:
     """
     Execute a tool and return result as string.
 
@@ -710,6 +710,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
         tool_name: Name of tool to execute
         tool_args: Tool arguments
         debug: Enable debug logging
+        use_rich: Use Rich formatting for output
+        shell_executor: Optional callback to execute shell commands (for TUI integration)
 
     Returns:
         String representation of result
@@ -881,6 +883,28 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                     result_str += f"  - {model}: {count}\n"
 
             return result_str
+
+        elif tool_name == 'execute_shell_command':
+            command = tool_args.get('command', '')
+            if not command:
+                return "Error: No command provided"
+
+            if shell_executor is None:
+                return "Error: Shell command execution not available in this context. Use the TUI shell mode."
+
+            # Execute the command via the provided executor
+            try:
+                result = shell_executor(command)
+                if hasattr(result, 'output'):
+                    # CommandResult object
+                    if result.success:
+                        return result.output if result.output else "(command executed successfully)"
+                    else:
+                        return f"Error: {result.error}" if result.error else "Command failed"
+                else:
+                    return str(result)
+            except Exception as e:
+                return f"Error executing command: {e}"
 
         else:
             return f"Unknown tool: {tool_name}"
@@ -1069,7 +1093,8 @@ def cmd_chat(args):
 
     # Create and run chat
     render_markdown = not args.no_markdown
-    chat = ChatTUI(provider, db=db, render_markdown=render_markdown)
+    disable_tools = getattr(args, 'no_tools', False)
+    chat = ChatTUI(provider, db=db, render_markdown=render_markdown, disable_tools=disable_tools)
     chat.run()
 
     return 0
@@ -1692,6 +1717,7 @@ def main():
     chat_parser.add_argument('--base-url', help='Base URL for provider (e.g., http://localhost:11434)')
     chat_parser.add_argument('--db', '-d', help='Database path to save conversations')
     chat_parser.add_argument('--no-markdown', action='store_true', help='Disable markdown rendering')
+    chat_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling (for models that don\'t support it)')
 
     # Ask command - natural language queries
     ask_parser = subparsers.add_parser('ask', help='Natural language query using LLM')

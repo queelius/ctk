@@ -227,10 +227,8 @@ class ConversationTreeNavigator:
 
     def _build_tree(self):
         """Build TreeMessage structure from ConversationTree"""
-        # Build TreeMessage structure from ConversationTree
+        # First pass: create all TreeMessage objects without parents
         for db_msg in self.conversation.message_map.values():
-            parent = self.message_map.get(db_msg.parent_id) if db_msg.parent_id else None
-
             # Extract metadata
             model = None
             user = None
@@ -241,17 +239,32 @@ class ConversationTreeNavigator:
             tree_msg = TreeMessage(
                 role=db_msg.role,
                 content=db_msg.content.text or "",
-                parent=parent,
+                parent=None,  # Will link in second pass
                 model=model,
                 user=user
             )
             tree_msg.id = db_msg.id  # Preserve original ID
             tree_msg.timestamp = db_msg.timestamp or datetime.now()
+            tree_msg._parent_id = db_msg.parent_id  # Store for second pass
 
             self.message_map[tree_msg.id] = tree_msg
 
+        # Second pass: link parents and children
+        for tree_msg in self.message_map.values():
+            parent_id = getattr(tree_msg, '_parent_id', None)
+            if parent_id:
+                parent = self.message_map.get(parent_id)
+                if parent:
+                    tree_msg.parent = parent
+                    parent.children.append(tree_msg)
+
+            # Set root (message with no parent)
             if not tree_msg.parent:
                 self.root = tree_msg
+
+            # Clean up temporary attribute
+            if hasattr(tree_msg, '_parent_id'):
+                delattr(tree_msg, '_parent_id')
 
     def get_all_paths(self) -> List[List[TreeMessage]]:
         """Get all paths from root to leaves"""

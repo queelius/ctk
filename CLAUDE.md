@@ -99,8 +99,46 @@ Main commands:
 - `tag`: Auto-tag with LLM
 - `stats`: Database statistics and analytics
 - `plugins`: List available plugins
-- `chat`: Launch interactive TUI
+- `chat`: Launch interactive TUI (shell-first mode)
 - `merge/diff/filter`: Database operations
+
+### Shell-First Mode (`ctk/integrations/chat/tui.py`)
+
+The TUI features a Unix-like shell interface for navigating and managing conversations via a Virtual Filesystem (VFS).
+
+**VFS Architecture** (`ctk/core/vfs.py`, `ctk/core/vfs_navigator.py`):
+- Conversations exposed as directories under `/chats/<conv_id>/`
+- Message trees navigable as `m1/m2/m3` subdirectories
+- Message metadata accessible as files: `text`, `role`, `timestamp`, `id`
+- Virtual directories: `/starred/`, `/pinned/`, `/archived/`, `/tags/`, `/recent/`, `/source/`, `/model/`
+- Prefix resolution allows short IDs (e.g., `cd 7c8` resolves to full UUID)
+
+**Command System** (`ctk/core/commands/`):
+- `navigation.py`: cd, ls, pwd
+- `unix.py`: cat, head, tail, echo, grep
+- `search.py`: find with -name, -content, -role, -type, -i, -limit, -l flags
+- `visualization.py`: tree, paths
+- `organization.py`: star, unstar, pin, unpin, archive, unarchive, title
+- `chat.py`: chat, complete
+
+**Key Features**:
+- 20 shell commands with Unix-like semantics
+- Pipe support: `ls | grep pattern | head 5`
+- Environment variables: `$CWD`, `$MODEL`, `$PROVIDER`, `$CONV_ID`
+- Tab completion for paths and commands
+- `find -l` shows rich metadata table with titles, models, dates, tags
+
+**CommandResult Pattern**:
+```python
+@dataclass
+class CommandResult:
+    success: bool
+    output: str = ""
+    error: str = ""
+    pipe_data: Optional[str] = None
+```
+
+See `SHELL_COMMANDS_REFERENCE.md` for complete command documentation.
 
 ### Import/Export Flow
 
@@ -124,16 +162,25 @@ Exporters (`ctk/integrations/exporters/`):
 
 ### TUI Architecture (`ctk/integrations/chat/tui.py`)
 
-**Chat Terminal UI**:
-- Interactive conversation browsing with Rich tables
+**Two-Mode System**:
+1. **Shell Mode** (default): Unix-like VFS navigation with 20 commands
+2. **Chat Mode**: Interactive LLM conversation with streaming
+
+**Shell Mode Features**:
+- Enter via `ctk chat` command
+- Navigate conversations with cd, ls, pwd
+- Search with `find` command (supports -name, -content, -role, -type, -i, -limit, -l)
+- View content with cat, head, tail, grep
+- Organize with star, pin, archive, title
+- Enter chat mode with `chat` command (loads conversation history as context)
+
+**Chat Mode Features**:
 - Live chat with LLM providers (Ollama, OpenAI, Anthropic)
 - Model Context Protocol (MCP) tool support
-- Conversation management (star, pin, archive, rename)
-- Natural language queries via `/ask` command
-- Tree navigation for branching conversations
-- Export to various formats from within TUI
+- Streaming responses
+- Exit to shell with `/exit` or Ctrl+D
 
-**Key TUI Commands**:
+**Legacy Slash Commands** (still available):
 - `/browse`: Browse conversations table
 - `/ask <query>`: Natural language query (LLM-powered)
 - `/search <query>`: Full-text search
@@ -166,24 +213,36 @@ Exporters (`ctk/integrations/exporters/`):
 
 ## Critical Notes
 
-### Current Refactoring Status
-The codebase is undergoing refactoring per `TODO.md`:
-- Phase 1 & 2 completed: Security fixes and error handling standardization
-- Phase 3 in progress: Testing infrastructure
-- Phase 4 pending: Performance optimization
+### Current Status
+- Shell-first mode fully implemented with 20 commands
+- Test coverage at ~35% (698 tests passing)
+- Key modules well-tested: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)
 
 ### Known Issues
-- Test coverage needs improvement (target: >70%)
+- Test coverage target: >70% (currently ~35%)
 - Database queries use LIKE instead of full-text search (consider FTS5)
 - Plugin system needs additional security validation
-- Complex-network-rag integration for similarity search (in progress)
 - Performance optimization needed for large databases (>100k conversations)
+- Some legacy tests need API updates (53 failing)
 
 ### Testing Approach
 - Unit tests in `tests/unit/` - test individual components
 - Integration tests in `tests/integration/` - test end-to-end workflows
 - Use pytest fixtures for database and sample data setup
 - Mock external dependencies when appropriate
+
+**Key Test Files** (comprehensive coverage):
+- `test_shell_parser.py`: Shell command parsing (99% coverage)
+- `test_command_dispatcher.py`: Command dispatch logic (100% coverage)
+- `test_vfs_path_parser.py`: VFS path parsing (88% coverage)
+- `test_vfs_navigator.py`: VFS navigation (96% coverage)
+- `test_navigation_commands.py`: cd, ls, pwd (100% coverage)
+- `test_unix_commands.py`: cat, head, tail, echo, grep (90% coverage)
+- `test_search_commands.py`: find command (92% coverage)
+- `test_organization_commands.py`: star, pin, archive, title (96% coverage)
+- `test_visualization_commands.py`: tree, paths (95% coverage)
+- `test_chat_commands.py`: chat, complete (95% coverage)
+- `test_models_comprehensive.py`: ConversationTree model (96% coverage)
 
 ### Error Handling Patterns
 - Use specific exceptions instead of bare `except:` clauses

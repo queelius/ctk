@@ -376,16 +376,18 @@ def get_ask_tools() -> List[Dict[str, Any]]:
     return [
         {
             "name": "search_conversations",
-            "description": """Search and filter conversations. If query is provided, searches text content. If query is omitted, lists conversations with filters. Multiple filters are combined with AND logic.
+            "description": """Search and filter conversations in the database.
 
-IMPORTANT EXAMPLES:
-- "search for python in starred conversations" → {"query": "python", "starred": true}
-- "find discussions about AI" → {"query": "AI"}
-- "show me starred conversations" → {"starred": true} (no query = list)
-- "list all conversations" → {} (no filters, no query)
-- "show archived conversations" → {"archived": true}
+DO NOT USE THIS TOOL FOR: greetings (hi, hello), chitchat, general questions, or anything that doesn't explicitly ask to search/find/list conversations.
 
-RULE: Only include starred/pinned/archived parameters if the user EXPLICITLY mentions that status. Otherwise omit them entirely.""",
+USE THIS TOOL WHEN the user says: "find...", "search for...", "show me...", "list...", "what conversations..."
+
+EXAMPLES:
+- "find conversations about python" → {"query": "python"}
+- "show me starred conversations" → {"starred": true}
+- "list recent conversations" → {"limit": 10}
+
+RULE: Only include starred/pinned/archived if user explicitly mentions them.""",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -431,7 +433,11 @@ RULE: Only include starred/pinned/archived parameters if the user EXPLICITLY men
         },
         {
             "name": "get_conversation",
-            "description": "Get details of a specific conversation by ID",
+            "description": """Get details of a specific conversation by its ID.
+
+DO NOT USE THIS TOOL FOR: greetings, chitchat, or questions that don't mention a specific conversation ID.
+
+USE THIS TOOL WHEN: user provides a conversation ID and wants details about it.""",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -449,11 +455,195 @@ RULE: Only include starred/pinned/archived parameters if the user EXPLICITLY men
         },
         {
             "name": "get_statistics",
-            "description": "Get database statistics (conversation counts, sources, etc.)",
+            "description": """Get database statistics (counts, sources, models).
+
+DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
+
+USE THIS TOOL WHEN: user asks "how many conversations", "what are the stats", "show statistics".""",
             "input_schema": {
                 "type": "object",
                 "properties": {},
                 "required": []
             }
+        },
+        {
+            "name": "execute_shell_command",
+            "description": """Execute a CTK shell command (cd, ls, find, cat, tree, star, etc.).
+
+DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
+
+USE THIS TOOL WHEN: user wants to navigate (cd, ls), view content (cat, tree), or organize (star, pin, archive).
+
+Commands: cd, ls, pwd, find, cat, tree, paths, star, unstar, pin, unpin, archive, unarchive, title""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute (e.g., 'ls /starred', 'find -name python')"
+                    }
+                },
+                "required": ["command"]
+            }
         }
     ]
+
+
+def get_ctk_system_prompt(db: 'ConversationDB', current_path: str = "/") -> str:
+    """
+    Generate a context-aware system prompt for CTK shell mode.
+
+    Args:
+        db: Database instance to get stats from
+        current_path: Current VFS path
+
+    Returns:
+        System prompt string
+    """
+    # Get database stats
+    try:
+        stats = db.get_statistics()
+        total_convs = stats.get('total_conversations', 0)
+        total_msgs = stats.get('total_messages', 0)
+
+        # Get counts for starred, pinned, archived
+        starred_count = len(db.list_conversations(starred=True, limit=None))
+        pinned_count = len(db.list_conversations(pinned=True, limit=None))
+        archived_count = len(db.list_conversations(archived=True, limit=None))
+
+        # Get top sources
+        sources = stats.get('by_source', {})
+        source_summary = ", ".join(f"{k}: {v}" for k, v in list(sources.items())[:3]) if sources else "none"
+
+    except Exception:
+        total_convs = 0
+        total_msgs = 0
+        starred_count = 0
+        pinned_count = 0
+        archived_count = 0
+        source_summary = "unknown"
+
+    prompt = f"""You are an assistant within CTK (Conversation Toolkit), a tool for managing and exploring conversation data from various LLM providers.
+
+## Current Context
+- VFS Path: {current_path}
+- Database: {total_convs} conversations, {total_msgs} messages
+- Starred: {starred_count} | Pinned: {pinned_count} | Archived: {archived_count}
+- Sources: {source_summary}
+
+## CRITICAL: When to Use Tools vs Direct Response
+
+**RESPOND DIRECTLY (NO TOOLS) for:**
+- Greetings: "hi", "hello", "hey" → Just greet back warmly
+- Questions about what CTK is → Explain using the context above
+- General conversation or chitchat
+- Questions you can answer from the context above
+- Clarifying questions back to the user
+
+**USE TOOLS ONLY when the user explicitly wants to:**
+- Search for specific conversations (use search_conversations)
+- Find conversations by content/title (use search_conversations with query)
+- List starred/pinned/archived (use search_conversations with filter)
+- Navigate the filesystem (use execute_shell_command)
+- Get detailed stats (use get_statistics)
+- Look up a specific conversation by ID (use get_conversation)
+
+## Available Tools
+1. search_conversations - Find/list conversations with optional filters
+2. execute_shell_command - Run shell commands. Use this to run `help` for full command reference.
+3. get_statistics - Get database statistics
+4. get_conversation - Get details of a specific conversation
+
+## Key Shell Commands (use via execute_shell_command)
+- `ls /starred` or `ls /pinned` or `ls /archived` - List filtered conversations
+- `find -name "pattern"` - Find by title pattern
+- `find -content "text" -l` - Find by content with metadata table
+- `cd /chats/<id>` - Navigate to conversation (supports prefix like `cd abc12`)
+- `cat text` - View message content (when inside a conversation)
+- `tree` - Show conversation structure
+- `star`, `pin`, `archive` - Organize current conversation
+- `help` - Full command reference
+
+## Example Responses
+- User: "hi" → "Hello! I'm here to help you explore your {total_convs} conversations. What would you like to find?"
+- User: "what is this?" → Explain CTK and mention the database stats
+- User: "find conversations about python" → Use search_conversations with query="python"
+- User: "show me starred" → Use execute_shell_command with command="ls /starred"
+- User: "how do I use this?" → Use execute_shell_command with command="help" """
+
+    return prompt
+
+
+def get_ctk_system_prompt_no_tools(db: 'ConversationDB', current_path: str = "/") -> str:
+    """
+    Generate a simpler system prompt for CTK when tools are disabled.
+
+    Args:
+        db: Database instance to get stats from
+        current_path: Current VFS path
+
+    Returns:
+        System prompt string (no tool instructions)
+    """
+    # Get database stats
+    try:
+        stats = db.get_statistics()
+        total_convs = stats.get('total_conversations', 0)
+        total_msgs = stats.get('total_messages', 0)
+
+        # Get counts for starred, pinned, archived
+        starred_count = len(db.list_conversations(starred=True, limit=None))
+        pinned_count = len(db.list_conversations(pinned=True, limit=None))
+
+        # Get top sources
+        sources = stats.get('by_source', {})
+        source_summary = ", ".join(f"{k}: {v}" for k, v in list(sources.items())[:3]) if sources else "none"
+
+    except Exception:
+        total_convs = 0
+        total_msgs = 0
+        starred_count = 0
+        pinned_count = 0
+        source_summary = "unknown"
+
+    prompt = f"""You are an assistant within CTK (Conversation Toolkit), a CLI tool for managing and exploring conversation data from various LLM providers.
+
+## Current Database
+- {total_convs} conversations, {total_msgs} messages
+- Starred: {starred_count} | Pinned: {pinned_count}
+- Sources: {source_summary}
+
+## Shell Commands Reference
+Navigation:
+- `cd /chats` - Go to conversations list
+- `cd /starred` or `cd /pinned` or `cd /archived` - Go to filtered views
+- `cd <id>` - Navigate to conversation (supports prefix matching like `cd abc12`)
+- `ls` - List current directory
+- `pwd` - Show current path
+
+Search:
+- `find -name "pattern"` - Find conversations by title (* and ? wildcards)
+- `find -content "text"` - Find by message content
+- `find -l` - Show results as table with metadata
+- `find /starred -content "python" -l` - Combined search
+
+View:
+- `cat text` - View message content (when in a message node)
+- `tree` - Show conversation tree structure
+- `paths` - List all conversation paths
+
+Organize:
+- `star` / `unstar` - Star/unstar current conversation
+- `pin` / `unpin` - Pin/unpin current conversation
+- `archive` / `unarchive` - Archive/unarchive
+- `title "New Title"` - Rename conversation
+
+Chat:
+- `say <message>` - Send message to LLM
+- `chat` - Enter interactive chat mode
+- `help` - Full command reference
+
+## How to Help
+Guide users to use shell commands directly. Be accurate with command syntax - don't invent flags that don't exist."""
+
+    return prompt

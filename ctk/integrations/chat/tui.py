@@ -52,7 +52,7 @@ class ChatTUI:
     """
 
     def __init__(self, provider: LLMProvider, db: Optional[ConversationDB] = None,
-                 render_markdown: bool = True):
+                 render_markdown: bool = True, disable_tools: bool = False):
         """
         Initialize chat TUI.
 
@@ -60,9 +60,11 @@ class ChatTUI:
             provider: LLM provider to use
             db: Optional database for loading/saving conversations
             render_markdown: Whether to render markdown in messages (default: True)
+            disable_tools: Disable tool calling (for models that don't support it)
         """
         self.provider = provider
         self.db = db
+        self.tools_disabled = disable_tools  # Can be set to True on auto-detect failure
 
         # Tree structure for conversation
         self.root: Optional[TreeMessage] = None  # Root of conversation tree
@@ -105,7 +107,8 @@ class ChatTUI:
             'show', 'tree', 'paths', 'fork', 'fork-id', 'context',
             'mcp', 'cd', 'pwd', 'ls', 'ln', 'cp', 'mv', 'rm', 'mkdir',
             'rag', 'goto-longest', 'goto-latest', 'where', 'alternatives',
-            'history', 'models', 'model', 'temp', 'regenerate', 'edit'
+            'history', 'models', 'model', 'temp', 'regenerate', 'edit',
+            'say', 'find', 'unstar', 'unpin', 'unarchive',
         }
 
         # Prompt toolkit setup
@@ -2348,105 +2351,386 @@ Available operations:
         print("\nLegend: U=user, A=assistant, ⚙=system, T=tool, R=result, *=current position")
 
 
+    def _build_vfs_message_path(self, conversation, target_message_id: str) -> str:
+        """Build VFS message path segments for a target message in a conversation.
+
+        Returns path like 'm1/m2/m3' for the message's position in the tree.
+        """
+        # Build path from root to target
+        path_to_target = []
+        current_id = target_message_id
+
+        while current_id:
+            msg = conversation.message_map.get(current_id)
+            if not msg:
+                break
+            path_to_target.insert(0, msg)
+            current_id = msg.parent_id
+
+        if not path_to_target:
+            return ""
+
+        # Convert to VFS path segments (m1, m2, etc.)
+        segments = []
+        for i, msg in enumerate(path_to_target):
+            if i == 0:
+                # Root message - find its index among root messages
+                try:
+                    idx = conversation.root_message_ids.index(msg.id)
+                except ValueError:
+                    idx = 0
+            else:
+                # Non-root - find index among siblings
+                parent_id = path_to_target[i-1].id
+                siblings = conversation.get_children(parent_id)
+                try:
+                    idx = next(j for j, s in enumerate(siblings) if s.id == msg.id)
+                except StopIteration:
+                    idx = 0
+            segments.append(f"m{idx + 1}")
+
+        return "/".join(segments)
+
     def goto_longest_path(self):
         """Navigate to the leaf node of the longest path"""
-        if not self.root:
-            print("Error: No conversation tree")
+        from ctk.core.vfs import VFSPathParser, PathType
+
+        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
+        use_vfs = False
+        if self.db:
+            try:
+                parsed = VFSPathParser.parse(self.vfs_cwd)
+                if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                    use_vfs = True
+            except:
+                pass
+
+        # If internal tree is loaded AND we're not navigating via VFS, use internal state
+        if self.root and not use_vfs:
+            # Find all leaf nodes
+            leaf_nodes = [msg for msg in self.message_map.values() if not msg.children]
+
+            if not leaf_nodes:
+                print("Error: No leaf nodes found")
+                return
+
+            # Find the leaf with the longest path to root
+            def get_path_length(node: TreeMessage) -> int:
+                length = 0
+                current = node
+                while current:
+                    length += 1
+                    current = current.parent
+                return length
+
+            longest_leaf = max(leaf_nodes, key=get_path_length)
+            path_length = get_path_length(longest_leaf)
+
+            self.current_message = longest_leaf
+            print(f"✓ Moved to longest path leaf")
+            print(f"  ID: {longest_leaf.id[:8]}...")
+            print(f"  Path length: {path_length} messages")
+            print(f"  Role: {longest_leaf.role.value}")
+            print(f"  Content: {longest_leaf.content[:100]}")
             return
 
-        # Find all leaf nodes
-        leaf_nodes = [msg for msg in self.message_map.values() if not msg.children]
-
-        if not leaf_nodes:
-            print("Error: No leaf nodes found")
+        # Otherwise, try to load from VFS path
+        if not self.db:
+            print("Error: No conversation tree loaded and no database available")
             return
 
-        # Find the leaf with the longest path to root
-        def get_path_length(node: TreeMessage) -> int:
-            length = 0
-            current = node
-            while current:
-                length += 1
-                current = current.parent
-            return length
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
 
-        longest_leaf = max(leaf_nodes, key=get_path_length)
-        path_length = get_path_length(longest_leaf)
+            if parsed.path_type not in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                print(f"Error: Not in a conversation directory (at {self.vfs_cwd})")
+                return
 
-        self.current_message = longest_leaf
-        print(f"✓ Moved to longest path leaf")
-        print(f"  ID: {longest_leaf.id[:8]}...")
-        print(f"  Path length: {path_length} messages")
-        print(f"  Role: {longest_leaf.role.value}")
-        print(f"  Content: {longest_leaf.content[:100]}")
+            conv_id = parsed.conversation_id
+            if not conv_id:
+                print("Error: Could not determine conversation ID from path")
+                return
+
+            conversation = self.db.load_conversation(conv_id)
+            if not conversation:
+                print(f"Error: Conversation not found: {conv_id}")
+                return
+
+            # Find longest path
+            paths = conversation.get_all_paths()
+            if not paths:
+                print("Error: No paths found in conversation")
+                return
+
+            longest_path = max(paths, key=len)
+            target_msg = longest_path[-1]  # Leaf of longest path
+
+            # Build VFS path to this message
+            msg_path = self._build_vfs_message_path(conversation, target_msg.id)
+
+            # Update VFS cwd - build base path from current location
+            base_path = f"/chats/{conv_id}"
+            if parsed.path_type == PathType.CONVERSATION_ROOT:
+                # We're at conversation root, just append message path
+                new_path = f"{self.vfs_cwd.rstrip('/')}/{msg_path}"
+            else:
+                # Navigate from conversation root
+                new_path = f"{base_path}/{msg_path}"
+
+            self.vfs_cwd = VFSPathParser.parse(new_path).normalized_path
+
+            content_text = target_msg.content.get_text() if hasattr(target_msg.content, 'get_text') else str(target_msg.content.text if hasattr(target_msg.content, 'text') else target_msg.content)
+
+            print(f"✓ Moved to longest path leaf")
+            print(f"  ID: {target_msg.id[:8]}...")
+            print(f"  Path length: {len(longest_path)} messages")
+            print(f"  Role: {target_msg.role.value if target_msg.role else 'unknown'}")
+            print(f"  Content: {content_text[:100]}")
+            print(f"  Path: {self.vfs_cwd}")
+
+        except Exception as e:
+            print(f"Error: {e}")
 
     def goto_latest_leaf(self):
         """Navigate to the most recently created leaf node"""
-        if not self.root:
-            print("Error: No conversation tree")
+        from ctk.core.vfs import VFSPathParser, PathType
+
+        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
+        use_vfs = False
+        if self.db:
+            try:
+                parsed = VFSPathParser.parse(self.vfs_cwd)
+                if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                    use_vfs = True
+            except:
+                pass
+
+        # If internal tree is loaded AND we're not navigating via VFS, use internal state
+        if self.root and not use_vfs:
+            # Find all leaf nodes
+            leaf_nodes = [msg for msg in self.message_map.values() if not msg.children]
+
+            if not leaf_nodes:
+                print("Error: No leaf nodes found")
+                return
+
+            # Find the leaf with the most recent timestamp
+            latest_leaf = max(leaf_nodes, key=lambda msg: msg.timestamp)
+
+            self.current_message = latest_leaf
+            print(f"✓ Moved to most recent leaf")
+            print(f"  ID: {latest_leaf.id[:8]}...")
+            print(f"  Timestamp: {latest_leaf.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  Role: {latest_leaf.role.value}")
+            print(f"  Content: {latest_leaf.content[:100]}")
             return
 
-        # Find all leaf nodes
-        leaf_nodes = [msg for msg in self.message_map.values() if not msg.children]
-
-        if not leaf_nodes:
-            print("Error: No leaf nodes found")
+        # Otherwise, try to load from VFS path
+        if not self.db:
+            print("Error: No conversation tree loaded and no database available")
             return
 
-        # Find the leaf with the most recent timestamp
-        latest_leaf = max(leaf_nodes, key=lambda msg: msg.timestamp)
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
 
-        self.current_message = latest_leaf
-        print(f"✓ Moved to most recent leaf")
-        print(f"  ID: {latest_leaf.id[:8]}...")
-        print(f"  Timestamp: {latest_leaf.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"  Role: {latest_leaf.role.value}")
-        print(f"  Content: {latest_leaf.content[:100]}")
+            if parsed.path_type not in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                print(f"Error: Not in a conversation directory (at {self.vfs_cwd})")
+                return
+
+            conv_id = parsed.conversation_id
+            if not conv_id:
+                print("Error: Could not determine conversation ID from path")
+                return
+
+            conversation = self.db.load_conversation(conv_id)
+            if not conversation:
+                print(f"Error: Conversation not found: {conv_id}")
+                return
+
+            # Find all leaf nodes (messages with no children)
+            leaf_msgs = []
+            for msg in conversation.message_map.values():
+                children = conversation.get_children(msg.id)
+                if not children:
+                    leaf_msgs.append(msg)
+
+            if not leaf_msgs:
+                print("Error: No leaf nodes found")
+                return
+
+            # Find the one with the most recent timestamp
+            latest_msg = max(leaf_msgs, key=lambda m: m.timestamp or datetime.min)
+
+            # Build VFS path to this message
+            msg_path = self._build_vfs_message_path(conversation, latest_msg.id)
+
+            # Update VFS cwd
+            base_path = f"/chats/{conv_id}"
+            if parsed.path_type == PathType.CONVERSATION_ROOT:
+                new_path = f"{self.vfs_cwd.rstrip('/')}/{msg_path}"
+            else:
+                new_path = f"{base_path}/{msg_path}"
+
+            self.vfs_cwd = VFSPathParser.parse(new_path).normalized_path
+
+            content_text = latest_msg.content.get_text() if hasattr(latest_msg.content, 'get_text') else str(latest_msg.content.text if hasattr(latest_msg.content, 'text') else latest_msg.content)
+            timestamp_str = latest_msg.timestamp.strftime('%Y-%m-%d %H:%M:%S') if latest_msg.timestamp else 'unknown'
+
+            print(f"✓ Moved to most recent leaf")
+            print(f"  ID: {latest_msg.id[:8]}...")
+            print(f"  Timestamp: {timestamp_str}")
+            print(f"  Role: {latest_msg.role.value if latest_msg.role else 'unknown'}")
+            print(f"  Content: {content_text[:100]}")
+            print(f"  Path: {self.vfs_cwd}")
+
+        except Exception as e:
+            print(f"Error: {e}")
 
     def show_current_position(self):
         """Show information about current position in tree"""
-        if not self.root:
-            print("Error: No conversation tree")
+        from ctk.core.vfs import VFSPathParser, PathType
+
+        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
+        use_vfs = False
+        if self.db:
+            try:
+                parsed = VFSPathParser.parse(self.vfs_cwd)
+                if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                    use_vfs = True
+            except:
+                pass
+
+        # If internal tree is loaded AND we're not navigating via VFS, use internal state
+        if self.root and self.current_message and not use_vfs:
+            current_path = self.get_current_path()
+            position = len(current_path) - 1
+
+            print(f"\nCurrent Position:")
+            print("=" * 80)
+            print(f"Message ID: {self.current_message.id[:8]}...")
+            print(f"Position in path: #{position} / {len(current_path) - 1}")
+            print(f"Role: {self.current_message.role.value}")
+            if self.current_message.model:
+                print(f"Model: {self.current_message.model}")
+            if self.current_message.user:
+                print(f"User: {self.current_message.user}")
+            print(f"Timestamp: {self.current_message.timestamp}")
+            print(f"\nContent:")
+            print("-" * 80)
+            print(self.current_message.content[:500])
+            if len(self.current_message.content) > 500:
+                print("...")
+            print("-" * 80)
+
+            # Show tree context
+            if self.current_message.parent:
+                print(f"\nParent: {self.current_message.parent.id[:8]}... ({self.current_message.parent.role.value})")
+            else:
+                print("\nParent: None (root message)")
+
+            if self.current_message.children:
+                print(f"Children: {len(self.current_message.children)}")
+                for i, child in enumerate(self.current_message.children):
+                    print(f"  [{i}] {child.id[:8]}... ({child.role.value})")
+            else:
+                print("Children: None (leaf node)")
+
+            print("=" * 80)
             return
 
-        if not self.current_message:
-            print("Currently at: Root (no messages yet)")
+        # Otherwise, try to load from VFS path
+        if not self.db:
+            print("Error: No conversation tree loaded and no database available")
             return
 
-        current_path = self.get_current_path()
-        position = len(current_path) - 1
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
 
-        print(f"\nCurrent Position:")
-        print("=" * 80)
-        print(f"Message ID: {self.current_message.id[:8]}...")
-        print(f"Position in path: #{position} / {len(current_path) - 1}")
-        print(f"Role: {self.current_message.role.value}")
-        if self.current_message.model:
-            print(f"Model: {self.current_message.model}")
-        if self.current_message.user:
-            print(f"User: {self.current_message.user}")
-        print(f"Timestamp: {self.current_message.timestamp}")
-        print(f"\nContent:")
-        print("-" * 80)
-        print(self.current_message.content[:500])
-        if len(self.current_message.content) > 500:
-            print("...")
-        print("-" * 80)
+            if parsed.path_type not in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                print(f"Error: Not in a conversation directory (at {self.vfs_cwd})")
+                return
 
-        # Show tree context
-        if self.current_message.parent:
-            print(f"\nParent: {self.current_message.parent.id[:8]}... ({self.current_message.parent.role.value})")
-        else:
-            print("\nParent: None (root message)")
+            conv_id = parsed.conversation_id
+            if not conv_id:
+                print("Error: Could not determine conversation ID from path")
+                return
 
-        if self.current_message.children:
-            print(f"Children: {len(self.current_message.children)}")
-            for i, child in enumerate(self.current_message.children):
-                print(f"  [{i}] {child.id[:8]}... ({child.role.value})")
-        else:
-            print("Children: None (leaf node)")
+            # Load conversation from database
+            conversation = self.db.load_conversation(conv_id)
+            if not conversation:
+                print(f"Error: Conversation not found: {conv_id}")
+                return
 
-        print("=" * 80)
+            print(f"\nCurrent Position (VFS):")
+            print("=" * 80)
+            print(f"Path: {self.vfs_cwd}")
+            print(f"Conversation ID: {conv_id}")
+            print(f"Title: {conversation.title or '(untitled)'}")
+            print(f"Total messages: {len(conversation.message_map)}")
+            print(f"Total paths: {len(conversation.get_all_paths())}")
+
+            # If at a message node, show message info
+            if parsed.path_type == PathType.MESSAGE_NODE and parsed.message_path:
+                # Navigate to the message
+                msg_path = parsed.message_path  # e.g., ['m1', 'm2']
+                # Start from root messages
+                current_messages = [conversation.message_map.get(rid) for rid in conversation.root_message_ids]
+                current_messages = [m for m in current_messages if m]
+
+                target_message = None
+                for i, segment in enumerate(msg_path):
+                    # Extract message index from segment (m1 -> 1, m10 -> 10)
+                    msg_idx = int(segment[1:]) - 1  # m1 is index 0
+                    if 0 <= msg_idx < len(current_messages):
+                        target_message = current_messages[msg_idx]
+                        if i < len(msg_path) - 1:
+                            # Get children for next iteration
+                            children = conversation.get_children(target_message.id)
+                            current_messages = children
+                    else:
+                        break
+
+                if target_message:
+                    print(f"\nMessage:")
+                    print("-" * 80)
+                    print(f"Message ID: {target_message.id[:8]}...")
+                    print(f"Role: {target_message.role.value if target_message.role else 'unknown'}")
+                    # Message class stores model in metadata, not as direct attribute
+                    model = getattr(target_message, 'model', None) or (target_message.metadata.get('model') if hasattr(target_message, 'metadata') and target_message.metadata else None)
+                    if model:
+                        print(f"Model: {model}")
+                    print(f"Timestamp: {target_message.timestamp}")
+                    content_text = target_message.content.get_text() if hasattr(target_message.content, 'get_text') else str(target_message.content.text if hasattr(target_message.content, 'text') else target_message.content)
+                    print(f"\nContent:")
+                    print(content_text[:500])
+                    if len(content_text) > 500:
+                        print("...")
+                    print("-" * 80)
+
+                    # Show children
+                    children = conversation.get_children(target_message.id)
+                    if children:
+                        print(f"\nChildren: {len(children)}")
+                        for i, child in enumerate(children):
+                            print(f"  [m{i+1}] {child.id[:8]}... ({child.role.value if child.role else 'unknown'})")
+                    else:
+                        print("\nChildren: None (leaf node)")
+            else:
+                # At conversation root, show root messages
+                print(f"\nRoot messages: {len(conversation.root_message_ids)}")
+                for i, rid in enumerate(conversation.root_message_ids):
+                    msg = conversation.message_map.get(rid)
+                    if msg:
+                        content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content.text if hasattr(msg.content, 'text') else msg.content)
+                        preview = content_text[:50].replace('\n', ' ').strip() if content_text else ""
+                        if len(content_text) > 50:
+                            preview += "..."
+                        print(f"  [m{i+1}] {msg.id[:8]}... ({msg.role.value if msg.role else 'unknown'}): {preview}")
+
+            print("=" * 80)
+
+        except Exception as e:
+            print(f"Error: {e}")
 
     def show_all_paths(self):
         """Show all complete paths through the conversation tree"""
@@ -2497,55 +2781,164 @@ Available operations:
 
     def show_alternatives(self):
         """Show alternative branches at current position"""
-        if not self.current_message:
-            print("Error: Not at a message position")
-            return
+        from ctk.core.vfs import VFSPathParser, PathType
 
-        if not self.current_message.children:
-            print("No alternative branches - this is a leaf node")
-            print("Next message you send will create the first child")
-            return
+        # Helper to count descendants in a conversation tree
+        def count_descendants_in_conv(conversation, msg_id: str) -> int:
+            children = conversation.get_children(msg_id)
+            count = len(children)
+            for child in children:
+                count += count_descendants_in_conv(conversation, child.id)
+            return count
 
-        print(f"\nAlternative branches from current message:")
-        print("=" * 80)
-        print(f"Current message: {self.current_message.id[:8]}...")
-        print(f"Role: {self.current_message.role.value}")
-        print(f"Content: {self.current_message.content[:60]}")
-        print()
+        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
+        # This handles the case where self.current_message is stale
+        use_vfs = False
+        if self.db:
+            try:
+                parsed = VFSPathParser.parse(self.vfs_cwd)
+                if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                    use_vfs = True
+            except:
+                pass
 
-        # Show all children as alternatives
-        for i, child in enumerate(self.current_message.children):
-            role_emoji = {"system": "⚙️", "user": "👤", "assistant": "🤖", "tool": "🔧", "tool_result": "📊"}
-            emoji = role_emoji.get(child.role.value, "❓")
+        # If internal tree is loaded AND we're not navigating via VFS, use internal state
+        if self.current_message and not use_vfs:
+            if not self.current_message.children:
+                print("No alternative branches - this is a leaf node")
+                print("Next message you send will create the first child")
+                return
 
-            content_preview = child.content[:60].replace('\n', ' ')
-            if len(child.content) > 60:
-                content_preview += "..."
-
-            meta = []
-            if child.model:
-                meta.append(f"model:{child.model}")
-            if child.user:
-                meta.append(f"user:{child.user}")
-            meta_str = f" [{', '.join(meta)}]" if meta else ""
-
-            # Count descendants
-            def count_descendants(node: TreeMessage) -> int:
-                count = len(node.children)
-                for c in node.children:
-                    count += count_descendants(c)
-                return count
-
-            descendants = count_descendants(child)
-
-            print(f"[{i}] {emoji} {child.id[:8]}...{meta_str}")
-            print(f"    {content_preview}")
-            print(f"    Descendants: {descendants}")
+            print(f"\nAlternative branches from current message:")
+            print("=" * 80)
+            print(f"Current message: {self.current_message.id[:8]}...")
+            print(f"Role: {self.current_message.role.value}")
+            print(f"Content: {self.current_message.content[:60]}")
             print()
 
-        print("=" * 80)
-        print(f"Use 'fork-id {child.id[:8]}' to fork from alternative branch")
-        print("Or send a new message to create another alternative")
+            # Show all children as alternatives
+            for i, child in enumerate(self.current_message.children):
+                role_emoji = {"system": "⚙️", "user": "👤", "assistant": "🤖", "tool": "🔧", "tool_result": "📊"}
+                emoji = role_emoji.get(child.role.value, "❓")
+
+                content_preview = child.content[:60].replace('\n', ' ')
+                if len(child.content) > 60:
+                    content_preview += "..."
+
+                meta = []
+                if child.model:
+                    meta.append(f"model:{child.model}")
+                if child.user:
+                    meta.append(f"user:{child.user}")
+                meta_str = f" [{', '.join(meta)}]" if meta else ""
+
+                # Count descendants
+                def count_descendants(node: TreeMessage) -> int:
+                    count = len(node.children)
+                    for c in node.children:
+                        count += count_descendants(c)
+                    return count
+
+                descendants = count_descendants(child)
+
+                print(f"[{i}] {emoji} {child.id[:8]}...{meta_str}")
+                print(f"    {content_preview}")
+                print(f"    Descendants: {descendants}")
+                print()
+
+            print("=" * 80)
+            print(f"Use 'fork-id {child.id[:8]}' to fork from alternative branch")
+            print("Or send a new message to create another alternative")
+            return
+
+        # Otherwise, try to load from VFS path
+        if not self.db:
+            print("Error: Not at a message position and no database available")
+            return
+
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
+
+            if parsed.path_type != PathType.MESSAGE_NODE or not parsed.message_path:
+                print("Error: Not at a message position (navigate to a message first)")
+                return
+
+            conv_id = parsed.conversation_id
+            if not conv_id:
+                print("Error: Could not determine conversation ID from path")
+                return
+
+            conversation = self.db.load_conversation(conv_id)
+            if not conversation:
+                print(f"Error: Conversation not found: {conv_id}")
+                return
+
+            # Navigate to the current message
+            msg_path = parsed.message_path
+            current_messages = [conversation.message_map.get(rid) for rid in conversation.root_message_ids]
+            current_messages = [m for m in current_messages if m]
+
+            target_message = None
+            for i, segment in enumerate(msg_path):
+                msg_idx = int(segment[1:]) - 1
+                if 0 <= msg_idx < len(current_messages):
+                    target_message = current_messages[msg_idx]
+                    if i < len(msg_path) - 1:
+                        current_messages = conversation.get_children(target_message.id)
+                else:
+                    break
+
+            if not target_message:
+                print("Error: Could not find message at current path")
+                return
+
+            # Get children of the current message
+            children = conversation.get_children(target_message.id)
+
+            if not children:
+                print("No alternative branches - this is a leaf node")
+                print("Use 'chat' command to start a conversation and add messages")
+                return
+
+            content_text = target_message.content.get_text() if hasattr(target_message.content, 'get_text') else str(target_message.content.text if hasattr(target_message.content, 'text') else target_message.content)
+
+            print(f"\nAlternative branches from current message:")
+            print("=" * 80)
+            print(f"Current message: {target_message.id[:8]}...")
+            print(f"Role: {target_message.role.value if target_message.role else 'unknown'}")
+            print(f"Content: {content_text[:60]}")
+            print()
+
+            # Show all children as alternatives
+            for i, child in enumerate(children):
+                role = child.role.value if child.role else "unknown"
+                role_emoji = {"system": "⚙️", "user": "👤", "assistant": "🤖", "tool": "🔧", "tool_result": "📊"}
+                emoji = role_emoji.get(role, "❓")
+
+                child_content = child.content.get_text() if hasattr(child.content, 'get_text') else str(child.content.text if hasattr(child.content, 'text') else child.content)
+                content_preview = child_content[:60].replace('\n', ' ')
+                if len(child_content) > 60:
+                    content_preview += "..."
+
+                meta = []
+                # Message class doesn't have model directly, check metadata
+                model = getattr(child, 'model', None) or child.metadata.get('model') if hasattr(child, 'metadata') else None
+                if model:
+                    meta.append(f"model:{model}")
+                meta_str = f" [{', '.join(meta)}]" if meta else ""
+
+                descendants = count_descendants_in_conv(conversation, child.id)
+
+                print(f"[m{i+1}] {emoji} {child.id[:8]}...{meta_str}")
+                print(f"    {content_preview}")
+                print(f"    Descendants: {descendants}")
+                print()
+
+            print("=" * 80)
+            print(f"Use 'cd m<N>' to navigate to an alternative branch")
+
+        except Exception as e:
+            print(f"Error: {e}")
 
     def show_conversation_history(self, max_content_length: Optional[int] = None):
         """
@@ -2594,11 +2987,104 @@ Available operations:
         Args:
             max_content_length: Max chars per message (None = show all)
         """
-        if not self.root:
-            self.print_error("No conversation tree")
+        from ctk.core.vfs import VFSPathParser, PathType
+
+        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
+        use_vfs = False
+        if self.db:
+            try:
+                parsed = VFSPathParser.parse(self.vfs_cwd)
+                if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                    use_vfs = True
+            except:
+                pass
+
+        # If internal tree is loaded AND we're not navigating via VFS, use internal state
+        if self.root and not use_vfs:
+            self.show_conversation_history(max_content_length=max_content_length)
             return
 
-        self.show_conversation_history(max_content_length=max_content_length)
+        # Otherwise, try to load from VFS path
+        if not self.db:
+            self.print_error("No conversation tree loaded and no database available")
+            return
+
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
+
+            if parsed.path_type not in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                self.print_error(f"Not in a conversation directory (at {self.vfs_cwd})")
+                return
+
+            conv_id = parsed.conversation_id
+            if not conv_id:
+                self.print_error("Could not determine conversation ID from path")
+                return
+
+            conversation = self.db.load_conversation(conv_id)
+            if not conversation:
+                self.print_error(f"Conversation not found: {conv_id}")
+                return
+
+            # Get the path to show
+            if parsed.path_type == PathType.MESSAGE_NODE and parsed.message_path:
+                # Navigate to specific message and show path to it
+                msg_path = parsed.message_path
+                current_messages = [conversation.message_map.get(rid) for rid in conversation.root_message_ids]
+                current_messages = [m for m in current_messages if m]
+
+                path_messages = []
+                for i, segment in enumerate(msg_path):
+                    msg_idx = int(segment[1:]) - 1
+                    if 0 <= msg_idx < len(current_messages):
+                        target = current_messages[msg_idx]
+                        path_messages.append(target)
+                        if i < len(msg_path) - 1:
+                            current_messages = conversation.get_children(target.id)
+                    else:
+                        break
+            else:
+                # At conversation root - show longest path
+                paths = conversation.get_all_paths()
+                path_messages = max(paths, key=len) if paths else []
+
+            if not path_messages:
+                self.print_error("No messages found")
+                return
+
+            # Display history
+            self.console.print()
+            for i, msg in enumerate(path_messages):
+                role = msg.role.value if msg.role else "unknown"
+
+                if role == "user":
+                    role_display = f"[dim]\\[{i}][/dim] [bold green]You:[/bold green]"
+                elif role == "assistant":
+                    # Message class stores model in metadata, not as direct attribute
+                    model_name = getattr(msg, 'model', None) or (msg.metadata.get('model') if hasattr(msg, 'metadata') and msg.metadata else None) or "Assistant"
+                    role_display = f"[dim]\\[{i}][/dim] [bold magenta]{model_name}:[/bold magenta]"
+                elif role == "system":
+                    role_display = f"[dim]\\[{i}][/dim] [bold yellow]System:[/bold yellow]"
+                else:
+                    role_display = f"[dim]\\[{i}][/dim] {role}:"
+
+                self.console.print(role_display)
+
+                content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content.text if hasattr(msg.content, 'text') else msg.content)
+
+                if max_content_length is not None and len(content_text) > max_content_length:
+                    content_text = content_text[:max_content_length].replace('\n', ' ') + "..."
+
+                if self.render_markdown and role == "assistant" and max_content_length is None:
+                    from rich.markdown import Markdown
+                    self.console.print(Markdown(content_text))
+                else:
+                    self.console.print(content_text)
+
+                self.console.print()
+
+        except Exception as e:
+            self.print_error(str(e))
 
     def export_conversation(self, fmt: str, filename: Optional[str] = None):
         """Export current conversation to a file"""
@@ -2948,10 +3434,38 @@ Available operations:
 
         Adds user message and gets AI response.
         Supports automatic tool calling if enabled.
+        When no conversation is loaded, uses CTK-aware system prompt with tools.
 
         Args:
             user_message: User's message
         """
+        # Check if we're in "standalone" mode (no conversation loaded)
+        standalone_mode = self.current_conversation_id is None
+
+        # Inject CTK system prompt if standalone and no system prompt yet
+        if standalone_mode and self.db:
+            current_path = self.get_current_path()
+            has_system_prompt = any(msg.role == LLMMessageRole.SYSTEM for msg in current_path)
+            if not has_system_prompt:
+                # Choose prompt based on whether tools are available
+                if self.tools_disabled:
+                    from ctk.core.helpers import get_ctk_system_prompt_no_tools
+                    ctk_prompt = get_ctk_system_prompt_no_tools(self.db, self.vfs_cwd)
+                else:
+                    from ctk.core.helpers import get_ctk_system_prompt
+                    ctk_prompt = get_ctk_system_prompt(self.db, self.vfs_cwd)
+                # Insert system message at the root
+                system_msg = TreeMessage(role=LLMMessageRole.SYSTEM, content=ctk_prompt, parent=None)
+                self.message_map[system_msg.id] = system_msg
+                # Make current root a child of system message
+                if self.root:
+                    self.root.parent = system_msg
+                    system_msg.children.append(self.root)
+                self.root = system_msg
+                # Set current_message so subsequent messages link to system prompt
+                if self.current_message is None:
+                    self.current_message = system_msg
+
         # Add user message
         self.add_message(LLMMessageRole.USER, user_message)
 
@@ -2970,7 +3484,14 @@ Available operations:
                 if self.num_ctx:
                     kwargs['num_ctx'] = self.num_ctx
 
-                # Add tools if auto-tools enabled and provider supports it
+                # Add CTK tools if in standalone mode, provider supports it, AND tools not disabled
+                ctk_tools_enabled = standalone_mode and self.provider.supports_tool_calling() and not self.tools_disabled
+                if ctk_tools_enabled:
+                    from ctk.core.helpers import get_ask_tools
+                    ctk_tools = get_ask_tools()
+                    kwargs['tools'] = self.provider.format_tools_for_api(ctk_tools)
+
+                # Add MCP tools if auto-tools enabled and provider supports it
                 if self.mcp_auto_tools and self.provider.supports_tool_calling():
                     tool_dicts = self.mcp_client.get_tools_as_dicts()
                     if tool_dicts:
@@ -3028,12 +3549,45 @@ Available operations:
                     # Print without newline so we can overwrite it
                     print(f"\r{status_msg} ⏳", end="", flush=True)
 
-                    response = self.provider.chat(
-                        self.get_messages_for_llm(),
-                        temperature=self.temperature,
-                        max_tokens=self.max_tokens,
-                        **kwargs
-                    )
+                    # Debug: show messages being sent (set CTK_DEBUG=1 to enable)
+                    import os
+                    if os.environ.get('CTK_DEBUG'):
+                        msgs = self.get_messages_for_llm()
+                        print(f"\n[DEBUG] Sending {len(msgs)} messages:")
+                        for i, m in enumerate(msgs):
+                            content_preview = m.content[:100] + "..." if len(m.content) > 100 else m.content
+                            print(f"  [{i}] {m.role}: {content_preview}")
+                        print()
+
+                    try:
+                        response = self.provider.chat(
+                            self.get_messages_for_llm(),
+                            temperature=self.temperature,
+                            max_tokens=self.max_tokens,
+                            **kwargs
+                        )
+                    except Exception as e:
+                        # Auto-detect: if tools caused a 400 error, disable and retry
+                        if '400' in str(e) and kwargs.get('tools') and not self.tools_disabled:
+                            print(f"\r{' ' * (len(status_msg) + 5)}\r", end="", flush=True)
+                            print(f"⚠️  Model doesn't support tools. Disabling and retrying...")
+                            self.tools_disabled = True
+                            # Remove tools and retry
+                            kwargs.pop('tools', None)
+                            # Update system prompt to no-tools version
+                            if standalone_mode and self.db and self.root and self.root.role == LLMMessageRole.SYSTEM:
+                                from ctk.core.helpers import get_ctk_system_prompt_no_tools
+                                self.root.content = get_ctk_system_prompt_no_tools(self.db, self.vfs_cwd)
+                            # Retry without tools
+                            print(f"\rGenerating response... ⏳", end="", flush=True)
+                            response = self.provider.chat(
+                                self.get_messages_for_llm(),
+                                temperature=self.temperature,
+                                max_tokens=self.max_tokens,
+                                **kwargs
+                            )
+                        else:
+                            raise
 
                     response_text = response.content
 
@@ -3060,11 +3614,16 @@ Available operations:
                     # Check for tool calls
                     tool_calls = self.provider.extract_tool_calls(response)
 
-                    if not tool_calls or not self.mcp_auto_tools:
-                        break  # No tools called or auto-tools disabled
+                    # Determine if we should process tool calls
+                    should_process_tools = tool_calls and (ctk_tools_enabled or self.mcp_auto_tools)
+                    if not should_process_tools:
+                        break  # No tools called or tools disabled
 
                     # Execute tool calls
                     print(f"\n🔧 Executing {len(tool_calls)} tool call(s)...")
+
+                    # CTK tool names for routing
+                    ctk_tool_names = {'search_conversations', 'get_conversation', 'get_statistics', 'execute_shell_command'}
 
                     for tool_call in tool_calls:
                         tool_name = tool_call.get('function', {}).get('name') or tool_call.get('name')
@@ -3077,35 +3636,80 @@ Available operations:
 
                         print(f"  → {tool_name}({json.dumps(tool_args)})")
 
-                        # Call the tool via MCP
-                        try:
-                            result = self.mcp_client.call_tool(tool_name, tool_args)
+                        # Route to CTK tools or MCP tools
+                        if tool_name in ctk_tool_names and ctk_tools_enabled:
+                            # Execute CTK tool
+                            try:
+                                from ctk.cli import execute_ask_tool
 
-                            # Show result
-                            result_display = result.for_display()
-                            if len(result_display) > 200:
-                                print(f"    Result: {result_display[:200]}...")
-                            else:
-                                print(f"    Result: {result_display}")
+                                # Create shell executor for execute_shell_command
+                                def shell_executor(cmd):
+                                    from ctk.core.shell_parser import ShellParser
+                                    pipeline = ShellParser.parse(cmd)
+                                    return self.command_dispatcher.execute(pipeline, print_output=False)
 
-                            # Add tool result to tree
-                            tool_result_content = result.for_llm()
-                            tool_msg = self.provider.format_tool_result_message(
-                                tool_name,
-                                tool_result_content,
-                                tool_id
-                            )
-                            self.add_message(tool_msg.role, tool_msg.content)
+                                result = execute_ask_tool(
+                                    self.db,
+                                    tool_name,
+                                    tool_args,
+                                    debug=False,
+                                    use_rich=False,
+                                    shell_executor=shell_executor
+                                )
 
-                        except Exception as e:
-                            print(f"    Error: {e}")
-                            # Add error as tool result
-                            error_msg = self.provider.format_tool_result_message(
-                                tool_name,
-                                {"success": False, "error": str(e)},
-                                tool_id
-                            )
-                            self.add_message(error_msg.role, error_msg.content)
+                                # Show result
+                                if result and len(result) > 200:
+                                    print(f"    Result: {result[:200]}...")
+                                elif result:
+                                    print(f"    Result: {result}")
+
+                                # Add tool result to tree
+                                tool_msg = self.provider.format_tool_result_message(
+                                    tool_name,
+                                    result or "(no output)",
+                                    tool_id
+                                )
+                                self.add_message(tool_msg.role, tool_msg.content)
+
+                            except Exception as e:
+                                print(f"    Error: {e}")
+                                error_msg = self.provider.format_tool_result_message(
+                                    tool_name,
+                                    f"Error: {str(e)}",
+                                    tool_id
+                                )
+                                self.add_message(error_msg.role, error_msg.content)
+
+                        elif self.mcp_auto_tools:
+                            # Call the tool via MCP
+                            try:
+                                result = self.mcp_client.call_tool(tool_name, tool_args)
+
+                                # Show result
+                                result_display = result.for_display()
+                                if len(result_display) > 200:
+                                    print(f"    Result: {result_display[:200]}...")
+                                else:
+                                    print(f"    Result: {result_display}")
+
+                                # Add tool result to tree
+                                tool_result_content = result.for_llm()
+                                tool_msg = self.provider.format_tool_result_message(
+                                    tool_name,
+                                    tool_result_content,
+                                    tool_id
+                                )
+                                self.add_message(tool_msg.role, tool_msg.content)
+
+                            except Exception as e:
+                                print(f"    Error: {e}")
+                                # Add error as tool result
+                                error_msg = self.provider.format_tool_result_message(
+                                    tool_name,
+                                    {"success": False, "error": str(e)},
+                                    tool_id
+                                )
+                                self.add_message(error_msg.role, error_msg.content)
 
                     print()  # Blank line before next iteration
 
@@ -4511,12 +5115,11 @@ Available operations:
                                     break
                             else:
                                 print(f"Command not found: {first_cmd}")
-                                print("Type 'help' for available commands")
+                                print("Type 'help' for commands, 'say <message>' to chat with LLM")
                     else:
-                        # Not a shell command in shell mode - treat as chat input
-                        # This enters temporary chat mode
-                        print("(Entering chat mode for this message)")
-                        self.chat(user_input)
+                        # Input doesn't look like a command - show help
+                        print(f"Unknown input. Use 'say <message>' to chat with LLM.")
+                        print("Type 'help' for available commands.")
 
                 else:
                     # Chat mode: check for /commands
