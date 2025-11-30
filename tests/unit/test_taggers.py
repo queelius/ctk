@@ -146,10 +146,10 @@ class TestOllamaTagger:
             json={"response": '["python", "programming", "api"]'},
             status=200
         )
-        
-        tagger = OllamaTagger()
+
+        tagger = OllamaTagger(base_url="http://localhost:11434")
         response = tagger.call_api("Test prompt")
-        
+
         assert response == '["python", "programming", "api"]'
     
     @pytest.mark.unit
@@ -161,10 +161,10 @@ class TestOllamaTagger:
             "http://localhost:11434/api/generate",
             status=500
         )
-        
-        tagger = OllamaTagger()
+
+        tagger = OllamaTagger(base_url="http://localhost:11434")
         response = tagger.call_api("Test prompt")
-        
+
         assert response is None
     
     @pytest.mark.unit
@@ -177,10 +177,10 @@ class TestOllamaTagger:
             json={"models": []},
             status=200
         )
-        
-        tagger = OllamaTagger()
+
+        tagger = OllamaTagger(base_url="http://localhost:11434")
         is_connected = tagger.check_connection()
-        
+
         assert is_connected is True
     
     @pytest.mark.unit
@@ -198,10 +198,10 @@ class TestOllamaTagger:
             },
             status=200
         )
-        
-        tagger = OllamaTagger()
+
+        tagger = OllamaTagger(base_url="http://localhost:11434")
         models = tagger.list_models()
-        
+
         assert "llama2" in models
         assert "codellama" in models
     

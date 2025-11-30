@@ -73,6 +73,10 @@ class TestVFSNavigatorMessages:
                     return self.conv
                 return None
 
+            def load_conversation(self, conv_id):
+                """Alias for get_conversation - used by VFSNavigator"""
+                return self.get_conversation(conv_id)
+
             def list_conversations(self, **kwargs):
                 return []
 
@@ -101,13 +105,16 @@ class TestVFSNavigatorMessages:
 
         entries = navigator.list_directory(path)
 
+        # Filter for child directories only (excludes virtual files like text, role, etc.)
+        child_dirs = [e for e in entries if e.is_directory]
+
         # Should have one child (m2)
-        assert len(entries) == 1
-        assert entries[0].name == "m1"  # First child is labeled m1
-        assert entries[0].message_id == "msg-2"
-        assert entries[0].role == "assistant"
-        assert "Response from assistant" in entries[0].content_preview
-        assert entries[0].has_children is True  # m2 has children (m3 and m4)
+        assert len(child_dirs) == 1
+        assert child_dirs[0].name == "m1"  # First child is labeled m1
+        assert child_dirs[0].message_id == "msg-2"
+        assert child_dirs[0].role == "assistant"
+        assert "Response from assistant" in child_dirs[0].content_preview
+        assert child_dirs[0].has_children is True  # m2 has children (m3 and m4)
 
     def test_list_message_node_with_branches(self, mock_db):
         """Test listing /chats/test-conv-123/m1/m1/ shows branches"""
@@ -116,32 +123,42 @@ class TestVFSNavigatorMessages:
 
         entries = navigator.list_directory(path)
 
+        # Filter for child directories only (excludes virtual files like text, role, etc.)
+        child_dirs = [e for e in entries if e.is_directory]
+
         # Should have two children (m3 and m4 - the branch point)
-        assert len(entries) == 2
+        assert len(child_dirs) == 2
 
         # First entry (m1 -> m3)
-        assert entries[0].name == "m1"
-        assert entries[0].message_id == "msg-3"
-        assert entries[0].role == "user"
-        assert "main branch" in entries[0].content_preview
-        assert entries[0].has_children is False  # m3 is a leaf
+        assert child_dirs[0].name == "m1"
+        assert child_dirs[0].message_id == "msg-3"
+        assert child_dirs[0].role == "user"
+        assert "main branch" in child_dirs[0].content_preview
+        assert child_dirs[0].has_children is False  # m3 is a leaf
 
         # Second entry (m2 -> m4)
-        assert entries[1].name == "m2"
-        assert entries[1].message_id == "msg-4"
-        assert entries[1].role == "user"
-        assert "Alternative branch" in entries[1].content_preview
-        assert entries[1].has_children is False  # m4 is a leaf
+        assert child_dirs[1].name == "m2"
+        assert child_dirs[1].message_id == "msg-4"
+        assert child_dirs[1].role == "user"
+        assert "Alternative branch" in child_dirs[1].content_preview
+        assert child_dirs[1].has_children is False  # m4 is a leaf
 
     def test_list_leaf_message_node(self, mock_db):
-        """Test listing a leaf message node returns empty"""
+        """Test listing a leaf message node shows metadata files but no child dirs"""
         navigator = VFSNavigator(mock_db)
         path = VFSPathParser.parse("/chats/test-conv-123/m1/m1/m1/")
 
         entries = navigator.list_directory(path)
 
-        # Leaf nodes have no children
-        assert len(entries) == 0
+        # Filter for child directories only
+        child_dirs = [e for e in entries if e.is_directory]
+
+        # Leaf nodes have no child directories (but have metadata files)
+        assert len(child_dirs) == 0
+
+        # Should have metadata files (text, role, timestamp, id)
+        file_entries = [e for e in entries if not e.is_directory]
+        assert len(file_entries) == 4
 
     def test_message_node_content_preview(self, mock_db):
         """Test that content preview is truncated at 50 chars"""
@@ -158,6 +175,9 @@ class TestVFSNavigatorMessages:
         class MockDBLong:
             def get_conversation(self, conv_id):
                 return conv if conv_id == "test-long" else None
+
+            def load_conversation(self, conv_id):
+                return self.get_conversation(conv_id)
 
         navigator = VFSNavigator(MockDBLong())
         path = VFSPathParser.parse("/chats/test-long/")
@@ -176,13 +196,15 @@ class TestVFSNavigatorMessages:
         # At root level, should be m1
         path = VFSPathParser.parse("/chats/test-conv-123/")
         entries = navigator.list_directory(path)
-        assert entries[0].name == "m1"
+        child_dirs = [e for e in entries if e.is_directory]
+        assert child_dirs[0].name == "m1"
 
         # At m1/m1/ level (m2's children), should be m1, m2
         path = VFSPathParser.parse("/chats/test-conv-123/m1/m1/")
         entries = navigator.list_directory(path)
-        assert entries[0].name == "m1"
-        assert entries[1].name == "m2"
+        child_dirs = [e for e in entries if e.is_directory]
+        assert child_dirs[0].name == "m1"
+        assert child_dirs[1].name == "m2"
 
     def test_invalid_conversation_id(self, mock_db):
         """Test error handling for non-existent conversation"""
@@ -239,9 +261,10 @@ class TestVFSNavigatorMessages:
         # Navigate: root -> m1 -> m1 -> m1 (should reach leaf m3)
         path = VFSPathParser.parse("/chats/test-conv-123/m1/m1/m1/")
 
-        # m3 is a leaf, should have no children
+        # m3 is a leaf, should have no child directories (but has metadata files)
         entries = navigator.list_directory(path)
-        assert len(entries) == 0
+        child_dirs = [e for e in entries if e.is_directory]
+        assert len(child_dirs) == 0
 
     def test_timestamp_preserved(self, mock_db):
         """Test that message timestamps are preserved in entries"""
@@ -261,6 +284,9 @@ class TestVFSNavigatorMessages:
         class MockDBEmpty:
             def get_conversation(self, conv_id):
                 return conv if conv_id == "empty-conv" else None
+
+            def load_conversation(self, conv_id):
+                return self.get_conversation(conv_id)
 
         navigator = VFSNavigator(MockDBEmpty())
         path = VFSPathParser.parse("/chats/empty-conv/")

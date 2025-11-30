@@ -40,12 +40,13 @@ class TestMessageNodePaths:
         assert len(path.segments) == 2
 
     def test_conversation_reference_without_trailing_slash(self):
-        """Test /chats/abc123 is CONVERSATION (reference)"""
+        """Test /chats/abc123 is CONVERSATION_ROOT (always navigable directory)"""
         path = VFSPathParser.parse("/chats/abc123")
 
-        assert path.path_type == PathType.CONVERSATION
+        # Implementation treats conversation paths as navigable directories
+        assert path.path_type == PathType.CONVERSATION_ROOT
         assert path.conversation_id == "abc123"
-        assert path.is_directory is False
+        assert path.is_directory is True  # Always navigable
         assert path.message_path is None
 
     def test_single_message_node(self):
@@ -130,14 +131,13 @@ class TestMessageNodePaths:
         assert path.message_path == ["m1"]
 
         # From /chats/abc123/m1/ go up to conversation
-        # Note: Without trailing slash, this is CONVERSATION (not ROOT)
-        # To get CONVERSATION_ROOT, use: VFSPathParser.parse("../", current_dir="/chats/abc123/m1/")
+        # Implementation always treats conversation paths as navigable directories
         path = VFSPathParser.parse("..", current_dir="/chats/abc123/m1/")
 
-        assert path.path_type == PathType.CONVERSATION
+        assert path.path_type == PathType.CONVERSATION_ROOT
         assert path.conversation_id == "abc123"
         assert path.message_path is None
-        assert path.is_directory is False  # Without trailing slash
+        assert path.is_directory is True  # Always navigable
 
     def test_message_node_normalization(self):
         """Test path normalization with message nodes"""
@@ -161,9 +161,9 @@ class TestMessageNodePaths:
 
     def test_conversation_vs_message_node_disambiguation(self):
         """Test that conversation IDs and message nodes don't conflict"""
-        # Conversation ID (looks like hash)
+        # Conversation ID (looks like hash) - always treated as navigable directory
         conv_path = VFSPathParser.parse("/chats/abc123def456")
-        assert conv_path.path_type == PathType.CONVERSATION
+        assert conv_path.path_type == PathType.CONVERSATION_ROOT
 
         # Message node (m + digits)
         msg_path = VFSPathParser.parse("/chats/abc123/m5")

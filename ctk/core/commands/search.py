@@ -239,7 +239,7 @@ class SearchCommands:
 
         # Search each conversation
         for conv in conversations:
-            if limit and len(results) >= limit:
+            if limit is not None and len(results) >= limit:
                 break
 
             # Check type filter for conversation (directory)
@@ -262,7 +262,7 @@ class SearchCommands:
 
                 # Add message paths to results
                 for msg_path in message_results:
-                    if limit and len(results) >= limit:
+                    if limit is not None and len(results) >= limit:
                         break
                     results.append(f"/chats/{conv.id}/{msg_path}")
             else:
@@ -309,7 +309,7 @@ class SearchCommands:
 
         # Add conversation prefix to paths
         for msg_path in message_results:
-            if limit and len(results) >= limit:
+            if limit is not None and len(results) >= limit:
                 break
             results.append(f"/chats/{conv_id}/{msg_path}")
 

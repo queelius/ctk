@@ -231,7 +231,7 @@ def cmd_export(args):
             # Export all or filtered conversations
             conv_list = db.list_conversations(limit=args.limit)
             for conv_info in conv_list:
-                conv = db.load_conversation(conv_info['id'])
+                conv = db.load_conversation(conv_info.id)
                 if conv:
                     # Apply filters
                     if args.filter_source and conv.metadata.source != args.filter_source:

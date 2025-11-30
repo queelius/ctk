@@ -17,9 +17,10 @@ from ctk.core.models import ConversationTree, ConversationMetadata
 @pytest.fixture(scope="session")
 def temp_db():
     """Create temporary database for testing"""
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-        db_path = f.name
-    
+    import shutil
+    # Create a temporary directory for the database
+    db_path = tempfile.mkdtemp(suffix='_ctk_db')
+
     try:
         # Create database with sample data
         with ConversationDB(db_path) as db:
@@ -35,11 +36,11 @@ def temp_db():
                 metadata=metadata
             )
             db.save_conversation(conv)
-        
+
         yield db_path
     finally:
         if os.path.exists(db_path):
-            os.unlink(db_path)
+            shutil.rmtree(db_path)
 
 @pytest.fixture(scope="session")
 def sample_jsonl_file():
@@ -123,7 +124,7 @@ class TestCLIIntegration:
         with ConversationDB(temp_db) as db:
             conversations = db.list_conversations()
             # Find imported conversation
-            imported = [c for c in conversations if 'test' in c.get('tags', [])]
+            imported = [c for c in conversations if 'test' in (c.tags or [])]
             assert len(imported) > 0
 
     def test_export_command(self, temp_db):
@@ -362,67 +363,70 @@ class TestCLIWorkflows:
     
     def test_full_import_export_workflow(self, sample_jsonl_file):
         """Test complete import then export workflow"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as db_file, \
-             tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as export_file:
-            
+        import shutil
+        db_dir = tempfile.mkdtemp(suffix='_ctk_db')
+        with tempfile.NamedTemporaryFile(suffix='.jsonl', delete=False) as export_file:
+
             try:
                 # Step 1: Import
                 with patch('sys.argv', [
                     'ctk', 'import', sample_jsonl_file,
-                    '--db', db_file.name,
+                    '--db', db_dir,
                     '--format', 'jsonl'
                 ]):
                     result = main()
                     assert result == 0
-                
+
                 # Step 2: Verify data in database
                 with patch('sys.argv', [
                     'ctk', 'stats',
-                    '--db', db_file.name
+                    '--db', db_dir
                 ]):
                     result = main()
                     assert result == 0
-                
+
                 # Step 3: Export
                 with patch('sys.argv', [
                     'ctk', 'export', export_file.name,
-                    '--db', db_file.name,
+                    '--db', db_dir,
                     '--format', 'jsonl'
                 ]):
                     result = main()
                     assert result == 0
-                
+
                 # Step 4: Verify export
                 assert os.path.exists(export_file.name)
                 assert os.path.getsize(export_file.name) > 0
-                
+
             finally:
-                for f in [db_file.name, export_file.name]:
-                    if os.path.exists(f):
-                        os.unlink(f)
+                if os.path.exists(export_file.name):
+                    os.unlink(export_file.name)
+                if os.path.exists(db_dir):
+                    shutil.rmtree(db_dir)
 
     def test_search_workflow(self, sample_jsonl_file):
         """Test search functionality workflow"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as db_file:
-            try:
-                # Import data
+        import shutil
+        db_dir = tempfile.mkdtemp(suffix='_ctk_db')
+        try:
+            # Import data
+            with patch('sys.argv', [
+                'ctk', 'import', sample_jsonl_file,
+                '--db', db_dir
+            ]):
+                result = main()
+                assert result == 0
+
+            # Search for content
+            with patch('sys.stdout') as mock_stdout:
                 with patch('sys.argv', [
-                    'ctk', 'import', sample_jsonl_file,
-                    '--db', db_file.name
+                    'ctk', 'search', 'Hello',
+                    '--db', db_dir
                 ]):
                     result = main()
                     assert result == 0
-                
-                # Search for content
-                with patch('sys.stdout') as mock_stdout:
-                    with patch('sys.argv', [
-                        'ctk', 'search', 'Hello',
-                        '--db', db_file.name
-                    ]):
-                        result = main()
-                        assert result == 0
-                        mock_stdout.write.assert_called()
-                
-            finally:
-                if os.path.exists(db_file.name):
-                    os.unlink(db_file.name)
+                    mock_stdout.write.assert_called()
+
+        finally:
+            if os.path.exists(db_dir):
+                shutil.rmtree(db_dir)
