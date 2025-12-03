@@ -207,11 +207,12 @@ class TestDatabaseCoverage:
     def test_list_conversations_with_filters(self):
         """Test list_conversations with filters"""
         from ctk.core.database import ConversationDB
-        
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        
-        try:
+        import os
+
+        # Use temp directory, not temp file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+
             with ConversationDB(db_path) as db:
                 # Create test conversations
                 for i in range(3):
@@ -223,15 +224,11 @@ class TestDatabaseCoverage:
                     msg = Message(id=f"msg-{i}", role=MessageRole.USER, content=MessageContent(text=f"Message {i}"))
                     conv.add_message(msg)
                     db.save_conversation(conv)
-                
+
                 # List with limit
                 limited = db.list_conversations(limit=2)
                 assert len(limited) <= 2
-                
+
                 # List with offset
                 offset = db.list_conversations(offset=1)
                 assert len(offset) >= 0
-        finally:
-            import os
-            if os.path.exists(db_path):
-                os.unlink(db_path)

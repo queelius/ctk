@@ -28,16 +28,21 @@ class GeminiImporter(ImporterPlugin):
                 data = json.loads(data)
             except:
                 return False
-        
+
         # Check for Gemini/Bard format markers
         if isinstance(data, dict):
-            return 'conversations' in data or 'messages' in data
-        
+            # Accept conversations, messages, or turns fields (Gemini format)
+            if 'conversations' in data or 'messages' in data or 'turns' in data:
+                return True
+            # Also accept conversation_id with turns
+            if 'conversation_id' in data:
+                return True
+
         if isinstance(data, list) and data:
             sample = data[0]
             return ('model' in str(sample) and 'gemini' in str(sample).lower()) or \
                    'bard' in str(sample).lower()
-        
+
         return False
     
     def _detect_model(self, conv_data: Dict) -> str:
@@ -78,7 +83,7 @@ class GeminiImporter(ImporterPlugin):
             conv_list = data if isinstance(data, list) else [data]
         
         for conv_data in conv_list:
-            conv_id = conv_data.get('id', str(uuid.uuid4()))
+            conv_id = conv_data.get('id', conv_data.get('conversation_id', str(uuid.uuid4())))
             title = conv_data.get('title', 'Untitled Conversation')
             model = self._detect_model(conv_data)
             
@@ -90,7 +95,7 @@ class GeminiImporter(ImporterPlugin):
                 created_at=self._parse_timestamp(conv_data.get('created_at')) or datetime.now(),
                 updated_at=self._parse_timestamp(conv_data.get('updated_at')) or datetime.now(),
                 tags=['google', 'gemini', model.lower().replace(' ', '-')],
-                custom={
+                custom_data={
                     'language': conv_data.get('language'),
                     'safety_settings': conv_data.get('safety_settings'),
                 }
@@ -101,8 +106,9 @@ class GeminiImporter(ImporterPlugin):
                 title=title,
                 metadata=metadata
             )
-            
-            messages = conv_data.get('messages', [])
+
+            # Handle both 'messages' and 'turns' fields (Gemini uses 'turns')
+            messages = conv_data.get('messages', conv_data.get('turns', []))
             parent_id = None
             
             for idx, msg_data in enumerate(messages):
@@ -151,7 +157,7 @@ class GeminiImporter(ImporterPlugin):
                     }
                 )
                 
-                tree.add_message(message, parent_id=parent_id)
+                tree.add_message(message)
                 parent_id = msg_id
             
             conversations.append(tree)

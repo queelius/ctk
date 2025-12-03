@@ -333,11 +333,13 @@ class DatabaseOperations:
                     stats['total_input'] += 1
 
                     # Additional filtering that's easier to do in Python
-                    if min_messages and conv_model.message_count < min_messages:
+                    # Count messages via relationship
+                    msg_count = len(conv_model.messages) if conv_model.messages else 0
+                    if min_messages and msg_count < min_messages:
                         stats['filtered_out'] += 1
                         continue
 
-                    if max_messages and conv_model.message_count > max_messages:
+                    if max_messages and msg_count > max_messages:
                         stats['filtered_out'] += 1
                         continue
 

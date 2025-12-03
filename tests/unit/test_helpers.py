@@ -76,7 +76,8 @@ class TestFormatConversationsTable:
     @pytest.mark.unit
     def test_format_conversations_table_creates_console_if_not_provided(self, sample_conversations):
         """Test that console is created if not provided"""
-        with patch('ctk.core.helpers.Console') as MockConsole:
+        # Console is imported from rich.console inside the function
+        with patch('rich.console.Console') as MockConsole:
             mock_console_instance = Mock()
             MockConsole.return_value = mock_console_instance
             format_conversations_table(sample_conversations)

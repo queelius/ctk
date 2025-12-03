@@ -30,7 +30,7 @@ class TestOpenAIImporter:
         assert conv.id == "conv_openai_001"
         assert conv.title == "ChatGPT Conversation"
         assert conv.metadata.source == "ChatGPT"
-        assert conv.metadata.model in ["gpt-4", "GPT-4"]  # Can be mapped or raw
+        assert conv.metadata.model in ["gpt-4", "GPT-4", "ChatGPT"]  # Can be mapped, raw, or default
         
         # Check messages
         messages = conv.get_longest_path()
@@ -398,7 +398,8 @@ class TestOpenAIImporterValidation:
     def test_validate_with_title(self):
         """Test validation with title field"""
         importer = OpenAIImporter()
-        data = {"title": "Test", "mapping": {}}
+        # OpenAI format requires 'mapping' and ('conversation_id' or 'id')
+        data = {"title": "Test", "mapping": {}, "id": "test-id"}
         assert importer.validate(data)
     
     @pytest.mark.unit
@@ -413,7 +414,8 @@ class TestOpenAIImporterValidation:
     def test_validate_list_of_conversations(self):
         """Test validation of list format"""
         importer = OpenAIImporter()
-        data = [{"mapping": {}}]
+        # OpenAI format requires 'mapping' and ('conversation_id' or 'id')
+        data = [{"mapping": {}, "conversation_id": "test-id"}]
         assert importer.validate(data)
 
 

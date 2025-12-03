@@ -50,7 +50,7 @@ def format_conversations_table(conversations: List, show_message_count: bool = F
         if conv_dict.get('archived_at'):
             flags += "📦 "
 
-        title = conv_dict.get('title') or conv_dict.get('title', 'Untitled')
+        title = conv_dict.get('title') or 'Untitled'
         if len(title) > 47:
             title = title[:47] + '...'
         title_with_flags = f"{flags}{title}" if flags else title
@@ -285,7 +285,7 @@ Available CTK Operations:
 """
 
     # Extract subparser information
-    if hasattr(parser, '_subparsers'):
+    if hasattr(parser, '_subparsers') and parser._subparsers is not None:
         for action in parser._subparsers._group_actions:
             if hasattr(action, 'choices'):
                 for cmd_name, cmd_parser in action.choices.items():

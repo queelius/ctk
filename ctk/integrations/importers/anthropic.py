@@ -38,20 +38,28 @@ class AnthropicImporter(ImporterPlugin):
             return False
 
         # Check for Anthropic format markers
-        # Look for uuid and either messages or chat_messages
+        # Look for chat_messages field (required) and optionally uuid or name
+        has_chat_messages = 'chat_messages' in sample
+        has_messages = 'messages' in sample
         has_uuid = 'uuid' in sample
-        has_messages = 'messages' in sample or 'chat_messages' in sample
+        has_name = 'name' in sample
+
+        # Valid if has chat_messages (primary Anthropic export format)
+        # Or has messages/uuid with sender pattern
+        if has_chat_messages:
+            return True
+
+        if has_messages and (has_uuid or has_name):
+            return True
 
         # Also check in the content of messages if available
         has_sender = False
-        if 'chat_messages' in sample and sample['chat_messages']:
-            has_sender = any('sender' in msg for msg in sample['chat_messages'])
-        elif 'messages' in sample and sample['messages']:
+        if 'messages' in sample and sample['messages']:
             has_sender = any('sender' in msg for msg in sample['messages'])
         else:
             has_sender = 'sender' in str(sample)
 
-        return has_uuid and (has_messages or has_sender)
+        return has_uuid and has_sender
     
     def _detect_model(self, conv_data: Dict) -> str:
         """Detect the Claude model used"""

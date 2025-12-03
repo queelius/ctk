@@ -22,27 +22,22 @@ class TestDatabaseAdditionalCoverage:
     @pytest.mark.unit
     def test_database_context_manager(self):
         """Test database as context manager"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+
             with ConversationDB(db_path) as db:
                 assert db is not None
                 assert os.path.exists(db_path)
-            
+
             # Database should be closed after context
             assert not hasattr(db, 'session') or db.session is None
-        finally:
-            if os.path.exists(db_path):
-                os.unlink(db_path)
     
     @pytest.mark.unit
     def test_get_conversation_by_id(self):
         """Test getting conversation by ID"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+
             with ConversationDB(db_path) as db:
                 # Create a conversation
                 conv = ConversationTree(
@@ -57,27 +52,23 @@ class TestDatabaseAdditionalCoverage:
                 )
                 conv.add_message(msg)
                 db.save_conversation(conv)
-                
-                # Get it back
-                retrieved = db.get_conversation("test-123")
+
+                # Get it back (use load_conversation not get_conversation)
+                retrieved = db.load_conversation("test-123")
                 assert retrieved is not None
                 assert retrieved.id == "test-123"
                 assert retrieved.title == "Test Conv"
-                
+
                 # Try non-existent
-                none_conv = db.get_conversation("non-existent")
+                none_conv = db.load_conversation("non-existent")
                 assert none_conv is None
-        finally:
-            if os.path.exists(db_path):
-                os.unlink(db_path)
     
     @pytest.mark.unit
     def test_update_conversation(self):
         """Test updating a conversation"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+
             with ConversationDB(db_path) as db:
                 # Create
                 conv = ConversationTree(
@@ -88,28 +79,24 @@ class TestDatabaseAdditionalCoverage:
                 msg = Message(id="msg-1", role=MessageRole.USER, content=MessageContent(text="Hi"))
                 conv.add_message(msg)
                 db.save_conversation(conv)
-                
+
                 # Update
                 conv.title = "Updated Title"
                 msg2 = Message(id="msg-2", role=MessageRole.ASSISTANT, content=MessageContent(text="Hello"))
                 conv.add_message(msg2)
                 db.save_conversation(conv)
-                
-                # Verify
-                retrieved = db.get_conversation("update-test")
+
+                # Verify (use load_conversation)
+                retrieved = db.load_conversation("update-test")
                 assert retrieved.title == "Updated Title"
                 assert len(retrieved.message_map) == 2
-        finally:
-            if os.path.exists(db_path):
-                os.unlink(db_path)
     
     @pytest.mark.unit
     def test_delete_conversation(self):
         """Test deleting a conversation"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-            db_path = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "test.db")
+
             with ConversationDB(db_path) as db:
                 # Create
                 conv = ConversationTree(
@@ -120,23 +107,20 @@ class TestDatabaseAdditionalCoverage:
                 msg = Message(id="msg-1", role=MessageRole.USER, content=MessageContent(text="Hi"))
                 conv.add_message(msg)
                 db.save_conversation(conv)
-                
-                # Verify it exists
-                assert db.get_conversation("delete-test") is not None
-                
+
+                # Verify it exists (use load_conversation)
+                assert db.load_conversation("delete-test") is not None
+
                 # Delete
                 result = db.delete_conversation("delete-test")
                 assert result is True
-                
+
                 # Verify it's gone
-                assert db.get_conversation("delete-test") is None
-                
+                assert db.load_conversation("delete-test") is None
+
                 # Try deleting non-existent
                 result = db.delete_conversation("non-existent")
                 assert result is False
-        finally:
-            if os.path.exists(db_path):
-                os.unlink(db_path)
 
 
 class TestConfigCoverage:
@@ -172,12 +156,12 @@ class TestPluginRegistryCoverage:
     def test_registry_discover_plugins(self):
         """Test plugin discovery"""
         registry = PluginRegistry()
-        
-        # Should discover built-in plugins
-        importers = registry.get_importers()
+
+        # Should discover built-in plugins (use list_importers/list_exporters)
+        importers = registry.list_importers()
         assert len(importers) > 0
-        
-        exporters = registry.get_exporters()
+
+        exporters = registry.list_exporters()
         assert len(exporters) > 0
     
     @pytest.mark.unit
@@ -204,12 +188,13 @@ class TestPluginRegistryCoverage:
     def test_list_plugin_names(self):
         """Test listing plugin names"""
         registry = PluginRegistry()
-        
-        importer_names = registry.list_importer_names()
+
+        # list_importers returns names directly (list of strings)
+        importer_names = registry.list_importers()
         assert 'openai' in importer_names
         assert 'anthropic' in importer_names
-        
-        exporter_names = registry.list_exporter_names()
+
+        exporter_names = registry.list_exporters()
         assert 'json' in exporter_names
         assert 'jsonl' in exporter_names
 
@@ -292,19 +277,20 @@ class TestModelsCoverage:
     
     @pytest.mark.unit
     def test_conversation_get_message(self):
-        """Test getting a specific message by ID"""
+        """Test getting a specific message by ID via message_map"""
         conv = ConversationTree(id="test", title="Test")
-        
+
         msg = Message(id="msg1", role=MessageRole.USER, content=MessageContent(text="Hello"))
         conv.add_message(msg)
-        
-        retrieved = conv.get_message("msg1")
+
+        # Use message_map directly (there's no get_message method)
+        retrieved = conv.message_map.get("msg1")
         assert retrieved is not None
         assert retrieved.id == "msg1"
         assert retrieved.content.text == "Hello"
-        
+
         # Non-existent message
-        none_msg = conv.get_message("nonexistent")
+        none_msg = conv.message_map.get("nonexistent")
         assert none_msg is None
     
     @pytest.mark.unit

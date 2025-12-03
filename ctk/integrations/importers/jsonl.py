@@ -37,7 +37,12 @@ class JSONLImporter(ImporterPlugin):
                         return True
                 except (json.JSONDecodeError, TypeError, KeyError):
                     pass
-        
+
+        # Support dict with messages array (common format)
+        if isinstance(data, dict):
+            if 'messages' in data or 'conversations' in data:
+                return True
+
         # Also support list of message dicts
         if isinstance(data, list) and data:
             sample = data[0]
@@ -48,7 +53,7 @@ class JSONLImporter(ImporterPlugin):
                 # Conversation wrapper
                 if 'messages' in sample or 'conversations' in sample:
                     return True
-        
+
         return False
     
     def _detect_model(self, data: Any) -> str:
@@ -164,6 +169,15 @@ class JSONLImporter(ImporterPlugin):
             if current_conv:
                 conversations.append((current_conv, current_metadata))
         
+        elif isinstance(data, dict):
+            # Single conversation as a dict with messages
+            if 'messages' in data:
+                metadata = {k: v for k, v in data.items() if k != 'messages'}
+                conversations.append((data['messages'], metadata))
+            elif 'conversations' in data:
+                metadata = {k: v for k, v in data.items() if k != 'conversations'}
+                conversations.append((data['conversations'], metadata))
+
         elif isinstance(data, list):
             # Already a list, check format
             if data and isinstance(data[0], dict):
@@ -190,8 +204,8 @@ class JSONLImporter(ImporterPlugin):
             if not messages_data:
                 continue
 
-            # Create conversation ID and title
-            conv_id = f"jsonl_{idx}_{uuid.uuid4().hex[:8]}"
+            # Create conversation ID (use provided ID if available, otherwise generate)
+            conv_id = conv_metadata.get('id', f"jsonl_{idx}_{uuid.uuid4().hex[:8]}")
 
             # Try to generate a title from the first user message or metadata
             title = conv_metadata.get('title', "Untitled Conversation")
