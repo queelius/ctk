@@ -26,7 +26,7 @@ def cmd_cat(args, stdin=''):
         return CommandResult(success=True, output=stdin)
     if args:
         return CommandResult(success=True, output=f"Content of {args[0]}\n")
-    return CommandResult(success=False, error="cat: no input")
+    return CommandResult(success=False, output='', error="cat: no input")
 
 
 def cmd_grep(args, stdin=''):

@@ -29,19 +29,19 @@ class TestCTKFluentAPI:
 
     def test_ctk_initialization_with_database(self):
         """Test CTK can be initialized with a database path"""
-        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp:
-            db_path = tmp.name
+        # Use a temp directory since ConversationDB expects a directory path
+        # (it stores conversations.db inside the directory)
+        with tempfile.TemporaryDirectory() as db_path:
+            ctk = CTK(db_path)
 
-        ctk = CTK(db_path)
+            assert ctk.db_path == db_path
+            # Database should be lazy-loaded
+            assert ctk._db is None
 
-        assert ctk.db_path == db_path
-        # Database should be lazy-loaded
-        assert ctk._db is None
-
-        # Accessing db property should initialize it
-        db = ctk.db
-        assert db is not None
-        assert isinstance(db, ConversationDB)
+            # Accessing db property should initialize it
+            db = ctk.db
+            assert db is not None
+            assert isinstance(db, ConversationDB)
 
     def test_conversation_builder_creation(self):
         """Test that conversation builder can be created and configured"""

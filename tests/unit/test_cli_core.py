@@ -38,38 +38,35 @@ class TestCLICommandBehaviors:
         # Then: Should exit with success code
         assert exc_info.value.code == 0
 
-    @patch('ctk.cli.ConversationDB')
-    @patch('ctk.cli.registry')
-    def test_import_command_processes_file_successfully(self, mock_registry, mock_db_class):
+    def test_import_command_processes_file_successfully(self):
         """Test import command successfully processes supported file formats"""
-        # Given: A mock importer and database
-        mock_importer = MagicMock()
-        mock_importer.import_file.return_value = [
-            ConversationTree(id="conv1", title="Test Conversation")
-        ]
-        mock_registry.get_importer.return_value = mock_importer
+        # Given: A real temp file with valid JSONL content
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            sample_data = {"messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"}
+            ], "id": "test-1"}
+            json.dump(sample_data, f)
+            f.write('\n')
+            temp_file = f.name
 
-        mock_db = MagicMock()
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        with tempfile.TemporaryDirectory() as temp_db:
+            try:
+                # When: Running import command via CLI
+                with patch('sys.argv', [
+                    'ctk', 'import', temp_file,
+                    '--db', temp_db,
+                    '--format', 'jsonl'
+                ]):
+                    result = main()
 
-        # Create a mock args object
-        args = MagicMock()
-        args.input = "test.json"
-        args.format = "json"
-        args.db = "test.db"
-        args.tags = None
-        args.sanitize = False
-        args.path_selection = "longest"
-        args.output = None
+                # Then: Should successfully import
+                assert result == 0
 
-        # When: Running import command
-        result = cmd_import(args)
-
-        # Then: Should successfully import and save conversations
-        assert result == 0
-        mock_registry.get_importer.assert_called_once_with("json")
-        mock_importer.import_file.assert_called_once_with("test.json", path_selection="longest")
-        mock_db.save_conversation.assert_called_once()
+            finally:
+                import os
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
 
     @patch('ctk.cli.ConversationDB')
     @patch('ctk.cli.registry')
@@ -89,99 +86,96 @@ class TestCLICommandBehaviors:
         # Then: Should return error code
         assert result != 0
 
-    @patch('ctk.cli.ConversationDB')
-    @patch('ctk.cli.registry')
-    def test_export_command_exports_conversations_successfully(self, mock_registry, mock_db_class):
+    def test_export_command_exports_conversations_successfully(self):
         """Test export command successfully exports conversations"""
-        # Given: A mock exporter and database with conversations
-        mock_exporter = MagicMock()
-        mock_registry.get_exporter.return_value = mock_exporter
+        import os
+        from ctk.core.database import ConversationDB
+        from ctk.core.models import ConversationTree
 
-        mock_db = MagicMock()
-        mock_db.list_conversations.return_value = [
-            {'id': 'conv1', 'title': 'Test Conversation'}
-        ]
-        mock_db.load_conversation.return_value = ConversationTree(id="conv1", title="Test")
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        # Given: A database with a conversation
+        with tempfile.TemporaryDirectory() as temp_db:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as export_file:
+                export_path = export_file.name
 
-        args = MagicMock()
-        args.output = "export.jsonl"
-        args.db = "test.db"
-        args.format = "jsonl"
-        args.ids = None
-        args.limit = 1000
-        args.filter_source = None
-        args.filter_model = None
-        args.filter_tag = None
-        args.sanitize = False
-        args.path_selection = "longest"
-        args.include_metadata = False
+            try:
+                # Create a database and add a conversation
+                with ConversationDB(temp_db) as db:
+                    conv = ConversationTree(id="test-conv-1", title="Test Conversation")
+                    db.save_conversation(conv)
 
-        # When: Running export command
-        result = cmd_export(args)
+                # When: Running export command via CLI
+                with patch('sys.argv', [
+                    'ctk', 'export', export_path,
+                    '--db', temp_db,
+                    '--format', 'jsonl'
+                ]):
+                    result = main()
 
-        # Then: Should successfully export conversations
-        assert result == 0
-        mock_registry.get_exporter.assert_called_once_with("jsonl")
-        mock_exporter.export_to_file.assert_called_once()
+                # Then: Should successfully export
+                assert result == 0
+                assert os.path.exists(export_path)
 
-    @patch('ctk.cli.ConversationDB')
-    def test_list_command_displays_conversations(self, mock_db_class):
+            finally:
+                if os.path.exists(export_path):
+                    os.unlink(export_path)
+
+    def test_list_command_displays_conversations(self):
         """Test list command displays available conversations"""
+        import os
+        from ctk.core.database import ConversationDB
+        from ctk.core.models import ConversationTree
+
         # Given: A database with conversations
-        mock_db = MagicMock()
-        mock_conversations = [
-            {'id': 'conv1', 'title': 'First Chat', 'message_count': 5},
-            {'id': 'conv2', 'title': 'Second Chat', 'message_count': 3}
-        ]
-        mock_db.list_conversations.return_value = mock_conversations
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        with tempfile.TemporaryDirectory() as temp_db:
+            # Create a database and add conversations
+            with ConversationDB(temp_db) as db:
+                conv1 = ConversationTree(id="conv1", title="First Chat")
+                conv2 = ConversationTree(id="conv2", title="Second Chat")
+                db.save_conversation(conv1)
+                db.save_conversation(conv2)
 
-        args = MagicMock()
-        args.db = "test.db"
-        args.limit = 100
-        args.json = False
+            # When: Running list command via CLI
+            with patch('sys.argv', [
+                'ctk', 'list',
+                '--db', temp_db
+            ]):
+                result = main()
 
-        # When: Running list command
-        with patch('builtins.print') as mock_print:
-            result = cmd_list(args)
+            # Then: Should successfully list conversations
+            assert result == 0
 
-        # Then: Should successfully list conversations
-        assert result == 0
-        mock_db.list_conversations.assert_called_once_with(limit=100)
-        # Should print conversation information
-        assert mock_print.call_count > 0
-
-    @patch('ctk.cli.ConversationDB')
-    def test_search_command_finds_conversations(self, mock_db_class):
+    def test_search_command_finds_conversations(self):
         """Test search command finds matching conversations"""
+        import os
+        from ctk.core.database import ConversationDB
+        from ctk.core.models import ConversationTree, Message, MessageRole, MessageContent
+
         # Given: A database with searchable conversations
-        mock_db = MagicMock()
-        mock_results = [
-            {'id': 'conv1', 'title': 'Python Tutorial', 'score': 0.95},
-            {'id': 'conv2', 'title': 'Python Advanced', 'score': 0.87}
-        ]
-        mock_db.search_conversations.return_value = mock_results
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        with tempfile.TemporaryDirectory() as temp_db:
+            # Create a database and add conversations with searchable content
+            with ConversationDB(temp_db) as db:
+                conv1 = ConversationTree(id="conv1", title="Python Tutorial")
+                conv1.add_message(Message(
+                    role=MessageRole.USER,
+                    content=MessageContent(text="How do I use Python?")
+                ))
+                conv2 = ConversationTree(id="conv2", title="Java Tutorial")
+                conv2.add_message(Message(
+                    role=MessageRole.USER,
+                    content=MessageContent(text="How do I use Java?")
+                ))
+                db.save_conversation(conv1)
+                db.save_conversation(conv2)
 
-        args = MagicMock()
-        args.query = "python"
-        args.db = "test.db"
-        args.limit = 100
-        args.offset = 0
-        args.json = False
+            # When: Running search command via CLI
+            with patch('sys.argv', [
+                'ctk', 'search', 'Python',
+                '--db', temp_db
+            ]):
+                result = main()
 
-        # When: Running search command
-        with patch('builtins.print') as mock_print:
-            result = cmd_search(args)
-
-        # Then: Should successfully search and display results
-        assert result == 0
-        mock_db.search_conversations.assert_called_once_with(
-            "python", limit=100, offset=0
-        )
-        # Should print search results
-        assert mock_print.call_count > 0
+            # Then: Should successfully search
+            assert result == 0
 
 
 class TestCLIErrorHandling:
@@ -236,71 +230,90 @@ class TestCLIErrorHandling:
 class TestCLIWorkflows:
     """Test end-to-end CLI workflow behaviors"""
 
-    @patch('ctk.cli.ConversationDB')
-    @patch('ctk.cli.registry')
-    def test_import_with_tags_workflow(self, mock_registry, mock_db_class):
+    def test_import_with_tags_workflow(self):
         """Test import workflow with tagging functionality"""
-        # Given: Import with tags specified
-        mock_importer = MagicMock()
-        mock_conversation = ConversationTree(id="conv1", title="Test")
-        mock_importer.import_file.return_value = [mock_conversation]
-        mock_registry.get_importer.return_value = mock_importer
+        import os
+        from ctk.core.database import ConversationDB
 
-        mock_db = MagicMock()
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        # Given: A temp file with valid JSONL content
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
+            sample_data = {"messages": [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"}
+            ], "id": "test-1"}
+            json.dump(sample_data, f)
+            f.write('\n')
+            temp_file = f.name
 
-        args = MagicMock()
-        args.input = "test.json"
-        args.format = "json"
-        args.db = "test.db"
-        args.tags = "work,important,2024"
-        args.sanitize = False
-        args.path_selection = "longest"
-        args.output = None
+        with tempfile.TemporaryDirectory() as temp_db:
+            try:
+                # When: Running import with tags
+                with patch('sys.argv', [
+                    'ctk', 'import', temp_file,
+                    '--db', temp_db,
+                    '--format', 'jsonl',
+                    '--tags', 'work,important,2024'
+                ]):
+                    result = main()
 
-        # When: Running import with tags
-        result = cmd_import(args)
+                # Then: Should successfully import with tags applied
+                assert result == 0
 
-        # Then: Should successfully import with tags applied
-        assert result == 0
+                # Verify tags were applied
+                with ConversationDB(temp_db) as db:
+                    conversations = db.list_conversations()
+                    assert len(conversations) > 0
+                    # Tags should be present
+                    conv = db.load_conversation(conversations[0].id)
+                    assert 'work' in conv.metadata.tags
 
-        # Verify conversation was saved (tags would be applied during processing)
-        mock_db.save_conversation.assert_called_once()
+            finally:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
 
-    @patch('ctk.cli.ConversationDB')
-    @patch('ctk.cli.registry')
-    def test_export_with_filtering_workflow(self, mock_registry, mock_db_class):
+    def test_export_with_filtering_workflow(self):
         """Test export workflow with filtering capabilities"""
-        # Given: Export with filters specified
-        mock_exporter = MagicMock()
-        mock_registry.get_exporter.return_value = mock_exporter
+        import os
+        from ctk.core.database import ConversationDB
+        from ctk.core.models import ConversationTree, ConversationMetadata
 
-        mock_db = MagicMock()
-        mock_db.list_conversations.return_value = [
-            {'id': 'conv1', 'source': 'openai', 'tags': ['work']}
-        ]
-        mock_db.load_conversation.return_value = ConversationTree(id="conv1")
-        mock_db_class.return_value.__enter__.return_value = mock_db
+        # Given: A database with conversations that have different sources
+        with tempfile.TemporaryDirectory() as temp_db:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as export_file:
+                export_path = export_file.name
 
-        args = MagicMock()
-        args.output = "filtered.jsonl"
-        args.db = "test.db"
-        args.format = "jsonl"
-        args.ids = None
-        args.limit = 1000
-        args.filter_source = "openai"
-        args.filter_model = None
-        args.filter_tag = "work"
-        args.sanitize = False
-        args.path_selection = "longest"
-        args.include_metadata = True
+            try:
+                # Create conversations with different sources
+                with ConversationDB(temp_db) as db:
+                    conv1 = ConversationTree(
+                        id="conv1",
+                        title="OpenAI Chat",
+                        metadata=ConversationMetadata(source="openai")
+                    )
+                    conv2 = ConversationTree(
+                        id="conv2",
+                        title="Other Chat",
+                        metadata=ConversationMetadata(source="other")
+                    )
+                    db.save_conversation(conv1)
+                    db.save_conversation(conv2)
 
-        # When: Running export with filters
-        result = cmd_export(args)
+                # When: Running export with source filter
+                with patch('sys.argv', [
+                    'ctk', 'export', export_path,
+                    '--db', temp_db,
+                    '--format', 'jsonl',
+                    '--filter-source', 'openai'
+                ]):
+                    result = main()
 
-        # Then: Should successfully export filtered conversations
-        assert result == 0
-        mock_exporter.export_to_file.assert_called_once()
+                # Then: Should successfully export filtered conversations
+                assert result == 0
+                assert os.path.exists(export_path)
+
+            finally:
+                if os.path.exists(export_path):
+                    os.unlink(export_path)
 
 
 class TestCLIConfigurationHandling:

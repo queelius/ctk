@@ -148,15 +148,27 @@ def cmd_import(args):
 
         # If saving to database, pass media_dir for image storage
         if args.db:
-            db_temp = ConversationDB(args.db)
-            if hasattr(db_temp, 'media_dir'):
-                import_kwargs['media_dir'] = str(db_temp.media_dir)
+            try:
+                db_temp = ConversationDB(args.db)
+                if hasattr(db_temp, 'media_dir'):
+                    import_kwargs['media_dir'] = str(db_temp.media_dir)
+            except (ValueError, PermissionError, OSError) as e:
+                print(f"Error: Cannot open database: {e}")
+                return 1
 
         # Import with kwargs
         conversations = importer.import_data(data, **import_kwargs)
 
     try:
         print(f"Imported {len(conversations)} conversation(s)")
+
+        # If no conversations were imported, treat as an error
+        # (unless explicitly told to ignore this via a flag)
+        if not conversations:
+            print("Warning: No valid conversations found in the input file")
+            if not args.db and not args.output:
+                # No output destination, this is definitely an error
+                return 1
 
         # Save to database if requested
         if args.db:
@@ -279,9 +291,13 @@ def cmd_export(args):
         if hasattr(db, 'db_dir') and db.db_dir:
             export_kwargs['db_dir'] = str(db.db_dir)
 
-        exporter.export_to_file(conversations, args.output, **export_kwargs)
-        print(f"Exported to {args.output}")
-        
+        try:
+            exporter.export_to_file(conversations, args.output, **export_kwargs)
+            print(f"Exported to {args.output}")
+        except (PermissionError, OSError) as e:
+            print(f"Error: Cannot write to output file: {e}")
+            return 1
+
         return 0
 
 
@@ -1597,6 +1613,9 @@ def main():
     import_parser.add_argument('--output-format', help='Output format for conversion: json, markdown, jsonl')
     import_parser.add_argument('--tags', '-t', help='Comma-separated tags to add')
     import_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
+    import_parser.add_argument('--path-selection', default='longest',
+                               choices=['longest', 'first', 'last'],
+                               help='For branching conversations: which path to export (default: longest)')
 
     # Export command
     export_parser = subparsers.add_parser('export', help='Export conversations')
