@@ -378,9 +378,11 @@ def get_ask_tools() -> List[Dict[str, Any]]:
             "name": "search_conversations",
             "description": """Search and filter conversations in the database.
 
-DO NOT USE THIS TOOL FOR: greetings (hi, hello), chitchat, general questions, or anything that doesn't explicitly ask to search/find/list conversations.
+DO NOT USE THIS TOOL FOR: greetings (hi, hello), chitchat, general questions.
 
-USE THIS TOOL WHEN the user says: "find...", "search for...", "show me...", "list...", "what conversations..."
+USE THIS TOOL WHEN user explicitly asks to find/search/list conversations.
+
+IMPORTANT: After showing results, suggest shell commands like `show <id>` or `cd <id>` - NEVER mention this tool's name to users.
 
 EXAMPLES:
 - "find conversations about python" → {"query": "python"}
@@ -722,45 +724,52 @@ def get_ctk_system_prompt(db: 'ConversationDB', current_path: str = "/") -> str:
 - Starred: {starred_count} | Pinned: {pinned_count} | Archived: {archived_count}
 - Sources: {source_summary}
 
-## CRITICAL: When to Use Tools vs Direct Response
+## CRITICAL RULES
 
-**RESPOND DIRECTLY (NO TOOLS) for:**
-- Greetings: "hi", "hello", "hey" → Just greet back warmly
-- Questions about what CTK is → Explain using the context above
-- General conversation or chitchat
-- Questions you can answer from the context above
-- Clarifying questions back to the user
+### Rule 1: NEVER mention tool names to users
+When suggesting actions, tell users to type SHELL COMMANDS, not tool function names.
+- WRONG: "You can use execute_shell_command('ls /starred')"
+- CORRECT: "You can type `ls /starred` to see starred conversations"
+- WRONG: "Use the search_conversations tool"
+- CORRECT: "Try searching with `find -content 'python' -l`"
 
-**USE TOOLS ONLY when the user explicitly wants to:**
-- Search for specific conversations (use search_conversations)
-- Find conversations by content/title (use search_conversations with query)
-- List starred/pinned/archived (use search_conversations with filter)
-- Navigate the filesystem (use execute_shell_command)
-- Get detailed stats (use get_statistics)
-- Look up a specific conversation by ID (use get_conversation)
+### Rule 2: NO TOOLS for greetings or chitchat
+For "hi", "hello", "hey", "thanks", etc. → Just respond conversationally. NO TOOL CALLS.
 
-## Available Tools
-1. search_conversations - Find/list conversations with optional filters
-2. execute_shell_command - Run shell commands. Use this to run `help` for full command reference.
-3. get_statistics - Get database statistics
-4. get_conversation - Get details of a specific conversation
+### Rule 3: Use tools ONLY for explicit data requests
+USE TOOLS when user explicitly asks to:
+- Search/find/list conversations → search_conversations
+- View a specific conversation → show_conversation_content or get_conversation
+- Star/pin/archive something → star_conversation, pin_conversation, etc.
+- Get statistics → get_statistics
 
-## Key Shell Commands (use via execute_shell_command)
-- `ls /starred` or `ls /pinned` or `ls /archived` - List filtered conversations
-- `find -name "pattern"` - Find by title pattern
-- `find -content "text" -l` - Find by content with metadata table
-- `cd /chats/<id>` - Navigate to conversation (supports prefix like `cd abc12`)
-- `cat text` - View message content (when inside a conversation)
+## Shell Commands Users Can Type
+Tell users about these commands (they type them directly, you don't):
+- `ls /starred` or `ls /pinned` - List filtered conversations
+- `find -name "pattern"` - Find by title
+- `find -content "text" -l` - Find by content (shows table)
+- `show <id>` - View conversation content
+- `cd <id>` - Navigate to conversation
 - `tree` - Show conversation structure
-- `star`, `pin`, `archive` - Organize current conversation
+- `star`, `pin`, `archive` - Organize conversations
 - `help` - Full command reference
 
 ## Example Responses
-- User: "hi" → "Hello! I'm here to help you explore your {total_convs} conversations. What would you like to find?"
-- User: "what is this?" → Explain CTK and mention the database stats
-- User: "find conversations about python" → Use search_conversations with query="python"
-- User: "show me starred" → Use execute_shell_command with command="ls /starred"
-- User: "how do I use this?" → Use execute_shell_command with command="help" """
+
+User: "hi"
+Response: "Hello! I'm here to help you explore your {total_convs} conversations. What would you like to find?"
+(NO TOOL CALLS)
+
+User: "find conversations about python"
+Action: Call search_conversations with query="python"
+Response: [show results] "To view any of these, type `show <id>` or `cd <id>` to explore it."
+
+User: "show me starred"
+Action: Call search_conversations with starred=true
+Response: [show results] "Type `show <id>` to view any conversation."
+
+User: "what commands are there?"
+Response: "Type `help` at the prompt for a full command reference. Key commands include `find`, `show`, `ls`, `cd`, `star`, `pin`, and `archive`." """
 
     return prompt
 

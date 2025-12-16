@@ -376,6 +376,85 @@ class VisualizationCommands:
             # Plain text output
             return CommandResult(success=True, output=result['output'])
 
+    def cmd_help(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Show help for shell commands
+
+        Usage:
+            help              - Show all available commands
+            help <command>    - Show help for specific command
+
+        Args:
+            args: Command arguments (optional command name)
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with help text
+        """
+        help_text = """
+CTK Shell Commands
+==================
+
+Navigation:
+  cd [path]         - Change directory (supports prefixes like cd abc12)
+  ls [-l] [path]    - List directory contents (-l for long format)
+  pwd               - Print working directory
+
+Search:
+  find [path] [options]  - Find conversations
+    -name "pattern"      - Match title (wildcards: * ?)
+    -content "text"      - Match message content
+    -role <role>         - Filter by role (user/assistant/system)
+    -type <type>         - Filter by type (conversation/message/etc)
+    -i                   - Case insensitive
+    -limit N             - Max results
+    -l                   - Long format (shows table with metadata)
+
+View:
+  show <id>         - Show conversation content (supports prefix)
+  show <id> -L      - Show latest path
+  show <id> --path N - Show specific path number
+  tree [id]         - Show conversation tree structure
+  paths [id]        - List all paths in conversation
+  cat <file>        - View content (when in message node: cat text)
+
+Organization:
+  star [id]         - Star conversation (current if no ID)
+  unstar [id]       - Remove star
+  pin [id]          - Pin conversation
+  unpin [id]        - Remove pin
+  archive [id]      - Archive conversation
+  unarchive [id]    - Unarchive
+  title "new title" - Rename conversation
+
+Chat:
+  say <message>     - Send message to LLM (one-shot)
+  chat [message]    - Enter chat mode (optionally with first message)
+  complete <text>   - Get completion for text
+
+System:
+  help              - Show this help
+  exit              - Exit shell (returns to previous mode)
+
+Virtual Filesystem Structure:
+  /                 - Root
+  /chats/           - All conversations
+  /starred/         - Starred conversations
+  /pinned/          - Pinned conversations
+  /archived/        - Archived conversations
+  /tags/<tag>/      - Conversations with tag
+  /source/<src>/    - Conversations by source
+  /model/<model>/   - Conversations by model
+  /recent/          - Recently updated
+
+Examples:
+  find -content "python" -l       Find conversations mentioning python
+  show abc12                      Show conversation starting with abc12
+  cd /starred && ls               List starred conversations
+  tree                            Show current conversation structure
+"""
+        return CommandResult(success=True, output=help_text)
+
 
 def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
     """
@@ -395,4 +474,5 @@ def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, t
         'tree': viz.cmd_tree,
         'paths': viz.cmd_paths,
         'show': viz.cmd_show,
+        'help': viz.cmd_help,
     }
