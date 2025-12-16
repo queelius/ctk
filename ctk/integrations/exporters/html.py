@@ -126,16 +126,32 @@ class HTMLExporter(ExporterPlugin):
                         elif embed and db_dir:
                             # Try to read image from disk and encode as base64
                             image_path = None
-                            if img.url and img.url.startswith('media/'):
-                                # Relative URL like 'media/xxx.png'
-                                image_path = Path(db_dir) / img.url
-                            elif img.path:
-                                # Explicit path
-                                image_path = Path(img.path)
-                                if not image_path.is_absolute():
-                                    image_path = Path(db_dir) / img.path
+                            img_ref = img.url or img.path
+                            if img_ref:
+                                # Try various path resolutions
+                                candidates = []
+                                if img_ref.startswith('media/'):
+                                    # Relative URL like 'media/xxx.png'
+                                    candidates.append(Path(db_dir) / img_ref)
+                                elif '/' not in img_ref and '\\' not in img_ref:
+                                    # Just a filename - look in media/ directory
+                                    candidates.append(Path(db_dir) / 'media' / img_ref)
+                                    # Also try directly in db_dir
+                                    candidates.append(Path(db_dir) / img_ref)
+                                else:
+                                    # Some other path - try relative to db_dir
+                                    candidates.append(Path(db_dir) / img_ref)
+                                    # Also try as absolute path
+                                    if Path(img_ref).is_absolute():
+                                        candidates.append(Path(img_ref))
 
-                            if image_path and image_path.exists():
+                                # Find first existing path
+                                for candidate in candidates:
+                                    if candidate.exists():
+                                        image_path = candidate
+                                        break
+
+                            if image_path:
                                 try:
                                     with open(image_path, 'rb') as f:
                                         img_data['data'] = base64.b64encode(f.read()).decode('utf-8')
@@ -143,10 +159,15 @@ class HTMLExporter(ExporterPlugin):
                                     if not img_data['mime_type'] or img_data['mime_type'] == 'image/png':
                                         ext = image_path.suffix.lower()
                                         mime_map = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-                                                   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
+                                                   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+                                                   '.jfif': 'image/jpeg', '.JPG': 'image/jpeg'}
                                         img_data['mime_type'] = mime_map.get(ext, 'image/png')
-                                except Exception:
-                                    pass  # Skip if can't read file
+                                except Exception as e:
+                                    import sys
+                                    print(f"Warning: Could not read image {image_path}: {e}", file=sys.stderr)
+                            elif img_ref:
+                                import sys
+                                print(f"Warning: Image not found: {img_ref} (looked in {db_dir}/media/)", file=sys.stderr)
 
                         images.append(img_data)
 
