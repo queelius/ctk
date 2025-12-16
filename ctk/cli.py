@@ -664,40 +664,51 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             tags_list = tool_args.get('tags', '').split(',') if tool_args.get('tags') else None
 
             # Convert string booleans to actual booleans
-            def to_bool(val):
+            # IMPORTANT: Only return True if explicitly true, otherwise None (not False!)
+            # When LLM passes "false" or False, it usually means "not filtering" not "filter to false"
+            def to_bool_or_none(val):
+                if val is None:
+                    return None
                 if isinstance(val, bool):
-                    return val
+                    return True if val else None  # Only True matters, False = not filtering
                 if isinstance(val, str):
-                    return val.lower() in ('true', '1', 'yes')
-                return bool(val)
+                    lower_val = val.lower()
+                    if lower_val in ('true', '1', 'yes'):
+                        return True
+                    # "false", "none", "null", "0", "no" all mean "not filtering"
+                    return None
+                return None
 
-            # Convert boolean flags - use None if not specified (don't default to False!)
-            starred_val = tool_args.get('starred')
-            starred = to_bool(starred_val) if starred_val is not None else None
+            # Convert boolean flags - only True matters for filtering
+            starred = to_bool_or_none(tool_args.get('starred'))
+            pinned = to_bool_or_none(tool_args.get('pinned'))
+            archived = to_bool_or_none(tool_args.get('archived'))
 
-            pinned_val = tool_args.get('pinned')
-            pinned = to_bool(pinned_val) if pinned_val is not None else None
+            # Clean up "None" strings in other params
+            def clean_none(val):
+                if val is None or (isinstance(val, str) and val.lower() in ('none', 'null', '')):
+                    return None
+                return val
 
-            archived_val = tool_args.get('archived')
-            archived = to_bool(archived_val) if archived_val is not None else None
+            # Clean all string params that might be "None" or "null"
+            query_text = clean_none(tool_args.get('query'))
+            source = clean_none(tool_args.get('source'))
+            project = clean_none(tool_args.get('project'))
+            model = clean_none(tool_args.get('model'))
+            limit_val = clean_none(tool_args.get('limit'))
 
             if debug:
                 print(f"[DEBUG] Parsed filters: starred={starred}, pinned={pinned}, archived={archived}", file=sys.stderr)
-
-            # Handle limit - LLM might pass 'null' string
-            limit_val = tool_args.get('limit')
-            if limit_val == 'null' or limit_val == 'None':
-                limit_val = None
+                print(f"[DEBUG] query={query_text}, source={source}, model={model}", file=sys.stderr)
 
             # If no query, use list_conversations for better performance
-            query_text = tool_args.get('query')
             if query_text:
                 results = db.search_conversations(
                     query_text=query_text,
                     limit=limit_val,
-                    source=tool_args.get('source'),
-                    project=tool_args.get('project'),
-                    model=tool_args.get('model'),
+                    source=source,
+                    project=project,
+                    model=model,
                     starred=starred,
                     archived=archived,
                     tags=tags_list,
@@ -707,9 +718,9 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                 # No query - use list for better performance
                 results = db.list_conversations(
                     limit=limit_val,
-                    source=tool_args.get('source'),
-                    project=tool_args.get('project'),
-                    model=tool_args.get('model'),
+                    source=source,
+                    project=project,
+                    model=model,
                     starred=starred,
                     pinned=pinned,
                     archived=archived,
