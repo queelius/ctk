@@ -102,7 +102,7 @@ class ChatTUI:
         # Known commands (for slash-optional command routing)
         self.known_commands = {
             'help', 'exit', 'quit', 'clear', 'new-chat',
-            'save', 'load', 'delete', 'search', 'list', 'ask', 'browse',
+            'save', 'load', 'delete', 'search', 'list', 'browse',
             'archive', 'star', 'pin', 'title', 'tag', 'export',
             'show', 'tree', 'paths', 'fork', 'fork-id', 'context',
             'mcp', 'cd', 'pwd', 'ls', 'ln', 'cp', 'mv', 'rm', 'mkdir',
@@ -381,12 +381,6 @@ class ChatTUI:
         'unpin': {
             'usage': 'unpin',
             'desc': 'Unpin the current conversation'
-        },
-        'ask': {
-            'usage': 'ask <query>',
-            'desc': 'Natural language query to search/list conversations',
-            'details': 'Uses LLM to interpret your query and search the database. Examples: "/ask show starred", "/ask conversations about python"',
-            'examples': ['ask show starred conversations', 'ask find discussions about AI', 'ask list all conversations']
         },
         'fork': {
             'usage': 'fork <num>',
@@ -911,12 +905,6 @@ You don't need to create directories before tagging - this is mainly for documen
 
         elif cmd == 'list':
             self.list_conversations(args)
-
-        elif cmd == 'ask':
-            if not args:
-                print("Error: /ask requires a query")
-            else:
-                self.ask_query(args)
 
         elif cmd == 'archive':
             self.archive_conversation(archive=True)
