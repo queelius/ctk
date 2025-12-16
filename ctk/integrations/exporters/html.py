@@ -26,19 +26,64 @@ class HTMLExporter(ExporterPlugin):
         """
         Export to file(s)
 
-        If embed=True, creates a single HTML file with data embedded.
-        If embed=False, creates index.html + conversations.jsonl + media/
+        Options:
+        - embed=True (default): Single HTML file with all data embedded (including base64 images)
+        - embed=False: Separate index.html + conversations.jsonl + media/ (requires web server)
+        - media_dir: Put media in specified directory, embed conversation data in HTML
         """
         embed = kwargs.pop('embed', True)  # Default to embedded for better UX
         db_dir = kwargs.pop('db_dir', None)  # Database directory for media files
+        media_dir = kwargs.pop('media_dir', None)  # Optional: output media to separate directory
 
-        if embed:
+        if media_dir:
+            # Hybrid mode: embed conversation data but put media in separate directory
+            import shutil
+            from pathlib import Path
+
+            # Determine output directory and paths
+            if file_path.endswith('.html'):
+                output_dir = os.path.dirname(file_path) or '.'
+                html_path = file_path
+            else:
+                output_dir = file_path
+                html_path = os.path.join(output_dir, 'index.html')
+
+            # Resolve media_dir relative to output directory
+            if not os.path.isabs(media_dir):
+                media_output_dir = os.path.join(output_dir, media_dir)
+            else:
+                media_output_dir = media_dir
+
+            # Create directories
+            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(media_output_dir, exist_ok=True)
+
+            # Copy media files if db_dir is provided
+            if db_dir:
+                source_media = Path(db_dir) / 'media'
+                if source_media.exists():
+                    for media_file in source_media.iterdir():
+                        if media_file.is_file():
+                            shutil.copy2(media_file, media_output_dir)
+
+            # Generate HTML with embedded data but media URLs pointing to media_dir
+            html_content = self.export_conversations(
+                conversations, embed=True, db_dir=db_dir,
+                media_dir=media_dir, **kwargs
+            )
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+
+        elif embed:
             # Single file export with embedded data (images encoded as base64)
             html_content = self.export_conversations(conversations, embed=True, db_dir=db_dir, **kwargs)
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
         else:
             # Multi-file export: index.html + conversations.jsonl + media/
+            import shutil
+            from pathlib import Path
+
             if file_path.endswith('.html'):
                 # Specific HTML filename provided - use its directory
                 output_dir = os.path.dirname(file_path) or '.'
@@ -57,8 +102,6 @@ class HTMLExporter(ExporterPlugin):
 
             # Copy media files if db_dir is provided
             if db_dir:
-                import shutil
-                from pathlib import Path
                 source_media = Path(db_dir) / 'media'
                 if source_media.exists():
                     # Copy all media files
@@ -83,8 +126,15 @@ class HTMLExporter(ExporterPlugin):
         """Export conversations to HTML5"""
         return self.export_conversations(conversations, **kwargs)
 
-    def _prepare_data(self, conversations: List[ConversationTree], db_dir: str = None, embed: bool = True):
-        """Prepare conversation data and stats"""
+    def _prepare_data(self, conversations: List[ConversationTree], db_dir: str = None, embed: bool = True, media_dir: str = None):
+        """Prepare conversation data and stats
+
+        Args:
+            conversations: List of conversations to export
+            db_dir: Database directory for resolving media file paths
+            embed: Whether to embed media as base64
+            media_dir: If set, use file URLs to this directory instead of embedding
+        """
         import base64
         from pathlib import Path
 
@@ -120,13 +170,32 @@ class HTMLExporter(ExporterPlugin):
                             'mime_type': img.mime_type or 'image/png'
                         }
 
-                        # Include base64 data - either from img.data or by reading file
-                        if img.data:
+                        # Determine the filename for this image
+                        img_ref = img.url or img.path
+                        if img_ref:
+                            # Get just the filename
+                            if img_ref.startswith('media/'):
+                                filename = img_ref[6:]  # Remove 'media/' prefix
+                            elif '/' in img_ref:
+                                filename = img_ref.split('/')[-1]
+                            elif '\\' in img_ref:
+                                filename = img_ref.split('\\')[-1]
+                            else:
+                                filename = img_ref
+                        else:
+                            filename = None
+
+                        # If media_dir is set, use file URLs instead of embedding
+                        if media_dir and filename:
+                            # Set URL to point to media_dir
+                            img_data['url'] = f"{media_dir}/{filename}"
+                            # Don't embed data - we're using file references
+                        elif img.data:
+                            # Already have base64 data
                             img_data['data'] = img.data
                         elif embed and db_dir:
                             # Try to read image from disk and encode as base64
                             image_path = None
-                            img_ref = img.url or img.path
                             if img_ref:
                                 # Try various path resolutions
                                 candidates = []
@@ -222,6 +291,7 @@ class HTMLExporter(ExporterPlugin):
         theme: str = 'auto',
         embed: bool = True,
         db_dir: str = None,
+        media_dir: str = None,
         **kwargs
     ) -> str:
         """
@@ -233,8 +303,9 @@ class HTMLExporter(ExporterPlugin):
             theme: Theme (light, dark, auto)
             embed: Whether to embed data in HTML (True) or load from external JSONL (False)
             db_dir: Database directory for resolving media file paths
+            media_dir: If set, use file URLs to this directory instead of embedding base64
         """
-        conv_data, stats = self._prepare_data(conversations, db_dir=db_dir, embed=embed)
+        conv_data, stats = self._prepare_data(conversations, db_dir=db_dir, embed=embed, media_dir=media_dir)
         return self._generate_html(conv_data, stats, theme, embed)
 
     def _generate_html(self, conversations: List[Dict], stats: Dict, theme: str, embed: bool = True) -> str:

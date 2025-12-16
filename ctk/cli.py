@@ -286,6 +286,8 @@ def cmd_export(args):
             export_kwargs['show_tree'] = args.show_tree
         if hasattr(args, 'embed'):
             export_kwargs['embed'] = args.embed
+        if hasattr(args, 'media_dir') and args.media_dir:
+            export_kwargs['media_dir'] = args.media_dir
 
         # Pass database directory for media files
         if hasattr(db, 'db_dir') and db.db_dir:
@@ -2069,7 +2071,7 @@ def main():
     export_parser.add_argument('--format', '-f', default='jsonl',
                                help='Export format: json, markdown, jsonl, html (default: jsonl)')
     export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
-    export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations (default: 1000)')
+    export_parser.add_argument('--limit', type=int, default=0, help='Maximum conversations (0 = all, default: all)')
     export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
     export_parser.add_argument('--filter-model', help='Filter by model (e.g., gpt-4, claude-3)')
     export_parser.add_argument('--filter-tags', help='Filter by tags (comma-separated)')
@@ -2088,6 +2090,8 @@ def main():
                                help='Show conversation tree structure in HTML export')
     export_parser.add_argument('--no-embed', action='store_false', dest='embed', default=True,
                                help='Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file')
+    export_parser.add_argument('--media-dir',
+                               help='Output media files to directory instead of embedding. Path relative to output file (default: embed in HTML)')
 
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
