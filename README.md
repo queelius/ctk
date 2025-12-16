@@ -479,7 +479,7 @@ sanitizer.add_rule(SanitizationRule(
 - **jsonl** - JSONL for fine-tuning (multiple formats)
 - **json** - Native CTK format, OpenAI, Anthropic, or generic JSON
 - **markdown** - Human-readable with tree visualization
-- **html5** - Interactive HTML with browsing and search
+- **html** - Interactive HTML with browsing and search
 
 ### List Available Plugins
 ```bash

@@ -69,7 +69,7 @@ ctk export archive/conversations.jsonl --db life.db --format jsonl
 ctk export archive/conversations.md --db life.db --format markdown --include-metadata
 
 # Export as HTML (Level 4: Fallback - browseable in any browser)
-ctk export archive/index.html --db life.db --format html5
+ctk export archive/index.html --db life.db --format html
 
 # Export as plain text (Level 5: Ultimate fallback)
 sqlite3 life.db "SELECT
@@ -321,7 +321,7 @@ cp "$DB" "$ARCHIVE/conversations.db"
 # Export multiple formats
 ctk export "$ARCHIVE/conversations.jsonl" --db "$DB" --format jsonl
 ctk export "$ARCHIVE/conversations.md" --db "$DB" --format markdown
-ctk export "$ARCHIVE/index.html" --db "$DB" --format html5
+ctk export "$ARCHIVE/index.html" --db "$DB" --format html
 
 # Plain text fallback
 sqlite3 "$DB" "SELECT c.title, m.role, m.content FROM conversations c JOIN messages m ON c.id = m.conversation_id ORDER BY c.created_at, m.created_at" > "$ARCHIVE/all_conversations.txt"

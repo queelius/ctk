@@ -257,8 +257,9 @@ class TestShellParser:
     def test_is_shell_command_llm(self, empty_parser):
         """Test detecting LLM commands"""
         assert empty_parser.is_shell_command('chat') is True
-        assert empty_parser.is_shell_command('complete prompt') is True
+        assert empty_parser.is_shell_command('say hello') is True
         assert empty_parser.is_shell_command('model') is True
+        assert empty_parser.is_shell_command('net embeddings') is True
 
     @pytest.mark.unit
     def test_is_shell_command_system(self, empty_parser):

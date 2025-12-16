@@ -106,9 +106,9 @@ class ChatTUI:
             'archive', 'star', 'pin', 'title', 'tag', 'export',
             'show', 'tree', 'paths', 'fork', 'fork-id', 'context',
             'mcp', 'cd', 'pwd', 'ls', 'ln', 'cp', 'mv', 'rm', 'mkdir',
-            'rag', 'goto-longest', 'goto-latest', 'where', 'alternatives',
+            'net', 'goto-longest', 'goto-latest', 'where', 'alternatives',
             'history', 'models', 'model', 'temp', 'regenerate', 'edit',
-            'say', 'find', 'unstar', 'unpin', 'unarchive', 'chat', 'complete',
+            'say', 'find', 'unstar', 'unpin', 'unarchive', 'chat',
         }
 
         # Prompt toolkit setup
@@ -438,8 +438,8 @@ class ChatTUI:
         'export': {
             'usage': 'export <format> [file]',
             'desc': 'Export conversation to file',
-            'details': 'Formats: markdown, json, jsonl, html5. If no file specified, generates default name.',
-            'examples': ['export markdown', 'export json output.json', 'export html5 report.html']
+            'details': 'Formats: markdown, json, jsonl, html. If no file specified, generates default name.',
+            'examples': ['export markdown', 'export json output.json', 'export html report.html']
         },
         'tree': {
             'usage': 'tree',
@@ -527,9 +527,9 @@ Display:
                 'list --archived'
             ]
         },
-        'rag': {
-            'usage': 'rag <subcommand> [options]',
-            'desc': 'RAG and similarity commands for finding related conversations',
+        'net': {
+            'usage': 'net <subcommand> [options]',
+            'desc': 'Network and similarity commands for finding related conversations',
             'details': '''Subcommands:
   embeddings [options]
     Generate embeddings for conversations in the database.
@@ -568,20 +568,39 @@ Display:
     Options:
       --rebuild           Recompute metrics even if cached
 
-Note: Run 'rag embeddings' once before using 'rag similar' or 'rag links'.
-Filters can be combined (e.g., --search python --starred --limit 50).''',
+  clusters [--algorithm louvain|label_propagation|greedy] [--min-size N]
+    Detect conversation communities using community detection algorithms.
+
+  neighbors <conv_id> [--depth N]
+    Show neighbors of a conversation in the similarity graph.
+    Uses current conversation if no ID specified.
+
+  path <source> <target>
+    Find shortest path between two conversations in the graph.
+
+  central [--metric degree|betweenness|pagerank|eigenvector] [--top-k N]
+    Find most central/connected conversations using centrality metrics.
+
+  outliers [--top-k N]
+    Find least connected conversations (potential outliers).
+
+Note: Run 'net embeddings' once before using other commands.
+Run 'net links' to build the graph before using clusters, neighbors, path, central, outliers.''',
             'examples': [
-                'rag embeddings',
-                'rag embeddings --force',
-                'rag embeddings --search python --limit 50',
-                'rag embeddings --starred --tags machine-learning',
-                'rag embeddings --project research --source openai',
-                'rag similar --top-k 5',
-                'rag similar test_abc123 --top-k 10 --threshold 0.3',
-                'rag links --threshold 0.3 --max-links 10',
-                'rag links --rebuild',
-                'rag network',
-                'rag network --rebuild',
+                'net embeddings',
+                'net embeddings --force',
+                'net embeddings --search python --limit 50',
+                'net embeddings --starred --tags machine-learning',
+                'net similar --top-k 5',
+                'net similar abc123 --top-k 10 --threshold 0.3',
+                'net links --threshold 0.3 --max-links 10',
+                'net links --rebuild',
+                'net network',
+                'net clusters --algorithm louvain',
+                'net neighbors abc123 --depth 2',
+                'net path abc123 def456',
+                'net central --metric pagerank --top-k 20',
+                'net outliers --top-k 15',
             ]
         },
         'cd': {
@@ -773,7 +792,7 @@ You don't need to create directories before tagging - this is mainly for documen
         print("    summary           - Ask LLM to summarize conversation")
 
         print("\n  Export:")
-        print("    export <fmt> [file] - Export conversation (markdown, json, jsonl, html5)")
+        print("    export <fmt> [file] - Export conversation (markdown, json, jsonl, html)")
 
         print("\n  Tree Navigation:")
         print("    tree              - Visualize conversation tree structure")
@@ -799,12 +818,17 @@ You don't need to create directories before tagging - this is mainly for documen
         print("    mcp call <tool> [args...]      - Call an MCP tool")
         print("    mcp auto                       - Toggle automatic tool use by LLM")
 
-        print("\n  RAG / Similarity:")
-        print("    rag embeddings [options]     - Generate embeddings (supports filters: --starred, --tags, etc.)")
-        print("    rag similar [id] [--top-k N] - Find similar conversations (uses current if no ID)")
-        print("    rag links [--threshold N]    - Build conversation graph")
-        print("    rag network [--rebuild]      - Show network statistics")
-        print("    Use 'help rag' for detailed options and examples")
+        print("\n  Network / Similarity:")
+        print("    net embeddings [options]     - Generate embeddings (supports filters: --starred, --tags, etc.)")
+        print("    net similar [id] [--top-k N] - Find similar conversations (uses current if no ID)")
+        print("    net links [--threshold N]    - Build conversation graph")
+        print("    net network [--rebuild]      - Show network statistics")
+        print("    net clusters [--algorithm]   - Detect conversation communities")
+        print("    net neighbors <id>           - Show graph neighbors")
+        print("    net path <src> <dst>         - Find path between conversations")
+        print("    net central [--metric]       - Find most central conversations")
+        print("    net outliers                 - Find least connected conversations")
+        print("    Use 'help net' for detailed options and examples")
 
         print("\n  Virtual Filesystem:")
         print("    cd [path]           - Change directory (/tags/physics, ../quantum, /starred)")
@@ -1121,7 +1145,7 @@ You don't need to create directories before tagging - this is mainly for documen
 
         elif cmd == 'export':
             if not args:
-                print("Error: /export requires format (markdown, json, jsonl, html5)")
+                print("Error: /export requires format (markdown, json, jsonl, html)")
             else:
                 # Parse format and optional filename
                 parts = args.split(maxsplit=1)
@@ -1249,15 +1273,21 @@ You don't need to create directories before tagging - this is mainly for documen
         elif cmd == 'mkdir':
             self.handle_mkdir(args)
 
-        elif cmd == 'rag':
+        elif cmd == 'net':
             if not args:
-                print("Error: /rag requires a subcommand (embeddings, similar, links)")
+                print("Error: /net requires a subcommand")
                 print("Usage:")
-                print("  /rag embeddings [--provider tfidf]")
-                print("  /rag similar [conv_id] [--top-k N]")
-                print("  /rag links [--threshold N]")
+                print("  /net embeddings [--provider tfidf]")
+                print("  /net similar [conv_id] [--top-k N]")
+                print("  /net links [--threshold N]")
+                print("  /net network [--rebuild]")
+                print("  /net clusters [--algorithm louvain]")
+                print("  /net neighbors <id> [--depth N]")
+                print("  /net path <source> <target>")
+                print("  /net central [--metric degree|betweenness|pagerank]")
+                print("  /net outliers [--top-k N]")
             else:
-                self.handle_rag_command(args)
+                self.handle_net_command(args)
 
         else:
             print(f"Unknown command: {cmd}")
@@ -3111,12 +3141,12 @@ Available operations:
                 from ctk.integrations.exporters.jsonl import JSONLExporter
                 exporter = JSONLExporter()
                 exporter.export_conversations([tree], output_file=filename)
-            elif fmt == 'html5':
-                from ctk.integrations.exporters.html5 import HTML5Exporter
-                exporter = HTML5Exporter()
+            elif fmt == 'html':
+                from ctk.integrations.exporters.html import HTMLExporter
+                exporter = HTMLExporter()
                 exporter.export_conversations([tree], output_path=filename)
             else:
-                print(f"Error: Unknown format '{fmt}'. Available: markdown, json, jsonl, html5")
+                print(f"Error: Unknown format '{fmt}'. Available: markdown, json, jsonl, html")
                 return
 
             print(f"✓ Exported conversation to {filename}")
@@ -3889,8 +3919,8 @@ Available operations:
             print(f"Unknown MCP subcommand: {subcmd}")
             print("Available: add, remove, connect, disconnect, list, tools, call, auto")
 
-    def handle_rag_command(self, args: str):
-        """Handle RAG/similarity subcommands"""
+    def handle_net_command(self, args: str):
+        """Handle network/similarity subcommands"""
         from ctk.core.similarity import (
             ConversationEmbedder,
             ConversationEmbeddingConfig,
@@ -4186,10 +4216,30 @@ Available operations:
             # Use current conversation if none specified
             if not conv_id:
                 conv_id = self.current_conversation_id
+                # Also try to get from VFS path if in a conversation directory
+                if not conv_id and hasattr(self, 'vfs_cwd'):
+                    from ctk.core.vfs import VFSPathParser, PathType
+                    try:
+                        parsed = VFSPathParser.parse(self.vfs_cwd)
+                        if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                            conv_id = parsed.conversation_id
+                    except Exception:
+                        pass
                 if not conv_id:
-                    print("Error: No conversation specified and no conversation currently loaded")
-                    print("Usage: /rag similar [conv_id] [--top-k N] [--threshold N]")
+                    print("Error: No conversation specified and not in a conversation directory")
+                    print("Usage: /net similar [conv_id] [--top-k N] [--threshold N]")
                     return
+
+            # Resolve prefix if needed
+            if conv_id and len(conv_id) < 36:
+                from ctk.core.vfs import VFSPathParser
+                try:
+                    chats_path = VFSPathParser.parse('/chats')
+                    resolved = self.navigator.resolve_prefix(conv_id, chats_path)
+                    if resolved:
+                        conv_id = resolved
+                except Exception:
+                    pass  # Use original conv_id if resolution fails
 
             # Load conversation
             query_conv = self.db.load_conversation(conv_id)
@@ -4320,7 +4370,7 @@ Available operations:
             # Get current embedding session
             session = self.db.get_current_embedding_session()
             if not session:
-                print("Error: No embedding session found. Run /rag embeddings first.")
+                print("Error: No embedding session found. Run /net embeddings first.")
                 return
 
             print(f"Building graph from embedding session {session['id']}...")
@@ -4370,7 +4420,8 @@ Available operations:
                 include_tags=True
             )
 
-            sim_computer = SimilarityComputer(config, self.db)
+            embedder = ConversationEmbedder(config)
+            sim_computer = SimilarityComputer(embedder, db=self.db)
             graph_builder = ConversationGraphBuilder(sim_computer)
 
             conversation_ids = [c.id for c in conversations]
@@ -4420,7 +4471,7 @@ Available operations:
             )
 
             print("✓ Graph metadata saved to database")
-            print(f"\nUse /rag network to view global statistics")
+            print(f"\nUse /net network to view global statistics")
 
         elif subcmd == 'network':
             # Parse options
@@ -4433,7 +4484,7 @@ Available operations:
             # Get current graph
             graph_metadata = self.db.get_current_graph()
             if not graph_metadata:
-                print("Error: No graph found. Run 'rag links' first to build a graph.")
+                print("Error: No graph found. Run 'net links' first to build a graph.")
                 return
 
             # Check if metrics already computed
@@ -4460,7 +4511,7 @@ Available operations:
                 G = load_graph_from_file(graph_path)
             except FileNotFoundError:
                 print(f"Error: Graph file not found: {graph_path}")
-                print("Run 'rag links --rebuild' to regenerate the graph")
+                print("Run 'net links --rebuild' to regenerate the graph")
                 return
             except Exception as e:
                 print(f"Error loading graph: {e}")
@@ -4479,9 +4530,383 @@ Available operations:
             stats_str = format_network_stats(graph_metadata, G)
             print(stats_str)
 
+        elif subcmd == 'clusters':
+            from ctk.core.network_analysis import load_graph_from_file
+            # Parse options
+            algorithm = 'louvain'
+            min_size = 2
+
+            if subargs:
+                arg_parts = subargs.split()
+                i = 0
+                while i < len(arg_parts):
+                    arg = arg_parts[i]
+                    if arg == '--algorithm' and i + 1 < len(arg_parts):
+                        algorithm = arg_parts[i + 1]
+                        i += 2
+                    elif arg == '--min-size' and i + 1 < len(arg_parts):
+                        try:
+                            min_size = int(arg_parts[i + 1])
+                        except ValueError:
+                            print(f"Error: --min-size must be an integer")
+                            return
+                        i += 2
+                    else:
+                        i += 1
+
+            # Load graph
+            graph_metadata = self.db.get_current_graph()
+            if not graph_metadata:
+                print("Error: No graph found. Run 'net links' first.")
+                return
+
+            G = load_graph_from_file(graph_metadata['graph_file_path'])
+            print(f"Detecting communities using {algorithm}...")
+
+            # Community detection
+            import networkx as nx
+            if algorithm == 'louvain':
+                try:
+                    communities = nx.community.louvain_communities(G, seed=42)
+                except AttributeError:
+                    from networkx.algorithms.community import greedy_modularity_communities
+                    communities = list(greedy_modularity_communities(G))
+            elif algorithm == 'label_propagation':
+                from networkx.algorithms.community import label_propagation_communities
+                communities = list(label_propagation_communities(G))
+            else:
+                from networkx.algorithms.community import greedy_modularity_communities
+                communities = list(greedy_modularity_communities(G))
+
+            # Filter and sort
+            communities = [c for c in communities if len(c) >= min_size]
+            communities = sorted(communities, key=len, reverse=True)
+
+            if not communities:
+                print("No communities found with minimum size")
+                return
+
+            print(f"\nFound {len(communities)} communities\n")
+
+            for i, community in enumerate(communities, 1):
+                print(f"Community {i} ({len(community)} conversations)")
+                for conv_id in list(community)[:5]:
+                    conv = self.db.load_conversation(conv_id)
+                    title = conv.title if conv else "(untitled)"
+                    print(f"  {conv_id[:8]}... {title[:50]}")
+                if len(community) > 5:
+                    print(f"  ... and {len(community) - 5} more")
+                print()
+
+        elif subcmd == 'neighbors':
+            from ctk.core.network_analysis import load_graph_from_file
+            # Parse options
+            conv_id = None
+            depth = 1
+
+            if subargs:
+                arg_parts = subargs.split()
+                i = 0
+                while i < len(arg_parts):
+                    arg = arg_parts[i]
+                    if arg == '--depth' and i + 1 < len(arg_parts):
+                        try:
+                            depth = int(arg_parts[i + 1])
+                        except ValueError:
+                            print("Error: --depth must be an integer")
+                            return
+                        i += 2
+                    elif not arg.startswith('--'):
+                        conv_id = arg
+                        i += 1
+                    else:
+                        i += 1
+
+            # Use current conversation if not specified
+            if not conv_id:
+                conv_id = self.current_conversation_id
+                if not conv_id and hasattr(self, 'vfs_cwd'):
+                    from ctk.core.vfs import VFSPathParser, PathType
+                    try:
+                        parsed = VFSPathParser.parse(self.vfs_cwd)
+                        if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                            conv_id = parsed.conversation_id
+                    except Exception:
+                        pass
+                if not conv_id:
+                    print("Error: No conversation specified")
+                    return
+
+            # Resolve prefix
+            if len(conv_id) < 36:
+                from ctk.core.vfs import VFSPathParser
+                try:
+                    chats_path = VFSPathParser.parse('/chats')
+                    resolved = self.navigator.resolve_prefix(conv_id, chats_path)
+                    if resolved:
+                        conv_id = resolved
+                    else:
+                        # Try direct DB lookup
+                        all_convs = self.db.list_conversations(limit=10000)
+                        matches = [c for c in all_convs if c.id.startswith(conv_id)]
+                        if len(matches) == 1:
+                            conv_id = matches[0].id
+                        elif len(matches) > 1:
+                            print(f"Ambiguous prefix '{conv_id}', matches:")
+                            for m in matches[:5]:
+                                print(f"  {m.id[:12]}... {m.title or '(untitled)'}")
+                            return
+                        else:
+                            print(f"No conversation found with prefix: {conv_id}")
+                            return
+                except Exception as e:
+                    # Fallback to direct DB lookup
+                    all_convs = self.db.list_conversations(limit=10000)
+                    matches = [c for c in all_convs if c.id.startswith(conv_id)]
+                    if len(matches) == 1:
+                        conv_id = matches[0].id
+                    elif len(matches) > 1:
+                        print(f"Ambiguous prefix '{conv_id}', matches:")
+                        for m in matches[:5]:
+                            print(f"  {m.id[:12]}... {m.title or '(untitled)'}")
+                        return
+                    else:
+                        print(f"No conversation found with prefix: {conv_id}")
+                        return
+
+            # Load graph
+            graph_metadata = self.db.get_current_graph()
+            if not graph_metadata:
+                print("Error: No graph found. Run 'net links' first.")
+                return
+
+            G = load_graph_from_file(graph_metadata['graph_file_path'])
+
+            if conv_id not in G:
+                print(f"Conversation {conv_id[:8]}... not in graph")
+                return
+
+            # Get neighbors
+            import networkx as nx
+            if depth == 1:
+                neighbors = set(G.neighbors(conv_id))
+            else:
+                neighbors = set()
+                current_level = {conv_id}
+                for _ in range(depth):
+                    next_level = set()
+                    for node in current_level:
+                        next_level.update(G.neighbors(node))
+                    neighbors.update(next_level)
+                    current_level = next_level - {conv_id}
+                neighbors.discard(conv_id)
+
+            source_conv = self.db.load_conversation(conv_id)
+            source_title = source_conv.title if source_conv else "(untitled)"
+
+            print(f"\nNeighbors of: {source_title} ({conv_id[:8]}...)")
+            print(f"Depth: {depth}, Found: {len(neighbors)}\n")
+
+            if not neighbors:
+                print("No neighbors found")
+                return
+
+            # Display with weights
+            neighbor_data = []
+            for nid in neighbors:
+                conv = self.db.load_conversation(nid)
+                title = conv.title if conv else "(untitled)"
+                weight = G[conv_id][nid].get('weight', 0) if G.has_edge(conv_id, nid) else 0
+                neighbor_data.append((nid, title, weight))
+
+            neighbor_data.sort(key=lambda x: x[2], reverse=True)
+
+            for nid, title, weight in neighbor_data[:20]:
+                weight_str = f"{weight:.3f}" if weight > 0 else "-"
+                print(f"  {nid[:8]}... [{weight_str}] {title[:45]}")
+
+            if len(neighbors) > 20:
+                print(f"\n... and {len(neighbors) - 20} more")
+
+        elif subcmd == 'path':
+            from ctk.core.network_analysis import load_graph_from_file
+            # Parse source and target
+            if not subargs or len(subargs.split()) < 2:
+                print("Error: path requires source and target IDs")
+                print("Usage: net path <source> <target>")
+                return
+
+            parts = subargs.split()
+            source_arg = parts[0]
+            target_arg = parts[1]
+
+            # Resolve prefixes
+            from ctk.core.vfs import VFSPathParser
+            chats_path = VFSPathParser.parse('/chats')
+
+            source_id = source_arg
+            if len(source_arg) < 36:
+                try:
+                    resolved = self.navigator.resolve_prefix(source_arg, chats_path)
+                    if resolved:
+                        source_id = resolved
+                except Exception:
+                    pass
+
+            target_id = target_arg
+            if len(target_arg) < 36:
+                try:
+                    resolved = self.navigator.resolve_prefix(target_arg, chats_path)
+                    if resolved:
+                        target_id = resolved
+                except Exception:
+                    pass
+
+            # Load graph
+            graph_metadata = self.db.get_current_graph()
+            if not graph_metadata:
+                print("Error: No graph found. Run 'net links' first.")
+                return
+
+            G = load_graph_from_file(graph_metadata['graph_file_path'])
+
+            if source_id not in G:
+                print(f"Source {source_id[:8]}... not in graph")
+                return
+            if target_id not in G:
+                print(f"Target {target_id[:8]}... not in graph")
+                return
+
+            # Find path
+            import networkx as nx
+            try:
+                path = nx.shortest_path(G, source_id, target_id)
+            except nx.NetworkXNoPath:
+                print("No path exists between these conversations")
+                return
+
+            print(f"\nPath found with {len(path)} steps:\n")
+
+            for i, cid in enumerate(path):
+                conv = self.db.load_conversation(cid)
+                title = conv.title if conv else "(untitled)"
+                marker = "●" if i == 0 or i == len(path) - 1 else "○"
+                prefix = "→ " if i > 0 else "  "
+                print(f"{prefix}{marker} {cid[:8]}... {title[:50]}")
+
+                if i < len(path) - 1:
+                    next_id = path[i + 1]
+                    if G.has_edge(cid, next_id):
+                        weight = G[cid][next_id].get('weight', 0)
+                        print(f"     similarity: {weight:.3f}")
+
+        elif subcmd == 'central':
+            from ctk.core.network_analysis import load_graph_from_file
+            # Parse options
+            metric = 'degree'
+            top_k = 10
+
+            if subargs:
+                arg_parts = subargs.split()
+                i = 0
+                while i < len(arg_parts):
+                    arg = arg_parts[i]
+                    if arg == '--metric' and i + 1 < len(arg_parts):
+                        metric = arg_parts[i + 1]
+                        i += 2
+                    elif arg == '--top-k' and i + 1 < len(arg_parts):
+                        try:
+                            top_k = int(arg_parts[i + 1])
+                        except ValueError:
+                            print("Error: --top-k must be an integer")
+                            return
+                        i += 2
+                    else:
+                        i += 1
+
+            # Load graph
+            graph_metadata = self.db.get_current_graph()
+            if not graph_metadata:
+                print("Error: No graph found. Run 'net links' first.")
+                return
+
+            G = load_graph_from_file(graph_metadata['graph_file_path'])
+
+            print(f"Computing {metric} centrality...")
+
+            import networkx as nx
+            if metric == 'degree':
+                centrality = nx.degree_centrality(G)
+            elif metric == 'betweenness':
+                centrality = nx.betweenness_centrality(G)
+            elif metric == 'pagerank':
+                centrality = nx.pagerank(G)
+            elif metric == 'eigenvector':
+                try:
+                    centrality = nx.eigenvector_centrality(G, max_iter=1000)
+                except nx.PowerIterationFailedConvergence:
+                    print("Eigenvector centrality failed, using degree")
+                    centrality = nx.degree_centrality(G)
+            else:
+                print(f"Unknown metric: {metric}")
+                return
+
+            sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+
+            print(f"\nTop {top_k} by {metric} centrality:\n")
+
+            for i, (cid, score) in enumerate(sorted_nodes[:top_k], 1):
+                conv = self.db.load_conversation(cid)
+                title = conv.title if conv else "(untitled)"
+                print(f"  {i:2}. [{score:.4f}] {cid[:8]}... {title[:45]}")
+
+        elif subcmd == 'outliers':
+            from ctk.core.network_analysis import load_graph_from_file
+            # Parse options
+            top_k = 10
+
+            if subargs:
+                arg_parts = subargs.split()
+                i = 0
+                while i < len(arg_parts):
+                    arg = arg_parts[i]
+                    if arg == '--top-k' and i + 1 < len(arg_parts):
+                        try:
+                            top_k = int(arg_parts[i + 1])
+                        except ValueError:
+                            print("Error: --top-k must be an integer")
+                            return
+                        i += 2
+                    else:
+                        i += 1
+
+            # Load graph
+            graph_metadata = self.db.get_current_graph()
+            if not graph_metadata:
+                print("Error: No graph found. Run 'net links' first.")
+                return
+
+            G = load_graph_from_file(graph_metadata['graph_file_path'])
+
+            import networkx as nx
+            centrality = nx.degree_centrality(G)
+            sorted_nodes = sorted(centrality.items(), key=lambda x: x[1])
+
+            print(f"\nTop {top_k} outliers (least connected):\n")
+
+            for i, (cid, score) in enumerate(sorted_nodes[:top_k], 1):
+                conv = self.db.load_conversation(cid)
+                title = conv.title if conv else "(untitled)"
+                degree = G.degree(cid)
+                print(f"  {i:2}. [degree={degree}] {cid[:8]}... {title[:45]}")
+
+            isolated = list(nx.isolates(G))
+            if isolated:
+                print(f"\nFound {len(isolated)} completely isolated nodes")
+
         else:
-            print(f"Unknown RAG subcommand: {subcmd}")
-            print("Available: embeddings, similar, links, network")
+            print(f"Unknown net subcommand: {subcmd}")
+            print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers")
 
     # ==================== VFS Command Handlers ====================
 

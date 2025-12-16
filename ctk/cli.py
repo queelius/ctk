@@ -1054,6 +1054,343 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             return f"Added tags to {conv_id[:8]}...: {', '.join(new_tags)}"
 
+        elif tool_name == 'list_tags':
+            # Get all tags with counts
+            stats = db.get_statistics()
+            tags_data = stats.get('by_tag', {})
+
+            if not tags_data:
+                return "No tags found in database."
+
+            result_str = "Tags in database:\n\n"
+            # Sort by count descending
+            sorted_tags = sorted(tags_data.items(), key=lambda x: x[1], reverse=True)
+            for tag, count in sorted_tags:
+                result_str += f"  {tag}: {count} conversation(s)\n"
+
+            result_str += f"\nTotal: {len(tags_data)} unique tags"
+            return result_str
+
+        elif tool_name == 'remove_tag':
+            conv_id = tool_args.get('conversation_id', '')
+            tag = tool_args.get('tag', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+            if not tag:
+                return "Error: tag required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            tree = db.load_conversation(conv_id)
+            if not tree:
+                return f"Conversation {conv_id} not found"
+
+            if not tree.metadata or not tree.metadata.tags:
+                return f"Conversation has no tags"
+
+            if tag not in tree.metadata.tags:
+                return f"Tag '{tag}' not found on conversation"
+
+            tree.metadata.tags = [t for t in tree.metadata.tags if t != tag]
+            db.save_conversation(tree)
+            return f"Removed tag '{tag}' from {conv_id[:8]}..."
+
+        elif tool_name == 'list_sources':
+            stats = db.get_statistics()
+            sources_data = stats.get('by_source', {})
+
+            if not sources_data:
+                return "No sources found in database."
+
+            result_str = "Sources in database:\n\n"
+            sorted_sources = sorted(sources_data.items(), key=lambda x: x[1], reverse=True)
+            for source, count in sorted_sources:
+                result_str += f"  {source}: {count} conversation(s)\n"
+
+            result_str += f"\nTotal: {len(sources_data)} sources"
+            return result_str
+
+        elif tool_name == 'list_models':
+            stats = db.get_statistics()
+            models_data = stats.get('by_model', {})
+
+            if not models_data:
+                return "No models found in database."
+
+            result_str = "Models in database:\n\n"
+            sorted_models = sorted(models_data.items(), key=lambda x: x[1], reverse=True)
+            for model, count in sorted_models[:20]:  # Limit to top 20
+                result_str += f"  {model}: {count} conversation(s)\n"
+
+            if len(models_data) > 20:
+                result_str += f"\n  ... and {len(models_data) - 20} more models"
+
+            result_str += f"\nTotal: {len(models_data)} unique models"
+            return result_str
+
+        elif tool_name == 'export_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            export_format = tool_args.get('format', 'markdown')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            tree = db.load_conversation(conv_id)
+            if not tree:
+                return f"Conversation {conv_id} not found"
+
+            if export_format == 'markdown':
+                from ctk.integrations.exporters.markdown import MarkdownExporter
+                exporter = MarkdownExporter()
+                output = exporter.export_to_string(tree)
+                return f"Markdown export of '{tree.title}':\n\n{output}"
+
+            elif export_format == 'json':
+                import json
+                # Convert to dict
+                conv_dict = {
+                    'id': tree.id,
+                    'title': tree.title,
+                    'messages': [
+                        {
+                            'role': msg.role.value if msg.role else 'user',
+                            'content': msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                        }
+                        for msg in tree.get_longest_path()
+                    ]
+                }
+                return f"JSON export:\n{json.dumps(conv_dict, indent=2)}"
+
+            elif export_format == 'jsonl':
+                messages = tree.get_longest_path()
+                lines = []
+                for msg in messages:
+                    import json
+                    line = json.dumps({
+                        'role': msg.role.value if msg.role else 'user',
+                        'content': msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                    })
+                    lines.append(line)
+                return f"JSONL export ({len(lines)} messages):\n" + "\n".join(lines)
+
+            else:
+                return f"Unknown format: {export_format}. Use markdown, json, or jsonl."
+
+        elif tool_name == 'duplicate_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            new_title = tool_args.get('new_title', None)
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            tree = db.load_conversation(conv_id)
+            if not tree:
+                return f"Conversation {conv_id} not found"
+
+            # Create a deep copy with new ID
+            import uuid
+            import copy
+
+            new_tree = copy.deepcopy(tree)
+            new_tree.id = str(uuid.uuid4())
+            new_tree.title = new_title or f"Copy of {tree.title}"
+
+            # Update message IDs
+            old_to_new = {}
+            for old_id, msg in list(new_tree.message_map.items()):
+                new_id = str(uuid.uuid4())
+                old_to_new[old_id] = new_id
+                msg.id = new_id
+
+            # Update message_map keys and parent references
+            new_message_map = {}
+            for old_id, msg in new_tree.message_map.items():
+                new_id = old_to_new.get(old_id, old_id)
+                if msg.parent_id and msg.parent_id in old_to_new:
+                    msg.parent_id = old_to_new[msg.parent_id]
+                new_message_map[new_id] = msg
+            new_tree.message_map = new_message_map
+
+            # Update root_message_ids
+            new_tree.root_message_ids = [old_to_new.get(rid, rid) for rid in new_tree.root_message_ids]
+
+            db.save_conversation(new_tree)
+            return f"Created copy: '{new_tree.title}' ({new_tree.id[:8]}...)"
+
+        elif tool_name == 'get_recent_conversations':
+            limit = tool_args.get('limit', 10)
+            if not isinstance(limit, int):
+                try:
+                    limit = int(limit)
+                except (ValueError, TypeError):
+                    limit = 10
+
+            conversations = db.list_conversations(limit=limit)
+
+            if not conversations:
+                return "No conversations found."
+
+            result_str = f"Recent conversations (last {len(conversations)}):\n\n"
+            for i, conv in enumerate(conversations, 1):
+                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                flags = ""
+                if conv_dict.get('starred_at'):
+                    flags += "⭐"
+                if conv_dict.get('pinned_at'):
+                    flags += "📌"
+
+                title = conv_dict.get('title', 'Untitled')[:50]
+                updated = conv_dict.get('updated_at', 'Unknown')[:19]
+
+                result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
+                result_str += f"   Updated: {updated}\n"
+
+            result_str += f"\nType `show <id>` to view any conversation."
+            return result_str
+
+        elif tool_name == 'list_conversations':
+            # Get filter parameters
+            starred = tool_args.get('starred')
+            pinned = tool_args.get('pinned')
+            archived = tool_args.get('archived')
+            limit = tool_args.get('limit', 20)
+            source = tool_args.get('source')
+            model = tool_args.get('model')
+
+            if not isinstance(limit, int):
+                try:
+                    limit = int(limit)
+                except (ValueError, TypeError):
+                    limit = 20
+
+            # Build kwargs for list_conversations
+            kwargs = {'limit': limit}
+            if starred is not None:
+                kwargs['starred'] = starred
+            if pinned is not None:
+                kwargs['pinned'] = pinned
+            if archived is not None:
+                kwargs['archived'] = archived
+            if source:
+                kwargs['source'] = source
+            if model:
+                kwargs['model'] = model
+
+            conversations = db.list_conversations(**kwargs)
+
+            if not conversations:
+                filters_desc = []
+                if starred:
+                    filters_desc.append("starred")
+                if pinned:
+                    filters_desc.append("pinned")
+                if archived:
+                    filters_desc.append("archived")
+                if source:
+                    filters_desc.append(f"source={source}")
+                if model:
+                    filters_desc.append(f"model={model}")
+                filter_str = f" ({', '.join(filters_desc)})" if filters_desc else ""
+                return f"No conversations found{filter_str}."
+
+            result_str = f"Conversations ({len(conversations)} results):\n\n"
+            for i, conv in enumerate(conversations, 1):
+                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                flags = ""
+                if conv_dict.get('starred_at'):
+                    flags += "⭐"
+                if conv_dict.get('pinned_at'):
+                    flags += "📌"
+                if conv_dict.get('archived_at'):
+                    flags += "📦"
+
+                title = conv_dict.get('title', 'Untitled')[:50]
+                source_str = conv_dict.get('metadata', {}).get('source', '') or ''
+                model_str = conv_dict.get('metadata', {}).get('model', '') or ''
+
+                result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
+                if source_str or model_str:
+                    result_str += f"   {source_str} | {model_str}\n"
+
+            return result_str
+
+        elif tool_name == 'list_conversation_paths':
+            conv_id_arg = tool_args.get('conversation_id', '')
+            conv_id = _resolve_conversation_id(db, conv_id_arg)
+            if not conv_id:
+                return f"Conversation not found: {conv_id_arg}"
+
+            conversation = db.load_conversation(conv_id)
+            if not conversation:
+                return f"Conversation not found: {conv_id}"
+
+            paths = conversation.get_all_paths()
+
+            if not paths:
+                return f"No paths found in conversation {conv_id[:8]}..."
+
+            result_str = f"Paths in conversation {conv_id[:8]}... ({len(paths)} total):\n\n"
+            for i, path in enumerate(paths, 1):
+                result_str += f"Path {i} ({len(path)} messages):\n"
+                for msg in path:
+                    role_label = msg.role.value.title() if msg.role else "User"
+                    content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                    preview = content_text[:50].replace('\n', ' ').strip() if content_text else ""
+                    if len(content_text) > 50:
+                        preview += "..."
+                    result_str += f"  {role_label}: {preview}\n"
+                result_str += "\n"
+
+            return result_str
+
+        elif tool_name == 'list_plugins':
+            from ctk.core.plugin import PluginManager
+
+            manager = PluginManager()
+            importers = manager.list_importers()
+            exporters = manager.list_exporters()
+
+            result_str = "Available Plugins:\n\n"
+
+            result_str += "Importers:\n"
+            if importers:
+                for name in sorted(importers):
+                    result_str += f"  - {name}\n"
+            else:
+                result_str += "  (none)\n"
+
+            result_str += "\nExporters:\n"
+            if exporters:
+                for name in sorted(exporters):
+                    result_str += f"  - {name}\n"
+            else:
+                result_str += "  (none)\n"
+
+            return result_str
+
+        elif tool_name == 'auto_tag_conversation':
+            conv_id_arg = tool_args.get('conversation_id', '')
+            conv_id = _resolve_conversation_id(db, conv_id_arg)
+            if not conv_id:
+                return f"Conversation not found: {conv_id_arg}"
+
+            conversation = db.load_conversation(conv_id)
+            if not conversation:
+                return f"Conversation not found: {conv_id}"
+
+            # Auto-tagging requires LLM - check if we have one in context
+            # This is a simplified version - the full implementation would use the TUI's provider
+            # For now, return a message suggesting manual tagging
+            return f"Auto-tagging requires an LLM provider. Use `ctk auto-tag {conv_id[:8]}` from the command line, or manually add tags with `tag_conversation`."
+
         else:
             return f"Unknown tool: {tool_name}"
 
@@ -1730,7 +2067,7 @@ def main():
     export_parser.add_argument('output', help='Output file path')
     export_parser.add_argument('--db', '-d', required=True, help='Database path')
     export_parser.add_argument('--format', '-f', default='jsonl',
-                               help='Export format: json, markdown, jsonl, html, html5 (default: jsonl)')
+                               help='Export format: json, markdown, jsonl, html (default: jsonl)')
     export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
     export_parser.add_argument('--limit', type=int, default=1000, help='Maximum conversations (default: 1000)')
     export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
@@ -1750,7 +2087,7 @@ def main():
     export_parser.add_argument('--show-tree', action='store_true', default=True,
                                help='Show conversation tree structure in HTML export')
     export_parser.add_argument('--embed', action='store_true',
-                               help='Embed data in HTML file (html5 only). Default: separate index.html + conversations.jsonl')
+                               help='Embed data in HTML file. Default: separate index.html + conversations.jsonl')
 
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
@@ -1915,6 +2252,10 @@ def main():
     from ctk.cli_db import add_db_commands
     add_db_commands(subparsers)
 
+    # Network/similarity operations command
+    from ctk.cli_net import add_net_commands
+    add_net_commands(subparsers)
+
     args = parser.parse_args()
     
     if args.verbose:
@@ -1973,6 +2314,32 @@ def main():
             return db_commands[args.db_command](args)
         else:
             print("Error: No database operation specified")
+            return 1
+
+    # Special handling for net subcommands
+    if args.command == 'net':
+        from ctk.cli_net import (
+            cmd_embeddings, cmd_similar, cmd_links, cmd_network,
+            cmd_clusters, cmd_neighbors, cmd_path, cmd_central, cmd_outliers
+        )
+
+        net_commands = {
+            'embeddings': cmd_embeddings,
+            'similar': cmd_similar,
+            'links': cmd_links,
+            'network': cmd_network,
+            'clusters': cmd_clusters,
+            'neighbors': cmd_neighbors,
+            'path': cmd_path,
+            'central': cmd_central,
+            'outliers': cmd_outliers,
+        }
+
+        if hasattr(args, 'net_command') and args.net_command:
+            return net_commands[args.net_command](args)
+        else:
+            print("Error: No network operation specified")
+            print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers")
             return 1
 
     return commands[args.command](args)

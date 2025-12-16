@@ -297,95 +297,6 @@ class TestChatCommand:
         # Should navigate to m1's second child (m2 vs m3 branch)
 
 
-class TestCompleteCommand:
-    """Test complete command (LLM completion without mode switch)"""
-
-    @pytest.mark.unit
-    def test_complete_with_args(self, chat_handler, mock_tui):
-        """Test complete command with prompt from args"""
-        # Mock provider response
-        mock_tui.provider.chat = Mock(return_value=iter([
-            {'content': 'This is '},
-            {'content': 'a test '},
-            {'content': 'response'}
-        ]))
-
-        result = chat_handler.cmd_complete(['What', 'is', 'Python?'], stdin='')
-
-        assert result.success is True
-        assert 'This is a test response' in result.output
-        # Mode should not change
-        assert mock_tui.mode == 'shell'
-
-    @pytest.mark.unit
-    def test_complete_with_stdin(self, chat_handler, mock_tui):
-        """Test complete command with piped prompt"""
-        mock_tui.provider.chat = Mock(return_value=iter([
-            {'content': 'Response text'}
-        ]))
-
-        result = chat_handler.cmd_complete([], stdin='Tell me about AI')
-
-        assert result.success is True
-        assert 'Response text' in result.output
-
-    @pytest.mark.unit
-    def test_complete_no_prompt(self, chat_handler):
-        """Test complete command without prompt"""
-        result = chat_handler.cmd_complete([], stdin='')
-
-        assert result.success is False
-        assert 'no prompt provided' in result.error
-
-    @pytest.mark.unit
-    def test_complete_no_provider(self, mock_tui):
-        """Test complete command when no LLM provider configured"""
-        mock_tui.provider = None
-        chat_handler = ChatCommands(tui_instance=mock_tui)
-
-        result = chat_handler.cmd_complete(['test'], stdin='')
-
-        assert result.success is False
-        assert 'No LLM provider' in result.error
-
-    @pytest.mark.unit
-    def test_complete_provider_error(self, chat_handler, mock_tui):
-        """Test complete command when provider raises error"""
-        mock_tui.provider.chat = Mock(side_effect=Exception('API Error'))
-
-        result = chat_handler.cmd_complete(['test'], stdin='')
-
-        assert result.success is False
-        assert 'LLM error' in result.error
-        assert 'API Error' in result.error
-
-    @pytest.mark.unit
-    def test_complete_streaming_response(self, chat_handler, mock_tui):
-        """Test complete with streaming chunks"""
-        mock_tui.provider.chat = Mock(return_value=iter([
-            {'content': 'Chunk 1\n'},
-            {'content': 'Chunk 2\n'},
-            {'content': 'Chunk 3'}
-        ]))
-
-        result = chat_handler.cmd_complete(['prompt'], stdin='')
-
-        assert result.success is True
-        assert 'Chunk 1' in result.output
-        assert 'Chunk 2' in result.output
-        assert 'Chunk 3' in result.output
-
-    @pytest.mark.unit
-    def test_complete_string_chunks(self, chat_handler, mock_tui):
-        """Test complete with string chunks (not dict)"""
-        mock_tui.provider.chat = Mock(return_value=iter(['text1', 'text2']))
-
-        result = chat_handler.cmd_complete(['prompt'], stdin='')
-
-        assert result.success is True
-        assert 'text1text2' in result.output
-
-
 class TestChatCommandFactory:
     """Test chat command factory function"""
 
@@ -395,9 +306,9 @@ class TestChatCommandFactory:
         commands = create_chat_commands(tui_instance=mock_tui)
 
         assert 'chat' in commands
-        assert 'complete' in commands
+        assert 'say' in commands
         assert callable(commands['chat'])
-        assert callable(commands['complete'])
+        assert callable(commands['say'])
 
     @pytest.mark.unit
     def test_created_commands_work(self, mock_tui):
@@ -499,16 +410,6 @@ class TestChatEdgeCases:
 
         # Should not crash, just continue with empty conversation
         assert result.success is True
-
-    @pytest.mark.unit
-    def test_complete_empty_response(self, chat_handler, mock_tui):
-        """Test complete with empty LLM response"""
-        mock_tui.provider.chat = Mock(return_value=iter([]))
-
-        result = chat_handler.cmd_complete(['prompt'], stdin='')
-
-        assert result.success is True
-        # Output should just have newline
 
     @pytest.mark.unit
     def test_chat_stdin_takes_precedence(self, chat_handler, mock_tui):

@@ -519,11 +519,13 @@ class SimilarityComputer:
                 raise ValueError("Database required to load conversation by ID")
 
             # Try to get cached embedding
+            # Use provider as model fallback (same logic as when saving)
+            model_name = self.embedder.config.model or self.embedder.config.provider
             if use_cache:
                 cached_emb = self.db.get_embedding(
                     source,
                     provider=self.embedder.config.provider,
-                    model=self.embedder.config.model
+                    model=model_name
                 )
                 if cached_emb is not None:
                     return cached_emb, source
@@ -553,12 +555,13 @@ class SimilarityComputer:
         if isinstance(source, ConversationTree):
             conv_id = source.id
 
-            # Try cache
+            # Try cache (use provider as model fallback, same as when saving)
+            model_name = self.embedder.config.model or self.embedder.config.provider
             if use_cache and self.db and conv_id:
                 cached_emb = self.db.get_embedding(
                     conv_id,
                     provider=self.embedder.config.provider,
-                    model=self.embedder.config.model
+                    model=model_name
                 )
                 if cached_emb is not None:
                     return cached_emb, conv_id

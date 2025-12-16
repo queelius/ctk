@@ -231,16 +231,18 @@ class ShellParser:
             'star', 'unstar', 'pin', 'unpin', 'archive', 'unarchive', 'title',
             'search', 'find', 'ask', 'show', 'tree', 'paths', 'export',
             # LLM commands
-            'chat', 'complete', 'model', 'say', 'models', 'temp',
+            'chat', 'model', 'say', 'models', 'temp',
             # MCP commands
             'mcp',
+            # Network/similarity commands
+            'net',
             # System commands
             'config', 'help', 'exit', 'clear', 'quit', 'history',
             # Session management
             'new-chat', 'save', 'load', 'delete', 'list',
             # Additional
             'browse', 'fork', 'fork-id', 'regenerate', 'edit', 'tag', 'untag',
-            'alternatives', 'context', 'rag',
+            'alternatives', 'context',
         }
 
         # Parse to get first word

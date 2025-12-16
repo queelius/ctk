@@ -1,7 +1,7 @@
 """
 Chat and LLM command handlers
 
-Implements: chat, complete, say
+Implements: chat, say
 """
 
 from typing import List, Dict, Callable
@@ -121,64 +121,6 @@ class ChatCommands:
             output="Entering chat mode. Type /exit to return to shell.\n"
         )
 
-    def cmd_complete(self, args: List[str], stdin: str = '') -> CommandResult:
-        """
-        Get LLM completion without entering chat mode
-
-        Usage:
-            complete <prompt>           - Get completion for prompt
-            echo "prompt" | complete    - Get completion from stdin
-
-        Args:
-            args: Command arguments (prompt text)
-            stdin: Standard input (piped prompt)
-
-        Returns:
-            CommandResult with LLM response
-        """
-        # Get prompt from args or stdin
-        if stdin:
-            prompt = stdin.strip()
-        elif args:
-            prompt = ' '.join(args)
-        else:
-            return CommandResult(
-                success=False,
-                output="",
-                error="complete: no prompt provided"
-            )
-
-        # Get completion without switching modes
-        if not self.tui.provider:
-            return CommandResult(
-                success=False,
-                output="",
-                error="complete: No LLM provider configured"
-            )
-
-        try:
-            # Get streaming response
-            response_text = ""
-            for chunk in self.tui.provider.chat([
-                {"role": "user", "content": prompt}
-            ], stream=True):
-                if isinstance(chunk, dict) and 'content' in chunk:
-                    response_text += chunk['content']
-                elif isinstance(chunk, str):
-                    response_text += chunk
-
-            return CommandResult(
-                success=True,
-                output=response_text + "\n"
-            )
-
-        except Exception as e:
-            return CommandResult(
-                success=False,
-                output="",
-                error=f"complete: LLM error: {str(e)}"
-            )
-
     def cmd_say(self, args: List[str], stdin: str = '') -> CommandResult:
         """
         Send a message to the LLM without entering chat mode
@@ -236,6 +178,5 @@ def create_chat_commands(tui_instance=None) -> Dict[str, Callable]:
 
     return {
         'chat': chat_cmds.cmd_chat,
-        'complete': chat_cmds.cmd_complete,
         'say': chat_cmds.cmd_say,
     }

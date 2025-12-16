@@ -430,7 +430,12 @@ Organization:
 Chat:
   say <message>     - Send message to LLM (one-shot)
   chat [message]    - Enter chat mode (optionally with first message)
-  complete <text>   - Get completion for text
+
+Network:
+  net embeddings    - Generate conversation embeddings
+  net similar [id]  - Find similar conversations (uses current if no ID)
+  net links         - Build similarity graph
+  net network       - Show network statistics
 
 System:
   help              - Show this help

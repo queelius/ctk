@@ -678,6 +678,201 @@ USE THIS TOOL WHEN: user says "tag this as...", "add tag...", "categorize as..."
                 },
                 "required": ["conversation_id", "tags"]
             }
+        },
+        {
+            "name": "list_tags",
+            "description": """List all tags in the database with counts.
+
+USE THIS TOOL WHEN: user says "show all tags", "what tags exist", "list tags".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "remove_tag",
+            "description": """Remove a tag from a conversation.
+
+USE THIS TOOL WHEN: user says "remove tag", "untag", "delete tag from...".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID"
+                    },
+                    "tag": {
+                        "type": "string",
+                        "description": "Tag to remove"
+                    }
+                },
+                "required": ["conversation_id", "tag"]
+            }
+        },
+        {
+            "name": "list_sources",
+            "description": """List all conversation sources (openai, anthropic, etc.) with counts.
+
+USE THIS TOOL WHEN: user says "what sources", "show sources", "where are conversations from".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "list_models",
+            "description": """List all models used in conversations with counts.
+
+USE THIS TOOL WHEN: user says "what models", "show models", "which models were used".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "export_conversation",
+            "description": """Export a conversation to a specific format.
+
+USE THIS TOOL WHEN: user says "export to markdown", "save as json", "export conversation".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID"
+                    },
+                    "format": {
+                        "type": "string",
+                        "enum": ["markdown", "json", "jsonl"],
+                        "description": "Export format (default: markdown)"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "duplicate_conversation",
+            "description": """Create a copy of a conversation with a new ID.
+
+USE THIS TOOL WHEN: user says "duplicate", "copy conversation", "clone this".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to duplicate"
+                    },
+                    "new_title": {
+                        "type": "string",
+                        "description": "Optional title for the copy"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "get_recent_conversations",
+            "description": """Get the N most recently updated conversations.
+
+USE THIS TOOL WHEN: user says "recent conversations", "latest chats", "what did I work on recently".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of conversations to return (default: 10)"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "list_conversations",
+            "description": """List conversations with optional filters.
+
+USE THIS TOOL WHEN: user asks to "list conversations", "show all chats", "list starred", "show pinned", "what's archived".
+
+Returns a formatted table of conversations matching the criteria.""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "starred": {
+                        "type": "boolean",
+                        "description": "Filter to starred conversations only"
+                    },
+                    "pinned": {
+                        "type": "boolean",
+                        "description": "Filter to pinned conversations only"
+                    },
+                    "archived": {
+                        "type": "boolean",
+                        "description": "Filter to archived conversations only"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results (default: 20)"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Filter by source (e.g., 'anthropic', 'openai')"
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Filter by model name"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "list_conversation_paths",
+            "description": """List all paths in a branching conversation tree.
+
+USE THIS TOOL WHEN: user asks "show paths", "list branches", "how many paths", "conversation branches".
+
+Returns all distinct paths from root to leaf in the conversation tree.""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or prefix of conversation ID"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "list_plugins",
+            "description": """List available importer and exporter plugins.
+
+USE THIS TOOL WHEN: user asks "what plugins", "list importers", "list exporters", "supported formats".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "auto_tag_conversation",
+            "description": """Automatically tag a conversation using LLM analysis.
+
+USE THIS TOOL WHEN: user says "auto-tag", "suggest tags", "analyze and tag".
+
+Uses LLM to analyze conversation content and suggest relevant tags.""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or prefix of conversation ID"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
         }
     ]
 
