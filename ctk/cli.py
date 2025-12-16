@@ -637,6 +637,34 @@ def cmd_say(args):
         return 1
 
 
+def _resolve_conversation_id(db: ConversationDB, conv_id: str) -> str:
+    """
+    Resolve a conversation ID prefix to full ID.
+
+    Args:
+        db: Database instance
+        conv_id: Full or partial conversation ID
+
+    Returns:
+        Full conversation ID or "Error: ..." message
+    """
+    if len(conv_id) >= 36:
+        # Already full ID
+        return conv_id
+
+    # Try prefix matching
+    all_convs = db.list_conversations(limit=None, include_archived=True)
+    matches = [c for c in all_convs if c.id.startswith(conv_id)]
+
+    if len(matches) == 0:
+        return f"Error: No conversation found matching '{conv_id}'"
+    elif len(matches) > 1:
+        match_list = ", ".join(f"{m.id[:8]}..." for m in matches[:3])
+        return f"Error: Multiple conversations match '{conv_id}': {match_list}"
+    else:
+        return matches[0].id
+
+
 def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug: bool = False, use_rich: bool = True, shell_executor=None) -> str:
     """
     Execute a tool and return result as string.
@@ -853,6 +881,179 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             except Exception as e:
                 return f"Error executing command: {e}"
 
+        elif tool_name == 'star_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            # Resolve prefix
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.star_conversation(conv_id)
+            return f"Starred conversation {conv_id[:8]}..."
+
+        elif tool_name == 'unstar_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.unstar_conversation(conv_id)
+            return f"Unstarred conversation {conv_id[:8]}..."
+
+        elif tool_name == 'pin_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.pin_conversation(conv_id)
+            return f"Pinned conversation {conv_id[:8]}..."
+
+        elif tool_name == 'unpin_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.unpin_conversation(conv_id)
+            return f"Unpinned conversation {conv_id[:8]}..."
+
+        elif tool_name == 'archive_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.archive_conversation(conv_id)
+            return f"Archived conversation {conv_id[:8]}..."
+
+        elif tool_name == 'unarchive_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.unarchive_conversation(conv_id)
+            return f"Unarchived conversation {conv_id[:8]}..."
+
+        elif tool_name == 'rename_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            title = tool_args.get('title', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+            if not title:
+                return "Error: title required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            db.update_conversation_title(conv_id, title)
+            return f"Renamed conversation {conv_id[:8]}... to '{title}'"
+
+        elif tool_name == 'show_conversation_content':
+            from ctk.core.helpers import show_conversation_helper
+
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            path_selection = tool_args.get('path_selection', 'longest')
+
+            result = show_conversation_helper(
+                db=db,
+                conv_id=conv_id,
+                path_selection=path_selection,
+                plain_output=True,
+                show_metadata=True
+            )
+
+            if result['success']:
+                return result['output']
+            else:
+                return f"Error: {result['error']}"
+
+        elif tool_name == 'show_conversation_tree':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            # Use shell command if executor available
+            if shell_executor:
+                result = shell_executor(f"tree {conv_id}")
+                if hasattr(result, 'output'):
+                    return result.output if result.success else f"Error: {result.error}"
+                return str(result)
+
+            # Fallback to direct implementation
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            tree = db.load_conversation(conv_id)
+            if not tree:
+                return f"Conversation {conv_id} not found"
+
+            return f"Tree for {tree.title or 'Untitled'}:\n(Use TUI shell mode for full tree visualization)"
+
+        elif tool_name == 'delete_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            if not conv_id:
+                return "Error: conversation_id required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            # Get title before deletion for confirmation message
+            tree = db.load_conversation(conv_id)
+            title = tree.title if tree else 'Unknown'
+
+            db.delete_conversation(conv_id)
+            return f"Deleted conversation '{title}' ({conv_id[:8]}...)"
+
+        elif tool_name == 'tag_conversation':
+            conv_id = tool_args.get('conversation_id', '')
+            tags = tool_args.get('tags', [])
+            if not conv_id:
+                return "Error: conversation_id required"
+            if not tags:
+                return "Error: tags required"
+
+            conv_id = _resolve_conversation_id(db, conv_id)
+            if conv_id.startswith("Error:"):
+                return conv_id
+
+            tree = db.load_conversation(conv_id)
+            if not tree:
+                return f"Conversation {conv_id} not found"
+
+            # Add tags
+            existing_tags = tree.metadata.tags if tree.metadata and tree.metadata.tags else []
+            new_tags = [t for t in tags if t not in existing_tags]
+            tree.metadata.tags = existing_tags + new_tags
+            db.save_conversation(tree)
+
+            return f"Added tags to {conv_id[:8]}...: {', '.join(new_tags)}"
+
         else:
             return f"Unknown tool: {tool_name}"
 
@@ -1049,36 +1250,31 @@ def cmd_chat(args):
 
 def cmd_show(args):
     """Show a specific conversation"""
-    from ctk.core.tree import ConversationTreeNavigator
+    from ctk.core.helpers import show_conversation_helper
 
     db = ConversationDB(args.db)
 
     try:
-        # Load conversation
-        tree = db.load_conversation(args.id)
+        # Determine which path to show based on args
+        path_selection = getattr(args, 'path', 'longest')  # Default to longest
 
-        if not tree:
-            # Try partial ID match - search all conversations
-            all_convs = db.list_conversations(limit=None, include_archived=True)
-            matches = [c for c in all_convs if c.id.startswith(args.id)]
+        # Use shared helper to load conversation
+        result = show_conversation_helper(
+            db=db,
+            conv_id=args.id,
+            path_selection=path_selection,
+            plain_output=getattr(args, 'no_color', False),
+            show_metadata=True
+        )
 
-            if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
-                return 1
-            elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
-                for match in matches[:5]:
-                    print(f"  - {match.id[:8]}... {match.title}")
-                return 1
-            else:
-                tree = db.load_conversation(matches[0].id)
-
-        if not tree:
-            print(f"Error: Conversation {args.id} not found")
+        if not result['success']:
+            print(f"Error: {result['error']}")
             return 1
 
-        # Create navigator
-        nav = ConversationTreeNavigator(tree)
+        tree = result['conversation']
+        nav = result['navigator']
+        path = result['path']
+        path_count = result['path_count']
 
         # Display conversation metadata
         print(f"\nConversation: {tree.title}")
@@ -1091,27 +1287,8 @@ def cmd_show(args):
             if tree.metadata.tags:
                 print(f"Tags: {', '.join(tree.metadata.tags)}")
         print(f"Total messages: {len(tree.message_map)}")
-
-        # Show path info
-        path_count = nav.get_path_count()
         print(f"Paths: {path_count}")
         print()
-
-        # Determine which path to show based on args
-        path_selection = getattr(args, 'path', 'longest')  # Default to longest
-
-        if path_selection == 'longest':
-            path = nav.get_longest_path()
-        elif path_selection == 'latest':
-            path = nav.get_latest_path()
-        elif path_selection.isdigit():
-            path_num = int(path_selection)
-            path = nav.get_path(path_num)
-            if not path:
-                print(f"Error: Path {path_num} not found (available: 0-{path_count-1})")
-                return 1
-        else:
-            path = nav.get_longest_path()
 
         if not path:
             print(f"No messages in conversation")

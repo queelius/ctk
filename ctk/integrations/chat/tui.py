@@ -108,7 +108,7 @@ class ChatTUI:
             'mcp', 'cd', 'pwd', 'ls', 'ln', 'cp', 'mv', 'rm', 'mkdir',
             'rag', 'goto-longest', 'goto-latest', 'where', 'alternatives',
             'history', 'models', 'model', 'temp', 'regenerate', 'edit',
-            'say', 'find', 'unstar', 'unpin', 'unarchive',
+            'say', 'find', 'unstar', 'unpin', 'unarchive', 'chat', 'complete',
         }
 
         # Prompt toolkit setup
@@ -732,7 +732,6 @@ You don't need to create directories before tagging - this is mainly for documen
         print("    delete [id]       - Delete conversation (current if no ID given)")
         print("    search <query>    - Search conversations")
         print("    list              - List recent conversations")
-        print("    ask <query>       - Natural language query (e.g., 'show starred')")
         print("    archive           - Archive current conversation")
         print("    unarchive         - Unarchive current conversation")
         print("    star              - Star current conversation")

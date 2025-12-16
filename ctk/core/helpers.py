@@ -474,7 +474,7 @@ DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
 
 USE THIS TOOL WHEN: user wants to navigate (cd, ls), view content (cat, tree), or organize (star, pin, archive).
 
-Commands: cd, ls, pwd, find, cat, tree, paths, star, unstar, pin, unpin, archive, unarchive, title""",
+Commands: cd, ls, pwd, find, cat, tree, paths, star, unstar, pin, unpin, archive, unarchive, title, show""",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -484,6 +484,197 @@ Commands: cd, ls, pwd, find, cat, tree, paths, star, unstar, pin, unpin, archive
                     }
                 },
                 "required": ["command"]
+            }
+        },
+        {
+            "name": "star_conversation",
+            "description": """Star a conversation to mark it as important.
+
+USE THIS TOOL WHEN: user says "star this", "mark as important", "favorite this conversation".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to star"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "unstar_conversation",
+            "description": """Remove star from a conversation.
+
+USE THIS TOOL WHEN: user says "unstar this", "remove from favorites".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to unstar"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "pin_conversation",
+            "description": """Pin a conversation to keep it at the top.
+
+USE THIS TOOL WHEN: user says "pin this", "keep at top".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to pin"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "unpin_conversation",
+            "description": """Remove pin from a conversation.
+
+USE THIS TOOL WHEN: user says "unpin this".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to unpin"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "archive_conversation",
+            "description": """Archive a conversation to hide it from default listings.
+
+USE THIS TOOL WHEN: user says "archive this", "hide this conversation".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to archive"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "unarchive_conversation",
+            "description": """Unarchive a conversation to make it visible again.
+
+USE THIS TOOL WHEN: user says "unarchive this", "restore this conversation".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to unarchive"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "rename_conversation",
+            "description": """Rename a conversation by setting its title.
+
+USE THIS TOOL WHEN: user says "rename this to...", "change title to...", "call this...".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to rename"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the conversation"
+                    }
+                },
+                "required": ["conversation_id", "title"]
+            }
+        },
+        {
+            "name": "show_conversation_content",
+            "description": """Show the full content of a conversation.
+
+USE THIS TOOL WHEN: user says "show me the conversation", "display the chat", "what was said in...".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to show"
+                    },
+                    "path_selection": {
+                        "type": "string",
+                        "description": "Which path to show: 'longest' (default), 'latest', or a path number like '0', '1'"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "show_conversation_tree",
+            "description": """Show the tree structure of a conversation (useful for branching conversations).
+
+USE THIS TOOL WHEN: user says "show the tree", "show branches", "conversation structure".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "delete_conversation",
+            "description": """Delete a conversation from the database. This is IRREVERSIBLE.
+
+USE THIS TOOL WHEN: user explicitly says "delete this conversation", "remove this chat".
+
+IMPORTANT: Ask for confirmation before deleting.""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID to delete"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        },
+        {
+            "name": "tag_conversation",
+            "description": """Add tags to a conversation for categorization.
+
+USE THIS TOOL WHEN: user says "tag this as...", "add tag...", "categorize as...".""",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Full or partial conversation ID"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags to add to the conversation"
+                    }
+                },
+                "required": ["conversation_id", "tags"]
             }
         }
     ]
@@ -647,3 +838,137 @@ Chat:
 Guide users to use shell commands directly. Be accurate with command syntax - don't invent flags that don't exist."""
 
     return prompt
+
+
+def show_conversation_helper(
+    db: ConversationDB,
+    conv_id: str,
+    path_selection: str = 'longest',
+    plain_output: bool = True,
+    show_metadata: bool = True,
+    render_markdown: bool = False
+) -> Dict[str, Any]:
+    """
+    Load and format a conversation for display.
+
+    This is a shared helper used by both CLI `ctk show` and shell `show` commands.
+
+    Args:
+        db: Database instance
+        conv_id: Conversation ID or prefix
+        path_selection: 'longest', 'latest', or path number as string
+        plain_output: If True, return plain text; if False, return Rich-formatted
+        show_metadata: Include metadata in output
+        render_markdown: Render markdown in messages (for Rich output)
+
+    Returns:
+        Dict with keys:
+            'success': bool
+            'conversation': ConversationTree if found
+            'output': formatted string output
+            'error': error message if failed
+    """
+    from ctk.core.tree import ConversationTreeNavigator
+
+    # Load conversation (with prefix matching)
+    conversation = db.load_conversation(conv_id)
+
+    if not conversation:
+        # Try partial ID match
+        all_convs = db.list_conversations(limit=None, include_archived=True)
+        matches = [c for c in all_convs if c.id.startswith(conv_id)]
+
+        if len(matches) == 0:
+            return {
+                'success': False,
+                'conversation': None,
+                'output': '',
+                'error': f"No conversation found matching '{conv_id}'"
+            }
+        elif len(matches) > 1:
+            match_list = "\n".join(f"  {m.id[:12]}... {m.title}" for m in matches[:5])
+            return {
+                'success': False,
+                'conversation': None,
+                'output': '',
+                'error': f"Multiple conversations match '{conv_id}':\n{match_list}"
+            }
+        else:
+            conversation = db.load_conversation(matches[0].id)
+
+    if not conversation:
+        return {
+            'success': False,
+            'conversation': None,
+            'output': '',
+            'error': f"Failed to load conversation: {conv_id}"
+        }
+
+    # Create navigator
+    nav = ConversationTreeNavigator(conversation)
+    path_count = nav.get_path_count()
+
+    # Select path
+    if path_selection == 'longest':
+        path = nav.get_longest_path()
+    elif path_selection == 'latest':
+        path = nav.get_latest_path()
+    elif path_selection.isdigit():
+        path_num = int(path_selection)
+        path = nav.get_path(path_num)
+        if not path:
+            return {
+                'success': False,
+                'conversation': conversation,
+                'output': '',
+                'error': f"Path {path_num} not found (available: 0-{path_count-1})"
+            }
+    else:
+        path = nav.get_longest_path()
+
+    # Build output
+    output_lines = []
+
+    if show_metadata:
+        output_lines.append(f"\nConversation: {conversation.title or '(untitled)'}")
+        output_lines.append(f"ID: {conversation.id}")
+        if conversation.metadata:
+            if conversation.metadata.source:
+                output_lines.append(f"Source: {conversation.metadata.source}")
+            if conversation.metadata.model:
+                output_lines.append(f"Model: {conversation.metadata.model}")
+            if conversation.metadata.created_at:
+                output_lines.append(f"Created: {conversation.metadata.created_at}")
+            if conversation.metadata.tags:
+                output_lines.append(f"Tags: {', '.join(conversation.metadata.tags)}")
+        output_lines.append(f"Total messages: {len(conversation.message_map)}")
+        output_lines.append(f"Paths: {path_count}")
+        output_lines.append("")
+
+    if not path:
+        output_lines.append("(no messages)")
+    else:
+        output_lines.append(f"Messages (path: {path_selection}, {len(path)} messages):")
+        output_lines.append("=" * 80)
+
+        for msg in path:
+            role_label = msg.role.value.title() if msg.role else "User"
+            content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+            output_lines.append(f"\n[{role_label}]")
+            output_lines.append(content_text)
+
+        output_lines.append("=" * 80)
+
+    if path_count > 1:
+        output_lines.append(f"\nNote: This conversation has {path_count} paths")
+        output_lines.append("Use --path N or -L for different path views")
+
+    return {
+        'success': True,
+        'conversation': conversation,
+        'navigator': nav,
+        'path': path,
+        'path_count': path_count,
+        'output': '\n'.join(output_lines) + '\n',
+        'error': ''
+    }

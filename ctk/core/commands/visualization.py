@@ -1,7 +1,7 @@
 """
 Visualization command handlers
 
-Implements: tree, paths
+Implements: tree, paths, show
 """
 
 from typing import List, Dict, Callable
@@ -232,6 +232,150 @@ class VisualizationCommands:
         output = '\n'.join(output_lines) + '\n'
         return CommandResult(success=True, output=output)
 
+    def cmd_show(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Show conversation content
+
+        Usage:
+            show <conv_id>          - Show conversation by ID (prefix allowed)
+            show <conv_id> --path N - Show specific path (0-indexed)
+            show <conv_id> -l       - Show longest path (default)
+            show <conv_id> -L       - Show latest path
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with conversation display
+        """
+        from ctk.core.helpers import show_conversation_helper
+
+        # Determine conversation ID
+        if not args:
+            # Try current conversation
+            if not self.tui:
+                return CommandResult(success=False, output="", error="show: Conversation ID required")
+
+            current_path = self.tui.vfs_cwd
+            parsed = VFSPathParser.parse(current_path)
+
+            if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+                conv_id = parsed.conversation_id
+            else:
+                return CommandResult(success=False, output="", error="show: Not in a conversation. Usage: show <conv_id>")
+            path_selection = 'longest'
+        else:
+            # Parse arguments
+            conv_id_arg = None
+            path_selection = 'longest'
+
+            i = 0
+            while i < len(args):
+                arg = args[i]
+                if arg == '--path' and i + 1 < len(args):
+                    path_selection = args[i + 1]
+                    i += 2
+                elif arg == '-l':
+                    path_selection = 'longest'
+                    i += 1
+                elif arg == '-L':
+                    path_selection = 'latest'
+                    i += 1
+                elif arg.startswith('-'):
+                    return CommandResult(success=False, output="", error=f"show: Unknown option: {arg}")
+                else:
+                    if conv_id_arg is None:
+                        conv_id_arg = arg
+                    i += 1
+
+            if not conv_id_arg:
+                return CommandResult(success=False, output="", error="show: Conversation ID required")
+
+            # Resolve conversation ID (with prefix support via VFS)
+            conv_id_or_path = conv_id_arg
+
+            try:
+                if conv_id_or_path.startswith('/'):
+                    parsed = VFSPathParser.parse(conv_id_or_path)
+                    conv_id = parsed.conversation_id
+                else:
+                    # Try prefix resolution
+                    chats_path = VFSPathParser.parse('/chats')
+                    try:
+                        resolved = self.navigator.resolve_prefix(conv_id_or_path, chats_path)
+                        conv_id = resolved if resolved else conv_id_or_path
+                    except ValueError:
+                        conv_id = conv_id_or_path
+            except Exception as e:
+                return CommandResult(success=False, output="", error=f"show: Invalid path: {e}")
+
+        # Use shared helper
+        result = show_conversation_helper(
+            db=self.db,
+            conv_id=conv_id,
+            path_selection=path_selection,
+            plain_output=True,
+            show_metadata=True
+        )
+
+        if not result['success']:
+            return CommandResult(success=False, output="", error=f"show: {result['error']}")
+
+        # Use Rich formatting if we have a TUI with console
+        conversation = result['conversation']
+        nav = result['navigator']
+        path = result['path']
+        path_count = result['path_count']
+
+        if self.tui and hasattr(self.tui, 'console'):
+            from io import StringIO
+            from rich.console import Console
+
+            # Create a string buffer to capture Rich output
+            string_io = StringIO()
+            console = Console(file=string_io, force_terminal=True)
+
+            # Metadata header
+            console.print(f"\n[bold]Conversation:[/bold] {conversation.title or '(untitled)'}")
+            console.print(f"[dim]ID:[/dim] {conversation.id}")
+            if conversation.metadata:
+                if conversation.metadata.source:
+                    console.print(f"[dim]Source:[/dim] {conversation.metadata.source}")
+                if conversation.metadata.model:
+                    console.print(f"[dim]Model:[/dim] {conversation.metadata.model}")
+                if conversation.metadata.created_at:
+                    console.print(f"[dim]Created:[/dim] {conversation.metadata.created_at}")
+                if conversation.metadata.tags:
+                    console.print(f"[dim]Tags:[/dim] {', '.join(conversation.metadata.tags)}")
+            console.print(f"[dim]Total messages:[/dim] {len(conversation.message_map)}")
+            console.print(f"[dim]Paths:[/dim] {path_count}")
+            console.print()
+
+            if not path:
+                console.print("[italic](no messages)[/italic]")
+            else:
+                console.print(f"[bold]Messages (path: {path_selection}, {len(path)} messages):[/bold]")
+                console.print("=" * 80)
+
+                for msg in path:
+                    role_label = msg.role.value.title() if msg.role else "User"
+                    role_color = {"User": "cyan", "Assistant": "magenta", "System": "yellow", "Tool": "green"}.get(role_label, "white")
+                    content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                    console.print(f"\n[bold {role_color}][{role_label}][/bold {role_color}]")
+                    console.print(content_text)
+
+                console.print("=" * 80)
+
+            if path_count > 1:
+                console.print(f"\n[italic]Note: This conversation has {path_count} paths[/italic]")
+                console.print("[dim]Use 'show <id> --path N' or '-L' for latest path[/dim]")
+
+            return CommandResult(success=True, output=string_io.getvalue())
+        else:
+            # Plain text output
+            return CommandResult(success=True, output=result['output'])
+
 
 def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
     """
@@ -250,4 +394,5 @@ def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, t
     return {
         'tree': viz.cmd_tree,
         'paths': viz.cmd_paths,
+        'show': viz.cmd_show,
     }
