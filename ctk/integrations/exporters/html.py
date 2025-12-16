@@ -27,14 +27,14 @@ class HTMLExporter(ExporterPlugin):
         Export to file(s)
 
         If embed=True, creates a single HTML file with data embedded.
-        If embed=False (default), creates index.html + conversations.jsonl + media/
+        If embed=False, creates index.html + conversations.jsonl + media/
         """
-        embed = kwargs.pop('embed', False)  # Remove from kwargs to avoid duplicate
+        embed = kwargs.pop('embed', True)  # Default to embedded for better UX
         db_dir = kwargs.pop('db_dir', None)  # Database directory for media files
 
         if embed:
-            # Single file export with embedded data
-            html_content = self.export_conversations(conversations, embed=True, **kwargs)
+            # Single file export with embedded data (images encoded as base64)
+            html_content = self.export_conversations(conversations, embed=True, db_dir=db_dir, **kwargs)
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
         else:
@@ -83,8 +83,11 @@ class HTMLExporter(ExporterPlugin):
         """Export conversations to HTML5"""
         return self.export_conversations(conversations, **kwargs)
 
-    def _prepare_data(self, conversations: List[ConversationTree]):
+    def _prepare_data(self, conversations: List[ConversationTree], db_dir: str = None, embed: bool = True):
         """Prepare conversation data and stats"""
+        import base64
+        from pathlib import Path
+
         conv_data = []
         stats = {
             'total_conversations': len(conversations),
@@ -114,11 +117,37 @@ class HTMLExporter(ExporterPlugin):
                         img_data = {
                             'url': img.url,
                             'caption': img.caption,
-                            'mime_type': img.mime_type
+                            'mime_type': img.mime_type or 'image/png'
                         }
-                        # Include base64 data if embedded
+
+                        # Include base64 data - either from img.data or by reading file
                         if img.data:
                             img_data['data'] = img.data
+                        elif embed and db_dir:
+                            # Try to read image from disk and encode as base64
+                            image_path = None
+                            if img.url and img.url.startswith('media/'):
+                                # Relative URL like 'media/xxx.png'
+                                image_path = Path(db_dir) / img.url
+                            elif img.path:
+                                # Explicit path
+                                image_path = Path(img.path)
+                                if not image_path.is_absolute():
+                                    image_path = Path(db_dir) / img.path
+
+                            if image_path and image_path.exists():
+                                try:
+                                    with open(image_path, 'rb') as f:
+                                        img_data['data'] = base64.b64encode(f.read()).decode('utf-8')
+                                    # Detect mime type from extension if not set
+                                    if not img_data['mime_type'] or img_data['mime_type'] == 'image/png':
+                                        ext = image_path.suffix.lower()
+                                        mime_map = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                                                   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
+                                        img_data['mime_type'] = mime_map.get(ext, 'image/png')
+                                except Exception:
+                                    pass  # Skip if can't read file
+
                         images.append(img_data)
 
                 msg_dict = {
@@ -171,6 +200,7 @@ class HTMLExporter(ExporterPlugin):
         include_metadata: bool = True,
         theme: str = 'auto',
         embed: bool = True,
+        db_dir: str = None,
         **kwargs
     ) -> str:
         """
@@ -181,8 +211,9 @@ class HTMLExporter(ExporterPlugin):
             include_metadata: Include conversation metadata
             theme: Theme (light, dark, auto)
             embed: Whether to embed data in HTML (True) or load from external JSONL (False)
+            db_dir: Database directory for resolving media file paths
         """
-        conv_data, stats = self._prepare_data(conversations)
+        conv_data, stats = self._prepare_data(conversations, db_dir=db_dir, embed=embed)
         return self._generate_html(conv_data, stats, theme, embed)
 
     def _generate_html(self, conversations: List[Dict], stats: Dict, theme: str, embed: bool = True) -> str:

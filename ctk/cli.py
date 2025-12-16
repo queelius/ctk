@@ -2086,8 +2086,8 @@ def main():
                                help='Grouping strategy for HTML export (default: date)')
     export_parser.add_argument('--show-tree', action='store_true', default=True,
                                help='Show conversation tree structure in HTML export')
-    export_parser.add_argument('--embed', action='store_true',
-                               help='Embed data in HTML file. Default: separate index.html + conversations.jsonl')
+    export_parser.add_argument('--no-embed', action='store_false', dest='embed', default=True,
+                               help='Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file')
 
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
