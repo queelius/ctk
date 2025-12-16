@@ -705,9 +705,18 @@ Available operations:
                 return 0
 
             else:
-                # No tool calls - this shouldn't happen with ask command
-                print("Error: No tool was called. Please rephrase your question.")
-                return 1
+                # No tool call - show LLM's text response if available
+                if response.content:
+                    print(response.content)
+                    return 0
+                else:
+                    # Provide helpful guidance
+                    print("I couldn't determine what to search for. Try asking something like:")
+                    print("  - 'list all conversations'")
+                    print("  - 'find conversations about python'")
+                    print("  - 'show starred conversations'")
+                    print("  - 'get statistics'")
+                    return 1
 
         except Exception as e:
             print(f"Error: {e}")

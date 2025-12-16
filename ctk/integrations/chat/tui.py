@@ -2000,7 +2000,16 @@ Available operations:
                     if tool_result:
                         print(tool_result)
             else:
-                print("Error: No tool was called. Please rephrase your question.")
+                # No tool call - show LLM's text response if available
+                if response.content:
+                    print(response.content)
+                else:
+                    # Provide helpful guidance
+                    print("I couldn't determine what to search for. Try asking something like:")
+                    print("  - 'list all conversations'")
+                    print("  - 'find conversations about python'")
+                    print("  - 'show starred conversations'")
+                    print("  - 'get statistics'")
 
         except Exception as e:
             print(f"Error executing query: {e}")
