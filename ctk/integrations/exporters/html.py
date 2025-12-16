@@ -3305,6 +3305,8 @@ function renderMediaGallery() {
                     msg.images.forEach(image => {
                         mediaItems.push({
                             url: image.url,
+                            data: image.data,
+                            mime_type: image.mime_type || 'image/png',
                             caption: image.caption || '',
                             conversationId: conv.id,
                             conversationTitle: conv.title,
@@ -3357,8 +3359,13 @@ function renderMediaGallery() {
             ? `<div class="media-item-caption">${escapeHtml(item.caption)}</div>`
             : '';
 
+        // Use base64 data if available, otherwise fall back to URL
+        const imgSrc = item.data
+            ? `data:${item.mime_type};base64,${item.data}`
+            : item.url;
+
         div.innerHTML = `
-            <img src="${item.url}" alt="${escapeHtml(item.caption)}" class="media-item-image">
+            <img src="${imgSrc}" alt="${escapeHtml(item.caption)}" class="media-item-image">
             <div class="media-item-info">
                 ${captionHtml}
                 <div class="media-item-meta">
@@ -3372,7 +3379,7 @@ function renderMediaGallery() {
 
         // Click to open in lightbox
         div.querySelector('img').addEventListener('click', () => {
-            openLightbox(item.url, item.caption);
+            openLightbox(imgSrc, item.caption);
         });
 
         // Click conversation link to navigate
