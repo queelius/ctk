@@ -581,15 +581,14 @@ Tags:"""
         return 0
 
 
-def cmd_ask(args):
-    """Natural language query using LLM to execute operations"""
+def cmd_say(args):
+    """One-shot message to LLM with full tool support (same as TUI 'say' command)"""
     from ctk.integrations.llm.ollama import OllamaProvider
-    from ctk.integrations.llm.base import Message, MessageRole
+    from ctk.integrations.chat.tui import ChatTUI
     from ctk.core.config import get_config
-    from ctk.core.helpers import generate_cli_prompt_from_argparse, get_ask_tools
 
     # Join query words
-    query = ' '.join(args.query)
+    message = ' '.join(args.message)
 
     # Load config
     cfg = get_config()
@@ -604,126 +603,38 @@ def cmd_ask(args):
     if args.base_url:
         config['base_url'] = args.base_url
 
+    # Create provider
     try:
         provider = OllamaProvider(config)
     except Exception as e:
         print(f"Error: Failed to initialize provider: {e}")
         return 1
 
-    # Generate system prompt from argparse
-    import sys
-    # Get the parser from main - we need to pass it through or reconstruct
-    # For now, generate a simplified prompt
-    system_prompt = """You are a tool-calling assistant for CTK (Conversation Toolkit).
+    # Test connection
+    if not provider.is_available():
+        base_url = config.get('base_url', 'http://localhost:11434')
+        print(f"Error: Cannot connect to {args.provider} at {base_url}")
+        return 1
 
-Your job is to:
-1. Call the appropriate tool(s) based on the user's question
-2. Return ONLY the exact tool output, verbatim, with no additional text
-
-DO NOT add any introduction, explanation, or reformatting. Just output the tool results exactly as received.
-
-CRITICAL RULES:
-1. BOOLEAN FILTERS: Only include starred/pinned/archived parameters if the user EXPLICITLY mentions them.
-2. QUERY PARAMETER:
-   - If user mentions a topic, keyword, or "about X" or "related to X" → include query parameter
-   - If user wants to list/show conversations by status only (starred/pinned/archived) → omit query parameter
-   - If user wants all conversations → use empty {} (no query, no filters)
-
-EXAMPLES:
-User: "show me starred conversations"
-Tool call: search_conversations({"starred": true})
-
-User: "show me pinned and starred conversations"
-Tool call: search_conversations({"starred": true, "pinned": true})
-
-User: "show me pinned and starred conversations, max 5"
-Tool call: search_conversations({"starred": true, "pinned": true, "limit": 5})
-
-User: "list all conversations"
-Tool call: search_conversations({})
-
-User: "show archived conversations"
-Tool call: search_conversations({"archived": true})
-
-User: "find conversations about python"
-Tool call: search_conversations({"query": "python"})
-
-User: "search for AI in starred conversations"
-Tool call: search_conversations({"query": "AI", "starred": true})
-
-User: "show me stuff related to jumping rope"
-Tool call: search_conversations({"query": "jumping rope"})
-
-User: "conversations about machine learning"
-Tool call: search_conversations({"query": "machine learning"})
-
-Available operations:
-- search_conversations: Search/list conversations (with optional text query and filters)
-- get_conversation: Get details of a specific conversation
-- get_statistics: Get database statistics"""
-
-    # Get tools
-    tools = get_ask_tools()
-    formatted_tools = provider.format_tools_for_api(tools)
-
-    # Build messages
-    messages = [
-        Message(role=MessageRole.SYSTEM, content=system_prompt),
-        Message(role=MessageRole.USER, content=query)
-    ]
-
-    # Open database
-    db = ConversationDB(args.db)
-
-    # Tool execution loop
-    max_iterations = 5
-    for iteration in range(max_iterations):
+    # Create database connection if specified
+    db = None
+    if args.db:
         try:
-            # Call LLM with tools
-            response = provider.chat(messages, temperature=0.1, tools=formatted_tools)
-
-            # Check if LLM wants to use tools
-            if response.tool_calls:
-                # Execute each tool call and output results directly
-                for tool_call in response.tool_calls:
-                    tool_name = tool_call['function']['name']
-                    # Arguments might already be a dict
-                    tool_args = tool_call['function']['arguments']
-                    if isinstance(tool_args, str):
-                        tool_args = json.loads(tool_args)
-
-                    # Execute tool and output result directly
-                    use_rich = args.format != 'json'
-                    tool_result = execute_ask_tool(db, tool_name, tool_args, debug=args.debug, use_rich=use_rich)
-
-                    if args.format == 'json':
-                        print(json.dumps({'tool': tool_name, 'result': tool_result}, indent=2))
-                    elif tool_result:  # Only print if there's content (Rich already printed)
-                        print(tool_result)
-
-                # Done - don't continue the loop
-                return 0
-
-            else:
-                # No tool call - show LLM's text response if available
-                if response.content:
-                    print(response.content)
-                    return 0
-                else:
-                    # Provide helpful guidance
-                    print("I couldn't determine what to search for. Try asking something like:")
-                    print("  - 'list all conversations'")
-                    print("  - 'find conversations about python'")
-                    print("  - 'show starred conversations'")
-                    print("  - 'get statistics'")
-                    return 1
-
+            db = ConversationDB(args.db)
         except Exception as e:
-            print(f"Error: {e}")
-            return 1
+            print(f"Warning: Could not connect to database: {e}")
 
-    print("Error: Maximum iterations reached")
-    return 1
+    # Create TUI instance (but don't run interactive loop)
+    disable_tools = getattr(args, 'no_tools', False)
+    tui = ChatTUI(provider, db=db, render_markdown=True, disable_tools=disable_tools)
+
+    # One-shot: send message and get response
+    try:
+        tui.chat(message)
+        return 0
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
 
 
 def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug: bool = False, use_rich: bool = True, shell_executor=None) -> str:
@@ -1747,17 +1658,15 @@ def main():
     chat_parser.add_argument('--no-markdown', action='store_true', help='Disable markdown rendering')
     chat_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling (for models that don\'t support it)')
 
-    # Ask command - natural language queries
-    ask_parser = subparsers.add_parser('ask', help='Natural language query using LLM')
-    ask_parser.add_argument('query', nargs='+', help='Natural language query')
-    ask_parser.add_argument('--db', '-d', required=True, help='Database path')
-    ask_parser.add_argument('--model', '-m', default='llama3.2', help='Model to use (default: llama3.2)')
-    ask_parser.add_argument('--provider', '-p', default='ollama', choices=['ollama'],
+    # Say command - one-shot LLM message with full tool support
+    say_parser = subparsers.add_parser('say', help='One-shot message to LLM (same as TUI say)')
+    say_parser.add_argument('message', nargs='+', help='Message to send')
+    say_parser.add_argument('--db', '-d', help='Database path (enables CTK tools)')
+    say_parser.add_argument('--model', '-m', default='llama3.2', help='Model to use (default: llama3.2)')
+    say_parser.add_argument('--provider', '-p', default='ollama', choices=['ollama'],
                             help='LLM provider (default: ollama)')
-    ask_parser.add_argument('--base-url', help='Base URL for provider')
-    ask_parser.add_argument('--format', choices=['text', 'json'], default='text',
-                            help='Output format')
-    ask_parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    say_parser.add_argument('--base-url', help='Base URL for provider')
+    say_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling')
 
     # Show command
     show_parser = subparsers.add_parser('show', help='Show a specific conversation')
@@ -1837,7 +1746,7 @@ def main():
         'plugins': cmd_plugins,
         'tags': cmd_tags,
         'auto-tag': cmd_auto_tag,
-        'ask': cmd_ask,
+        'say': cmd_say,
         'models': cmd_models,
         'sources': cmd_sources,
         'chat': cmd_chat,
