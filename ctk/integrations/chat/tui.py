@@ -3653,8 +3653,7 @@ Available operations:
 
                                 # Create shell executor for execute_shell_command
                                 def shell_executor(cmd):
-                                    from ctk.core.shell_parser import ShellParser
-                                    pipeline = ShellParser.parse(cmd)
+                                    pipeline = self.shell_parser.parse(cmd)
                                     return self.command_dispatcher.execute(pipeline, print_output=False)
 
                                 result = execute_ask_tool(
