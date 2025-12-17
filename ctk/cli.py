@@ -254,7 +254,14 @@ def cmd_export(args):
                         required_tags = set(args.filter_tags.split(','))
                         if not required_tags.issubset(set(conv.metadata.tags)):
                             continue
-                    
+                    # Organization filters
+                    if hasattr(args, 'starred') and args.starred:
+                        if not conv.metadata.starred_at:
+                            continue
+                    if hasattr(args, 'pinned') and args.pinned:
+                        if not conv.metadata.pinned_at:
+                            continue
+
                     conversations.append(conv)
         
         if not conversations:
@@ -288,6 +295,12 @@ def cmd_export(args):
             export_kwargs['embed'] = args.embed
         if hasattr(args, 'media_dir') and args.media_dir:
             export_kwargs['media_dir'] = args.media_dir
+
+        # Add Hugo-specific options if present
+        if hasattr(args, 'draft'):
+            export_kwargs['include_draft'] = args.draft
+        if hasattr(args, 'date_prefix'):
+            export_kwargs['date_prefix'] = args.date_prefix
 
         # Pass database directory for media files
         if hasattr(db, 'db_dir') and db.db_dir:
@@ -2069,7 +2082,7 @@ def main():
     export_parser.add_argument('output', help='Output file path')
     export_parser.add_argument('--db', '-d', required=True, help='Database path')
     export_parser.add_argument('--format', '-f', default='jsonl',
-                               help='Export format: json, markdown, jsonl, html (default: jsonl)')
+                               help='Export format: json, markdown, jsonl, html, hugo (default: jsonl)')
     export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
     export_parser.add_argument('--limit', type=int, default=0, help='Maximum conversations (0 = all, default: all)')
     export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
@@ -2092,6 +2105,16 @@ def main():
                                help='Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file')
     export_parser.add_argument('--media-dir',
                                help='Output media files to directory instead of embedding. Path relative to output file (default: embed in HTML)')
+    # Organization filters
+    export_parser.add_argument('--starred', action='store_true',
+                               help='Export only starred conversations')
+    export_parser.add_argument('--pinned', action='store_true',
+                               help='Export only pinned conversations')
+    # Hugo-specific options
+    export_parser.add_argument('--draft', action='store_true',
+                               help='Hugo: mark exported conversations as draft')
+    export_parser.add_argument('--no-date-prefix', action='store_false', dest='date_prefix', default=True,
+                               help='Hugo: do not include date prefix in directory names')
 
     # List command
     list_parser = subparsers.add_parser('list', help='List conversations')
