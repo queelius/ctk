@@ -1,0 +1,64 @@
+site_name: CTK - Conversation Toolkit
+site_description: A powerful toolkit for managing AI conversations from multiple providers
+site_url: https://yourusername.github.io/ctk/
+repo_url: https://github.com/yourusername/ctk
+repo_name: ctk
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - User Guide:
+    - Importing Conversations: guide/importing.md
+    - Searching & Filtering: guide/searching.md
+    - Exporting: guide/exporting.md
+    - Shell Mode: guide/shell-mode.md
+    - Chat TUI: guide/chat-tui.md
+  - Reference:
+    - CLI Commands: reference/cli.md
+    - Shell Commands: reference/shell-commands.md
+    - Python API: reference/api.md
+  - Advanced:
+    - Architecture: advanced/architecture.md
+    - Creating Plugins: advanced/plugins.md
+    - Resilience & Archiving: advanced/resilience.md
