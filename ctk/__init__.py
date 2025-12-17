@@ -2,7 +2,7 @@
 Conversation Toolkit - A robust system for managing tree-based conversations
 """
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 __author__ = "CTK Contributors"
 
 from .core.models import (

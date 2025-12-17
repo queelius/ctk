@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="conversation-tk",
-    version="2.3.0",
+    version="2.4.0",
     author="CTK Contributors",
     description="A robust toolkit for managing tree-based conversations from multiple sources",
     long_description=long_description,
