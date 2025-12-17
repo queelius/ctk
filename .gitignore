@@ -91,3 +91,16 @@ temp/
 conversations.db
 my_chats.db
 sample.db
+
+# Test database directories
+test.db/
+:memory:/
+
+# Out directories for exports
+/out/
+
+# Build artifacts (additional)
+*.egg-info/
+
+# Benchmark data
+.benchmarks/

@@ -357,6 +357,42 @@ ctk export clean_export.jsonl --db chats.db --format jsonl --sanitize
 # - Credit card numbers (if any)
 ```
 
+### Export to Hugo (Static Site)
+```bash
+# Export all conversations as Hugo page bundles
+ctk export content/conversations/ --format hugo --db chats.db
+
+# Export only starred conversations (curated for blog)
+ctk export content/conversations/ --format hugo --db chats.db --starred
+
+# Export specific conversations
+ctk export content/conversations/ --format hugo --db chats.db --ids conv1 conv2
+
+# Mark as drafts for review
+ctk export content/conversations/ --format hugo --db chats.db --draft
+```
+
+Each conversation becomes a Hugo page bundle:
+```
+content/conversations/
+  2024-01-15-debugging-rust-abc123/
+    index.md        # Frontmatter + markdown content
+    images/         # Copied media files
+```
+
+### Export to HTML5 (Interactive App)
+```bash
+# Single self-contained HTML file (default, recommended)
+ctk export archive.html --format html --db chats.db
+
+# Separate media files for smaller HTML
+ctk export archive.html --format html --db chats.db --media-dir media
+# Creates: archive.html + media/ folder
+
+# Multi-file export (requires web server)
+ctk export archive/ --format html --db chats.db --no-embed
+```
+
 ## 🌳 Understanding the Tree Structure
 
 CTK stores all conversations as trees, which provides several benefits:
@@ -479,7 +515,8 @@ sanitizer.add_rule(SanitizationRule(
 - **jsonl** - JSONL for fine-tuning (multiple formats)
 - **json** - Native CTK format, OpenAI, Anthropic, or generic JSON
 - **markdown** - Human-readable with tree visualization
-- **html** - Interactive HTML with browsing and search
+- **html** - Interactive HTML5 app with browsing, search, and media gallery
+- **hugo** - Hugo page bundles for static site generation
 
 ### List Available Plugins
 ```bash
@@ -549,10 +586,12 @@ CTK uses SQLite with the following structure:
 - [x] Rich console output with tables
 - [x] Natural language queries (ask command)
 - [x] Star/pin/archive organization
-- [x] Multiple export formats (JSONL, JSON, Markdown, HTML5)
+- [x] Multiple export formats (JSONL, JSON, Markdown, HTML5, Hugo)
 - [x] MCP tool integration
 - [x] Auto-tagging with LLM
 - [x] Database merge/diff operations
+- [x] Shell-first mode with VFS navigation
+- [x] Hugo static site export
 
 ### In Progress 🔨
 - [ ] Embeddings and similarity search (complex-network-rag integration)
@@ -564,8 +603,6 @@ CTK uses SQLite with the following structure:
 - [ ] Conversation deduplication utilities
 - [ ] LangChain/LlamaIndex integration
 - [ ] Advanced analytics dashboard
-- [ ] Multi-user collaboration features
-- [ ] Cloud sync (optional, privacy-preserving)
 
 ## 🧪 Development
 
