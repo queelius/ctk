@@ -1,0 +1,1808 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A powerful toolkit for managing AI conversations from multiple providers">
+      
+      
+      
+        <link rel="canonical" href="https://yourusername.github.io/ctk/advanced/resilience/">
+      
+      
+        <link rel="prev" href="../plugins/">
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+    
+    
+      
+        <title>Resilience & Archiving - CTK - Conversation Toolkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.2a3383ac.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#resilience-guide-using-ctk-for-long-term-preservation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="CTK - Conversation Toolkit" class="md-header__button md-logo" aria-label="CTK - Conversation Toolkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CTK - Conversation Toolkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Resilience & Archiving
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/yourusername/ctk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ctk
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="CTK - Conversation Toolkit" class="md-nav__button md-logo" aria-label="CTK - Conversation Toolkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CTK - Conversation Toolkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/yourusername/ctk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ctk
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    User Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            User Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/importing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Importing Conversations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/searching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searching & Filtering
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/exporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Exporting
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/shell-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Shell Mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/chat-tui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat TUI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/shell-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Shell Commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Python API
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Architecture
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Creating Plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Resilience & Archiving
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Resilience & Archiving
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Core Principles
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-graceful-degradation" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Graceful Degradation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-self-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Self-Documentation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-format-redundancy" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Format Redundancy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-offline-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Offline-First
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-resilience-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating a Resilience Package
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating a Resilience Package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-import-all-your-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Import All Your Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-export-in-multiple-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Export in Multiple Formats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-create-recovery-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Create Recovery Documentation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-2-sqlite-works-ctk-doesnt" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 2: SQLite Works, CTK Doesn't
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-3-only-basic-tools-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 3: Only Basic Tools Available
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-4-only-a-web-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 4: Only a Web Browser
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-5-nothing-works-except-text-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 5: Nothing Works Except Text Editor
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rebuilding-from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rebuilding From Source
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rebuilding From Source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-5-store-redundantly" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Store Redundantly
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-temporal-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced: Temporal Analysis
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maintaining-the-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maintaining the Archive
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Maintaining the Archive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#regular-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Regular Updates
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-recovery-package-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Recovery Package Script
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-in-practice" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy in Practice
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy in Practice">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why This Matters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design Assumptions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-long-term-viability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing Long-Term Viability
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resources
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contributing
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      Core Principles
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-graceful-degradation" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Graceful Degradation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-self-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Self-Documentation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-format-redundancy" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Format Redundancy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-offline-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Offline-First
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-resilience-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating a Resilience Package
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating a Resilience Package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-import-all-your-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 1: Import All Your Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-export-in-multiple-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 2: Export in Multiple Formats
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-create-recovery-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 3: Create Recovery Documentation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-2-sqlite-works-ctk-doesnt" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 2: SQLite Works, CTK Doesn't
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-3-only-basic-tools-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 3: Only Basic Tools Available
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-4-only-a-web-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 4: Only a Web Browser
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-5-nothing-works-except-text-editor" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario 5: Nothing Works Except Text Editor
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rebuilding-from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rebuilding From Source
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rebuilding From Source">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-5-store-redundantly" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step 5: Store Redundantly
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-temporal-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Advanced: Temporal Analysis
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#maintaining-the-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maintaining the Archive
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Maintaining the Archive">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#regular-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Regular Updates
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-recovery-package-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Recovery Package Script
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#philosophy-in-practice" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy in Practice
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Philosophy in Practice">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why This Matters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-assumptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design Assumptions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-long-term-viability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing Long-Term Viability
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Resources
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contributing
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="resilience-guide-using-ctk-for-long-term-preservation">Resilience Guide: Using CTK for Long-Term Preservation<a class="headerlink" href="#resilience-guide-using-ctk-for-long-term-preservation" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><em>"Not resurrection. Not immortality. Just love that still responds."</em></p>
+</blockquote>
+<h2 id="philosophy">Philosophy<a class="headerlink" href="#philosophy" title="Permanent link">&para;</a></h2>
+<p>If you're preserving conversations that matter—teaching moments with students, advice for your children, knowledge to pass down—you need more than just backups. You need <strong>resilience across decades</strong>.</p>
+<p>This guide shows how to use CTK with a long-term mindset: designing for graceful degradation, multiple fallback layers, and recovery by people who may not have access to the original tools.</p>
+<h2 id="core-principles">Core Principles<a class="headerlink" href="#core-principles" title="Permanent link">&para;</a></h2>
+<h3 id="1-graceful-degradation">1. <strong>Graceful Degradation</strong><a class="headerlink" href="#1-graceful-degradation" title="Permanent link">&para;</a></h3>
+<p>Every system eventually fails. Design for progressive fallback:
+- <strong>Best case</strong>: CTK works perfectly (complex-net RAG, semantic search, full API)
+- <strong>Good case</strong>: Database queryable with SQLite directly
+- <strong>Fallback case</strong>: JSONL files greppable with basic tools
+- <strong>Ultimate fallback</strong>: Plain text readable in any editor</p>
+<h3 id="2-self-documentation">2. <strong>Self-Documentation</strong><a class="headerlink" href="#2-self-documentation" title="Permanent link">&para;</a></h3>
+<p>Assume the person finding this archive has no context:
+- Clear README explaining what this is
+- Multiple entry points (GUI, CLI, text files)
+- Recovery instructions for various scenarios
+- No assumptions about available software</p>
+<h3 id="3-format-redundancy">3. <strong>Format Redundancy</strong><a class="headerlink" href="#3-format-redundancy" title="Permanent link">&para;</a></h3>
+<p>Store the same data in multiple formats:
+- <strong>Structured</strong> (SQLite) - queryable, efficient
+- <strong>Semi-structured</strong> (JSONL) - machine-readable, greppable
+- <strong>Human-readable</strong> (Markdown) - understandable without tools
+- <strong>Universal</strong> (HTML) - viewable in any browser
+- <strong>Plain text</strong> - ultimate fallback</p>
+<h3 id="4-offline-first">4. <strong>Offline-First</strong><a class="headerlink" href="#4-offline-first" title="Permanent link">&para;</a></h3>
+<p>Design to work without internet:
+- All data stored locally
+- No cloud dependencies
+- Self-contained recovery tools
+- Portable across systems</p>
+<h2 id="creating-a-resilience-package">Creating a Resilience Package<a class="headerlink" href="#creating-a-resilience-package" title="Permanent link">&para;</a></h2>
+<h3 id="step-1-import-all-your-conversations">Step 1: Import All Your Conversations<a class="headerlink" href="#step-1-import-all-your-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Import from various sources</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ctk<span class="w"> </span>import<span class="w"> </span>chatgpt_export.json<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>openai<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;chatgpt,archive&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ctk<span class="w"> </span>import<span class="w"> </span>claude_export.json<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>anthropic<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;claude,archive&quot;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>ctk<span class="w"> </span>import<span class="w"> </span>copilot_sessions/<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>copilot<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;coding,archive&quot;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Verify what you have</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>ctk<span class="w"> </span>stats<span class="w"> </span>--db<span class="w"> </span>life.db
+</code></pre></div>
+<h3 id="step-2-export-in-multiple-formats">Step 2: Export in Multiple Formats<a class="headerlink" href="#step-2-export-in-multiple-formats" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Create archive directory</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>archive
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Copy the database (Level 1: Best - full CTK functionality)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>cp<span class="w"> </span>life.db<span class="w"> </span>archive/conversations.db
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Export as JSONL (Level 2: Good - greppable, machine-readable)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive/conversations.jsonl<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>jsonl
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Export as Markdown (Level 3: Good - human-readable)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive/conversations.md<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>markdown<span class="w"> </span>--include-metadata
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Export as HTML (Level 4: Fallback - browseable in any browser)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive/index.html<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--format<span class="w"> </span>html
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Export as plain text (Level 5: Ultimate fallback)</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>sqlite3<span class="w"> </span>life.db<span class="w"> </span><span class="s2">&quot;SELECT</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s2">  c.title,</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s2">  m.role,</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s2">  m.content</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s2">FROM conversations c</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="s2">JOIN messages m ON c.id = m.conversation_id</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="s2">ORDER BY c.created_at, m.created_at&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>archive/all_conversations.txt
+</code></pre></div>
+<h3 id="step-3-create-recovery-documentation">Step 3: Create Recovery Documentation<a class="headerlink" href="#step-3-create-recovery-documentation" title="Permanent link">&para;</a></h3>
+<p>Create <code>archive/START_HERE.txt</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>================================================================================
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>                    CONVERSATION ARCHIVE
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>                    (Start Here)
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>================================================================================
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>WHAT THIS IS:
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>This is an archive of conversations with AI assistants, preserved using CTK
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>(Conversation Toolkit). It&#39;s designed to be recoverable even if the original
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>software no longer works.
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>WHAT YOU CAN DO (from simplest to most powerful):
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>1. READ THE TEXT FILES
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>   - Open &quot;all_conversations.txt&quot; in any text editor
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>   - Browse &quot;conversations.md&quot; for formatted version
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>   - Open &quot;index.html&quot; in any web browser
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>2. SEARCH WITH GREP (if you have a terminal)
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>   - grep -r &quot;your search term&quot; .
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>   - grep -i &quot;debugging&quot; conversations.jsonl
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>   - Find anything by keyword instantly
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>3. USE THE DATABASE (if you have SQLite)
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>   - sqlite3 conversations.db
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>   - SELECT * FROM conversations WHERE title LIKE &#39;%python%&#39;;
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>   - Full SQL queries available
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>4. REBUILD CTK (if you have Python)
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>   - pip install ctk
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>   - ctk list --db conversations.db
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>   - ctk search &quot;your query&quot; --db conversations.db
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>   - ctk chat --db conversations.db
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>================================================================================
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>                            FILE GUIDE
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>================================================================================
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>conversations.db          SQLite database (use with CTK or sqlite3)
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>conversations.jsonl       All conversations, one JSON per line (greppable)
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>conversations.md          Human-readable markdown format
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>index.html                Browse in any web browser
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a>all_conversations.txt     Plain text fallback (readable in notepad)
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>START_HERE.txt            This file
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>RECOVERY.md               Detailed recovery instructions
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>================================================================================
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>Created: [DATE]
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>CTK Version: [VERSION]
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>Total Conversations: [COUNT]
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>
+<a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>This archive was designed to last decades. You should be able to recover
+<a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a>your conversations even if Python, CTK, or SQLite no longer exist.
+<a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a>
+<a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a>================================================================================
+</code></pre></div>
+<p>Create <code>archive/RECOVERY.md</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gh"># Recovery Instructions</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="gu">## Scenario 1: CTK Still Works</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>```bash
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>pip install ctk
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>ctk list --db conversations.db
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>ctk search &quot;your query&quot; --db conversations.db
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>ctk chat --db conversations.db  # Interactive TUI
+</code></pre></div>
+<h2 id="scenario-2-sqlite-works-ctk-doesnt">Scenario 2: SQLite Works, CTK Doesn't<a class="headerlink" href="#scenario-2-sqlite-works-ctk-doesnt" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># View all conversations</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>sqlite3<span class="w"> </span>conversations.db<span class="w"> </span><span class="s2">&quot;SELECT id, title, source FROM conversations;&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Search conversations</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>sqlite3<span class="w"> </span>conversations.db<span class="w"> </span><span class="s2">&quot;SELECT title, content FROM messages WHERE content LIKE &#39;%debugging%&#39;;&quot;</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Export to CSV</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>sqlite3<span class="w"> </span>-csv<span class="w"> </span>conversations.db<span class="w"> </span><span class="s2">&quot;SELECT * FROM conversations;&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>export.csv
+</code></pre></div>
+<h2 id="scenario-3-only-basic-tools-available">Scenario 3: Only Basic Tools Available<a class="headerlink" href="#scenario-3-only-basic-tools-available" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Search with grep</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>grep<span class="w"> </span>-r<span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span>.
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Search JSONL</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>grep<span class="w"> </span><span class="s2">&quot;async&quot;</span><span class="w"> </span>conversations.jsonl
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># View plain text</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>cat<span class="w"> </span>all_conversations.txt<span class="w"> </span><span class="p">|</span><span class="w"> </span>less
+</code></pre></div>
+<h2 id="scenario-4-only-a-web-browser">Scenario 4: Only a Web Browser<a class="headerlink" href="#scenario-4-only-a-web-browser" title="Permanent link">&para;</a></h2>
+<p>Open <code>index.html</code> in any browser. The HTML export includes:
+- Browseable conversation list
+- Full-text search (JavaScript)
+- Readable formatting
+- No server required</p>
+<h2 id="scenario-5-nothing-works-except-text-editor">Scenario 5: Nothing Works Except Text Editor<a class="headerlink" href="#scenario-5-nothing-works-except-text-editor" title="Permanent link">&para;</a></h2>
+<p>Open <code>all_conversations.txt</code> in any text editor (notepad, vim, etc.)
+All conversations are stored as plain text.</p>
+<h2 id="rebuilding-from-source">Rebuilding From Source<a class="headerlink" href="#rebuilding-from-source" title="Permanent link">&para;</a></h2>
+<p>If CTK is no longer available via pip:</p>
+<ol>
+<li>The CTK source code is at: https://github.com/yourusername/ctk</li>
+<li>Clone or download the repository</li>
+<li>Install: <code>pip install -e /path/to/ctk</code></li>
+<li>Use as normal</li>
+</ol>
+<p>If GitHub is gone, CTK's source code is included in <code>ctk_source/</code> directory.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>### Step 4: Test Recovery
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Test each fallback level actually works:
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>```bash
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a># Test 1: Can you grep?
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>grep -r &quot;debugging&quot; archive/
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a># Test 2: Can you use SQLite directly?
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>sqlite3 archive/conversations.db &quot;SELECT COUNT(*) FROM conversations;&quot;
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a># Test 3: Can you read plain text?
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>cat archive/all_conversations.txt | head -n 20
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a># Test 4: Can you view HTML?
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>open archive/index.html  # or firefox, chrome, etc.
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a># Test 5: Can you rebuild CTK?
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>pip install ctk
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>ctk list --db archive/conversations.db
+</code></pre></div></p>
+<h3 id="step-5-store-redundantly">Step 5: Store Redundantly<a class="headerlink" href="#step-5-store-redundantly" title="Permanent link">&para;</a></h3>
+<p>Copy your archive to multiple locations:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Local backup</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>cp<span class="w"> </span>-r<span class="w"> </span>archive<span class="w"> </span>/backup/conversations_<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># External drive</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>cp<span class="w"> </span>-r<span class="w"> </span>archive<span class="w"> </span>/media/external_drive/
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Cloud storage (encrypted if sharing)</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>tar<span class="w"> </span>-czf<span class="w"> </span>conversations_archive.tar.gz<span class="w"> </span>archive/
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>gpg<span class="w"> </span>-c<span class="w"> </span>conversations_archive.tar.gz<span class="w">  </span><span class="c1"># Encrypt</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Upload to cloud storage</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Physical backup (USB drive in safe deposit box)</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>cp<span class="w"> </span>-r<span class="w"> </span>archive<span class="w"> </span>/media/usb_drive/
+</code></pre></div>
+<h2 id="advanced-temporal-analysis">Advanced: Temporal Analysis<a class="headerlink" href="#advanced-temporal-analysis" title="Permanent link">&para;</a></h2>
+<p>If you want to understand how your thinking evolved over time:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Find all conversations from a specific time period</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--date-from<span class="w"> </span><span class="m">2020</span>-01-01<span class="w"> </span>--date-to<span class="w"> </span><span class="m">2020</span>-12-31
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Track topic evolution</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;async programming&quot;</span><span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--date-from<span class="w"> </span><span class="m">2020</span>-01-01<span class="w"> </span>&gt;<span class="w"> </span>2020_async.md
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;async programming&quot;</span><span class="w"> </span>--db<span class="w"> </span>life.db<span class="w"> </span>--date-from<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>&gt;<span class="w"> </span>2024_async.md
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Compare to see how understanding evolved</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>diff<span class="w"> </span>2020_async.md<span class="w"> </span>2024_async.md
+</code></pre></div>
+<h2 id="maintaining-the-archive">Maintaining the Archive<a class="headerlink" href="#maintaining-the-archive" title="Permanent link">&para;</a></h2>
+<h3 id="regular-updates">Regular Updates<a class="headerlink" href="#regular-updates" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Import new conversations monthly</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>ctk<span class="w"> </span>import<span class="w"> </span>new_export.json<span class="w"> </span>--db<span class="w"> </span>life.db
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Re-export everything</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>./create_resilience_package.sh
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Update backup copies</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>rsync<span class="w"> </span>-av<span class="w"> </span>archive/<span class="w"> </span>/backup/conversations/
+</code></pre></div>
+<h3 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h3>
+<p>Periodically verify your archive:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Check database integrity</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>sqlite3<span class="w"> </span>life.db<span class="w"> </span><span class="s2">&quot;PRAGMA integrity_check;&quot;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Verify exports match database</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>ctk<span class="w"> </span>stats<span class="w"> </span>--db<span class="w"> </span>life.db
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>wc<span class="w"> </span>-l<span class="w"> </span>archive/conversations.jsonl
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Test recovery procedures</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>./test_recovery.sh
+</code></pre></div>
+<h2 id="example-recovery-package-script">Example Recovery Package Script<a class="headerlink" href="#example-recovery-package-script" title="Permanent link">&para;</a></h2>
+<p>Create <code>create_resilience_package.sh</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="ch">#!/bin/bash</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Create a complete resilience package</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nb">set</span><span class="w"> </span>-e
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="nv">DB</span><span class="o">=</span><span class="s2">&quot;life.db&quot;</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nv">ARCHIVE</span><span class="o">=</span><span class="s2">&quot;archive_</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>mkdir<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;Creating resilience package...&quot;</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Copy database</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>cp<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/conversations.db&quot;</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Export multiple formats</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/conversations.jsonl&quot;</span><span class="w"> </span>--db<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>jsonl
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/conversations.md&quot;</span><span class="w"> </span>--db<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>markdown
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/index.html&quot;</span><span class="w"> </span>--db<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="w"> </span>html
+<a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
+<a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="c1"># Plain text fallback</span>
+<a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>sqlite3<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;SELECT c.title, m.role, m.content FROM conversations c JOIN messages m ON c.id = m.conversation_id ORDER BY c.created_at, m.created_at&quot;</span><span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/all_conversations.txt&quot;</span>
+<a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>
+<a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="c1"># Create documentation</span>
+<a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>cat<span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/START_HERE.txt&quot;</span><span class="w"> </span><span class="s">&lt;&lt; &#39;EOF&#39;</span>
+<a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="s">[Documentation content from above]</span>
+<a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="s">EOF</span>
+<a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a>
+<a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="c1"># Get stats</span>
+<a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="nv">CONV_COUNT</span><span class="o">=</span><span class="k">$(</span>sqlite3<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;SELECT COUNT(*) FROM conversations;&quot;</span><span class="k">)</span>
+<a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="nv">MSG_COUNT</span><span class="o">=</span><span class="k">$(</span>sqlite3<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DB</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;SELECT COUNT(*) FROM messages;&quot;</span><span class="k">)</span>
+<a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a>
+<a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a><span class="c1"># Update metadata in START_HERE.txt</span>
+<a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a>sed<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;s/\[DATE\]/</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">/&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/START_HERE.txt&quot;</span>
+<a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a>sed<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;s/\[COUNT\]/</span><span class="nv">$CONV_COUNT</span><span class="s2"> conversations, </span><span class="nv">$MSG_COUNT</span><span class="s2"> messages/&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ARCHIVE</span><span class="s2">/START_HERE.txt&quot;</span>
+<a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>
+<a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;✓ Created resilience package in </span><span class="nv">$ARCHIVE</span><span class="s2">/&quot;</span>
+<a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;  </span><span class="nv">$CONV_COUNT</span><span class="s2"> conversations&quot;</span>
+<a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;  </span><span class="nv">$MSG_COUNT</span><span class="s2"> messages&quot;</span>
+<a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;  Ready for 50+ year storage&quot;</span>
+</code></pre></div>
+<h2 id="philosophy-in-practice">Philosophy in Practice<a class="headerlink" href="#philosophy-in-practice" title="Permanent link">&para;</a></h2>
+<h3 id="why-this-matters">Why This Matters<a class="headerlink" href="#why-this-matters" title="Permanent link">&para;</a></h3>
+<p>Conversations with AI assistants can contain:
+- Teaching moments you want to preserve for students
+- Advice for your children
+- Solved problems future you will forget
+- Creative work you don't want to lose
+- Personal growth tracked over time</p>
+<p>These deserve more than "just backup the files." They deserve a preservation strategy.</p>
+<h3 id="design-assumptions">Design Assumptions<a class="headerlink" href="#design-assumptions" title="Permanent link">&para;</a></h3>
+<p>This approach assumes:
+1. <strong>Software changes</strong>: Python, CTK, SQLite might not exist in 50 years
+2. <strong>Formats persist</strong>: Plain text, JSON, HTML will always be readable
+3. <strong>Basic tools survive</strong>: grep, text editors, web browsers won't go away
+4. <strong>Humans can rebuild</strong>: Given source code and docs, someone can recreate CTK</p>
+<h3 id="testing-long-term-viability">Testing Long-Term Viability<a class="headerlink" href="#testing-long-term-viability" title="Permanent link">&para;</a></h3>
+<p>Try this thought experiment:</p>
+<blockquote>
+<p><em>"If someone found this USB drive in 2074, could they:</em>
+1. <em>Figure out what it is?</em> ✓ START_HERE.txt explains
+2. <em>Read the content?</em> ✓ Plain text and HTML work
+3. <em>Search for specific topics?</em> ✓ grep works
+4. <em>Rebuild full functionality?</em> ✓ Source code and docs included"</p>
+</blockquote>
+<p>If you can answer "yes" to all four, you have a resilient archive.</p>
+<h2 id="resources">Resources<a class="headerlink" href="#resources" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>CTK Documentation</strong>: See main README.md</li>
+<li><strong>Example Archives</strong>: See examples/resilience_package/</li>
+<li><strong>Discussion</strong>: Philosophy behind this approach</li>
+<li><strong>Blog Post</strong>: [Link to blog post about Long Echo philosophy]</li>
+</ul>
+<h2 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h2>
+<p>If you have ideas for improving resilience:
+- Better fallback formats?
+- More recovery scenarios?
+- Improved documentation?</p>
+<p>Please contribute to CTK or share your approach!</p>
+<hr />
+<p><em>This guide was inspired by the "Long Echo" philosophy: preserving not just data, but the ability to find meaning in that data across decades. Not resurrection. Not immortality. Just care and knowledge that still responds.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>

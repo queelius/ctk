@@ -1,0 +1,2737 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A powerful toolkit for managing AI conversations from multiple providers">
+      
+      
+      
+        <link rel="canonical" href="https://yourusername.github.io/ctk/">
+      
+      
+      
+        <link rel="next" href="getting-started/installation/">
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+    
+    
+      
+        <title>CTK - Conversation Toolkit</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.2a3383ac.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#conversation-toolkit-ctk" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="CTK - Conversation Toolkit" class="md-header__button md-logo" aria-label="CTK - Conversation Toolkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            CTK - Conversation Toolkit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/yourusername/ctk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ctk
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="CTK - Conversation Toolkit" class="md-nav__button md-logo" aria-label="CTK - Conversation Toolkit" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    CTK - Conversation Toolkit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/yourusername/ctk" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    ctk
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      🚀 Quick Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🌟 Key Features
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🌟 Key Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-functionality" class="md-nav__link">
+    <span class="md-ellipsis">
+      Core Functionality
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search &amp; Discovery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interactive-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interactive Features
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      📦 Installation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📦 Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      From Source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual Setup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      📥 Import Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📥 Import Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chatgptopenai" class="md-nav__link">
+    <span class="md-ellipsis">
+      ChatGPT/OpenAI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claudeanthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      Claude/Anthropic
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-copilot-from-vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      GitHub Copilot (from VS Code)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-llm-formats-jsonl" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local LLM Formats (JSONL)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-and-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔍 Search and Filter
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔍 Search and Filter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      List Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#natural-language-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Natural Language Queries
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      View Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      View Statistics
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conversation-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Conversation Organization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📋 Conversation Organization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#starunstar-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Star/Unstar Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pinunpin-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pin/Unpin Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#archiveunarchive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Archive/Unarchive
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rename-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rename Conversations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interactive-chat-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      💬 Interactive Chat TUI
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="💬 Interactive Chat TUI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tui-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      TUI Features
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tui-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      TUI Commands
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗄️ Database Operations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🗄️ Database Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#merge-databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Merge Databases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database Diff
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-and-extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filter and Extract
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      📤 Export Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📤 Export Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#export-for-fine-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export for Fine-Tuning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-with-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export with Filtering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-with-sanitization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export with Sanitization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-hugo-static-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export to Hugo (Static Site)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-html5-interactive-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export to HTML5 (Interactive App)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#understanding-the-tree-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      🌳 Understanding the Tree Structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🌳 Understanding the Tree Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-conversations-single-path-trees" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linear Conversations → Single-Path Trees
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#branching-conversations-eg-chatgpt-regenerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Branching Conversations (e.g., ChatGPT regenerations)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-selection-for-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Selection for Export
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 Advanced Usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔧 Advanced Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batch-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Batch Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-sanitization-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Sanitization Rules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#available-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔌 Available Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔌 Available Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#importers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Importers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exporters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-available-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      List Available Plugins
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-custom-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      🛠️ Creating Custom Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🛠️ Creating Custom Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-importer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Importer
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗄️ Database Schema
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔐 Privacy &amp; Security
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗺️ Roadmap
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🗺️ Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Completed ✅
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      In Progress 🔨
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned 📋
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧪 Development
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      📝 License
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      🤝 Contributing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgments" class="md-nav__link">
+    <span class="md-ellipsis">
+      🙏 Acknowledgments
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Quick Start
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    User Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            User Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/importing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Importing Conversations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/searching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Searching & Filtering
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/exporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Exporting
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/shell-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Shell Mode
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/chat-tui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Chat TUI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI Commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/shell-commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Shell Commands
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Python API
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="advanced/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Architecture
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="advanced/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Creating Plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="advanced/resilience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Resilience & Archiving
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      🚀 Quick Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      🌟 Key Features
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🌟 Key Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-functionality" class="md-nav__link">
+    <span class="md-ellipsis">
+      Core Functionality
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search &amp; Discovery
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interactive-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interactive Features
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      📦 Installation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📦 Installation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      From Source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Manual Setup
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#import-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      📥 Import Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📥 Import Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#chatgptopenai" class="md-nav__link">
+    <span class="md-ellipsis">
+      ChatGPT/OpenAI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claudeanthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      Claude/Anthropic
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-copilot-from-vs-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      GitHub Copilot (from VS Code)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-llm-formats-jsonl" class="md-nav__link">
+    <span class="md-ellipsis">
+      Local LLM Formats (JSONL)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#search-and-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔍 Search and Filter
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔍 Search and Filter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#list-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      List Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search" class="md-nav__link">
+    <span class="md-ellipsis">
+      Search
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#natural-language-queries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Natural Language Queries
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      View Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#view-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      View Statistics
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conversation-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      📋 Conversation Organization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📋 Conversation Organization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#starunstar-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Star/Unstar Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pinunpin-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pin/Unpin Conversations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#archiveunarchive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Archive/Unarchive
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rename-conversations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rename Conversations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interactive-chat-tui" class="md-nav__link">
+    <span class="md-ellipsis">
+      💬 Interactive Chat TUI
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="💬 Interactive Chat TUI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tui-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      TUI Features
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tui-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      TUI Commands
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗄️ Database Operations
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🗄️ Database Operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#merge-databases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Merge Databases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      Database Diff
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filter-and-extract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Filter and Extract
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#export-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      📤 Export Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📤 Export Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#export-for-fine-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export for Fine-Tuning
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-with-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export with Filtering
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-with-sanitization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export with Sanitization
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-hugo-static-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export to Hugo (Static Site)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-to-html5-interactive-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export to HTML5 (Interactive App)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#understanding-the-tree-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      🌳 Understanding the Tree Structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🌳 Understanding the Tree Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#linear-conversations-single-path-trees" class="md-nav__link">
+    <span class="md-ellipsis">
+      Linear Conversations → Single-Path Trees
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#branching-conversations-eg-chatgpt-regenerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Branching Conversations (e.g., ChatGPT regenerations)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-selection-for-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Selection for Export
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔧 Advanced Usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔧 Advanced Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Python API
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batch-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Batch Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-sanitization-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Sanitization Rules
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#available-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔌 Available Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔌 Available Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#importers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Importers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exporters" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporters
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-available-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      List Available Plugins
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-custom-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      🛠️ Creating Custom Plugins
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🛠️ Creating Custom Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-importer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Custom Importer
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#database-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗄️ Database Schema
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔐 Privacy &amp; Security
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗺️ Roadmap
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🗺️ Roadmap">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Completed ✅
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      In Progress 🔨
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#planned" class="md-nav__link">
+    <span class="md-ellipsis">
+      Planned 📋
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      🧪 Development
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      📝 License
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      🤝 Contributing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgments" class="md-nav__link">
+    <span class="md-ellipsis">
+      🙏 Acknowledgments
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="conversation-toolkit-ctk">Conversation Toolkit (CTK)<a class="headerlink" href="#conversation-toolkit-ctk" title="Permanent link">&para;</a></h1>
+<p>A powerful, plugin-based system for managing AI conversations from multiple providers. Import, store, search, and export your conversations in a unified tree format while preserving provider-specific details.</p>
+<h2 id="quick-start">🚀 Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Setup (one-time)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>install
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">source</span><span class="w"> </span>venv/bin/activate
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Import conversations</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>ctk<span class="w"> </span>import<span class="w"> </span>chatgpt_export.json<span class="w"> </span>--db<span class="w"> </span>my_chats.db
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>ctk<span class="w"> </span>import<span class="w"> </span>claude_export.json<span class="w"> </span>--db<span class="w"> </span>my_chats.db<span class="w"> </span>--format<span class="w"> </span>anthropic
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># View and search with beautiful tables</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>my_chats.db<span class="w"> </span>--starred
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;python async&quot;</span><span class="w"> </span>--db<span class="w"> </span>my_chats.db<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>ctk<span class="w"> </span>ask<span class="w"> </span><span class="s2">&quot;show me conversations about machine learning&quot;</span><span class="w"> </span>--db<span class="w"> </span>my_chats.db
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># Interactive chat with LLM</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>ctk<span class="w"> </span>chat<span class="w"> </span>--db<span class="w"> </span>my_chats.db<span class="w">  </span><span class="c1"># Start TUI with conversation management</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># Export for fine-tuning</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>training.jsonl<span class="w"> </span>--db<span class="w"> </span>my_chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl
+</code></pre></div>
+<h2 id="key-features">🌟 Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
+<h3 id="core-functionality">Core Functionality<a class="headerlink" href="#core-functionality" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>🌳 Universal Tree Format</strong>: All conversations stored as trees - linear chats are single-path trees, branching conversations preserve all paths</li>
+<li><strong>🔌 Plugin Architecture</strong>: Auto-discovers importers/exporters, easy to add new formats</li>
+<li><strong>💾 SQLite Backend</strong>: Fast, searchable local database with proper indexing</li>
+<li><strong>🔒 Privacy First</strong>: Everything local, optional secret masking for API keys/passwords</li>
+<li><strong>🤖 Coding Agent Support</strong>: Import from GitHub Copilot, Cursor, and other coding assistants</li>
+</ul>
+<h3 id="search-discovery">Search &amp; Discovery<a class="headerlink" href="#search-discovery" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>🔍 Full-Text Search</strong>: Search across all conversations instantly with Rich table output</li>
+<li><strong>🤖 Natural Language Queries</strong>: Use <code>/ask</code> or <code>ctk ask</code> for LLM-powered queries</li>
+<li><strong>🏷️ Smart Tagging</strong>: Auto-tags by provider, model, language; manual tags; LLM auto-tagging</li>
+<li><strong>⭐ Organization</strong>: Star, pin, and archive conversations for easy filtering</li>
+</ul>
+<h3 id="interactive-features">Interactive Features<a class="headerlink" href="#interactive-features" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>💬 Chat TUI</strong>: Beautiful terminal UI with conversation browsing, editing, and chat</li>
+<li><strong>🌐 MCP Integration</strong>: Model Context Protocol support for tool calling</li>
+<li><strong>🔄 Live Editing</strong>: Fork conversations, navigate paths, edit trees in real-time</li>
+<li><strong>📊 Rich Visualization</strong>: Color-coded messages, tree views, path exploration</li>
+</ul>
+<h2 id="installation">📦 Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<h3 id="from-source">From Source<a class="headerlink" href="#from-source" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/yourusername/ctk.git
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>ctk
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>make<span class="w"> </span>setup
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+</code></pre></div>
+<h3 id="manual-setup">Manual Setup<a class="headerlink" href="#manual-setup" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre></div>
+<h2 id="import-examples">📥 Import Examples<a class="headerlink" href="#import-examples" title="Permanent link">&para;</a></h2>
+<h3 id="chatgptopenai">ChatGPT/OpenAI<a class="headerlink" href="#chatgptopenai" title="Permanent link">&para;</a></h3>
+<p>Export your ChatGPT conversations from <a href="https://chat.openai.com/settings">chat.openai.com/settings</a> → Data Controls → Export</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Auto-detect format</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>ctk<span class="w"> </span>import<span class="w"> </span>conversations.json<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Explicit format with tags</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>ctk<span class="w"> </span>import<span class="w"> </span>chatgpt_export.json<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>openai<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;work,2024&quot;</span>
+</code></pre></div>
+<h3 id="claudeanthropic">Claude/Anthropic<a class="headerlink" href="#claudeanthropic" title="Permanent link">&para;</a></h3>
+<p>Export from Claude's settings</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ctk<span class="w"> </span>import<span class="w"> </span>claude_export.json<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>anthropic
+</code></pre></div>
+<h3 id="github-copilot-from-vs-code">GitHub Copilot (from VS Code)<a class="headerlink" href="#github-copilot-from-vs-code" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Import from VS Code workspace storage</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ctk<span class="w"> </span>import<span class="w"> </span>~/.vscode/workspaceStorage<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>copilot
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Or find Copilot data automatically</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;from ctk.integrations.importers.copilot import CopilotImporter; \</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s2">          paths = CopilotImporter.find_copilot_data(); \</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s2">          print(&#39;\n&#39;.join(map(str, paths)))&quot;</span>
+</code></pre></div>
+<h3 id="local-llm-formats-jsonl">Local LLM Formats (JSONL)<a class="headerlink" href="#local-llm-formats-jsonl" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Import JSONL for fine-tuning datasets</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>ctk<span class="w"> </span>import<span class="w"> </span>training_data.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Import multiple files</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">for</span><span class="w"> </span>file<span class="w"> </span><span class="k">in</span><span class="w"> </span>*.jsonl<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span>ctk<span class="w"> </span>import<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$file</span><span class="s2">&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">done</span>
+</code></pre></div>
+<h2 id="search-and-filter">🔍 Search and Filter<a class="headerlink" href="#search-and-filter" title="Permanent link">&para;</a></h2>
+<h3 id="list-conversations">List Conversations<a class="headerlink" href="#list-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># List all (newest first) with Rich tables</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Filter by status</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--starred
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--pinned
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--archived
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Combine filters</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--starred<span class="w"> </span>--pinned<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Output as JSON</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>ctk<span class="w"> </span>list<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--json
+</code></pre></div>
+<h3 id="search">Search<a class="headerlink" href="#search" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Search with Rich table output</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;machine learning&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Advanced filtering</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--source<span class="w"> </span>ChatGPT<span class="w"> </span>--model<span class="w"> </span>GPT-4
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;async&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;code,tutorial&quot;</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Search with date ranges</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>ctk<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;AI&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--date-from<span class="w"> </span><span class="m">2024</span>-01-01<span class="w"> </span>--date-to<span class="w"> </span><span class="m">2024</span>-12-31
+</code></pre></div>
+<h3 id="natural-language-queries">Natural Language Queries<a class="headerlink" href="#natural-language-queries" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Ask anything in plain English using LLM</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>ctk<span class="w"> </span>ask<span class="w"> </span><span class="s2">&quot;show me starred conversations&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>ctk<span class="w"> </span>ask<span class="w"> </span><span class="s2">&quot;find discussions about async python&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>ctk<span class="w"> </span>ask<span class="w"> </span><span class="s2">&quot;conversations from last week about AI&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--debug
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># The LLM interprets your query and executes the right database operations</span>
+</code></pre></div>
+<h3 id="view-conversations">View Conversations<a class="headerlink" href="#view-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Show specific conversation (prefix matching)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>ctk<span class="w"> </span>show<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Show with path selection</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>ctk<span class="w"> </span>show<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--path<span class="w"> </span>longest
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>ctk<span class="w"> </span>show<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--path<span class="w"> </span>latest
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># View tree structure</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>ctk<span class="w"> </span>tree<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># List all paths in branching conversation</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>ctk<span class="w"> </span>paths<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h3 id="view-statistics">View Statistics<a class="headerlink" href="#view-statistics" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ctk<span class="w"> </span>stats<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Output:</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Database Statistics:</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1">#   Total conversations: 851</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1">#   Total messages: 25890</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1">#   Starred: 23</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1">#   Pinned: 5</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1">#   Archived: 142</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Messages by role:</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1">#     assistant: 12388</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1">#     user: 9574</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1">#     system: 1632</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="c1"># Conversations by source:</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1">#     ChatGPT: 423</span>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1">#     Claude: 287</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1">#     Copilot: 141</span>
+</code></pre></div>
+<h2 id="conversation-organization">📋 Conversation Organization<a class="headerlink" href="#conversation-organization" title="Permanent link">&para;</a></h2>
+<h3 id="starunstar-conversations">Star/Unstar Conversations<a class="headerlink" href="#starunstar-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Star a conversation for quick access</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>ctk<span class="w"> </span>star<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Star multiple conversations</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>ctk<span class="w"> </span>star<span class="w"> </span>abc123<span class="w"> </span>def456<span class="w"> </span>ghi789<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Unstar</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>ctk<span class="w"> </span>star<span class="w"> </span>--unstar<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h3 id="pinunpin-conversations">Pin/Unpin Conversations<a class="headerlink" href="#pinunpin-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Pin important conversations to the top</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>ctk<span class="w"> </span>pin<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Unpin</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>ctk<span class="w"> </span>pin<span class="w"> </span>--unpin<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h3 id="archiveunarchive">Archive/Unarchive<a class="headerlink" href="#archiveunarchive" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Archive old conversations</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ctk<span class="w"> </span>archive<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Unarchive</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>ctk<span class="w"> </span>archive<span class="w"> </span>--unarchive<span class="w"> </span>abc123<span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h3 id="rename-conversations">Rename Conversations<a class="headerlink" href="#rename-conversations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Change conversation title</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>ctk<span class="w"> </span>title<span class="w"> </span>abc123<span class="w"> </span><span class="s2">&quot;New descriptive title&quot;</span><span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h2 id="interactive-chat-tui">💬 Interactive Chat TUI<a class="headerlink" href="#interactive-chat-tui" title="Permanent link">&para;</a></h2>
+<p>Launch the terminal UI for interactive conversation management and chat:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ctk<span class="w"> </span>chat<span class="w"> </span>--db<span class="w"> </span>chats.db
+</code></pre></div>
+<h3 id="tui-features">TUI Features<a class="headerlink" href="#tui-features" title="Permanent link">&para;</a></h3>
+<p><strong>Navigation &amp; Browsing:</strong>
+- Browse conversations with filtering (starred, pinned, archived)
+- Rich table view with emoji flags (⭐📌📦)
+- Quick search and natural language queries
+- Tree view for branching conversations
+- Path navigation in multi-branch trees</p>
+<p><strong>Conversation Management:</strong>
+- Create, rename, delete conversations
+- Star, pin, archive operations
+- Auto-tagging with LLM
+- Export to various formats</p>
+<p><strong>Live Chat:</strong>
+- Chat with any LLM provider (Ollama, OpenAI, Anthropic)
+- Model Context Protocol (MCP) tool support
+- Fork conversations to explore alternatives
+- Edit and regenerate messages
+- Switch between conversation paths</p>
+<h3 id="tui-commands">TUI Commands<a class="headerlink" href="#tui-commands" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Navigation</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>/browse<span class="w">              </span><span class="c1"># Browse conversations table</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>/show<span class="w"> </span>&lt;id&gt;<span class="w">           </span><span class="c1"># Show conversation</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>/tree<span class="w"> </span>&lt;id&gt;<span class="w">           </span><span class="c1"># View tree structure</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>/paths<span class="w"> </span>&lt;id&gt;<span class="w">          </span><span class="c1"># List all paths</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Search &amp; Query</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>/search<span class="w"> </span>&lt;query&gt;<span class="w">      </span><span class="c1"># Full-text search</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>/ask<span class="w"> </span>&lt;query&gt;<span class="w">         </span><span class="c1"># Natural language query (LLM-powered)</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># Organization</span>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>/star<span class="w"> </span>&lt;id&gt;<span class="w">           </span><span class="c1"># Star conversation</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>/pin<span class="w"> </span>&lt;id&gt;<span class="w">            </span><span class="c1"># Pin conversation</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>/archive<span class="w"> </span>&lt;id&gt;<span class="w">        </span><span class="c1"># Archive conversation</span>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>/title<span class="w"> </span>&lt;id&gt;<span class="w"> </span>&lt;title&gt;<span class="w">  </span><span class="c1"># Rename conversation</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="c1"># Chat Operations</span>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>/fork<span class="w">                </span><span class="c1"># Fork current conversation</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>/regenerate<span class="w">          </span><span class="c1"># Regenerate last message</span>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>/edit<span class="w"> </span>&lt;msg_id&gt;<span class="w">       </span><span class="c1"># Edit a message</span>
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>/model<span class="w"> </span>&lt;name&gt;<span class="w">        </span><span class="c1"># Switch LLM model</span>
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>
+<a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="c1"># Export &amp; Tools</span>
+<a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a>/export<span class="w"> </span>&lt;format&gt;<span class="w">     </span><span class="c1"># Export current conversation</span>
+<a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a>/tag<span class="w">                 </span><span class="c1"># Auto-tag with LLM</span>
+<a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a>/help<span class="w">                </span><span class="c1"># Show all commands</span>
+<a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a>/quit<span class="w">                </span><span class="c1"># Exit TUI</span>
+</code></pre></div>
+<h2 id="database-operations">🗄️ Database Operations<a class="headerlink" href="#database-operations" title="Permanent link">&para;</a></h2>
+<h3 id="merge-databases">Merge Databases<a class="headerlink" href="#merge-databases" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Combine multiple databases</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>ctk<span class="w"> </span>merge<span class="w"> </span>source1.db<span class="w"> </span>source2.db<span class="w"> </span>--output<span class="w"> </span>merged.db
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Automatically handles duplicates by conversation ID</span>
+</code></pre></div>
+<h3 id="database-diff">Database Diff<a class="headerlink" href="#database-diff" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Compare two databases</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>ctk<span class="w"> </span>diff<span class="w"> </span>db1.db<span class="w"> </span>db2.db
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Shows:</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># - Conversations only in db1</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># - Conversations only in db2</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># - Conversations with different content</span>
+</code></pre></div>
+<h3 id="filter-and-extract">Filter and Extract<a class="headerlink" href="#filter-and-extract" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Create filtered database</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>ctk<span class="w"> </span>filter<span class="w"> </span>--db<span class="w"> </span>all_chats.db<span class="w"> </span>--output<span class="w"> </span>work_chats.db<span class="w"> </span>--tags<span class="w"> </span><span class="s2">&quot;work&quot;</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>ctk<span class="w"> </span>filter<span class="w"> </span>--db<span class="w"> </span>all_chats.db<span class="w"> </span>--output<span class="w"> </span>starred.db<span class="w"> </span>--starred
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>ctk<span class="w"> </span>filter<span class="w"> </span>--db<span class="w"> </span>all_chats.db<span class="w"> </span>--output<span class="w"> </span>recent.db<span class="w"> </span>--date-from<span class="w"> </span><span class="m">2024</span>-01-01
+</code></pre></div>
+<h2 id="export-examples">📤 Export Examples<a class="headerlink" href="#export-examples" title="Permanent link">&para;</a></h2>
+<h3 id="export-for-fine-tuning">Export for Fine-Tuning<a class="headerlink" href="#export-for-fine-tuning" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># JSONL format for local LLMs</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>training.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Include only assistant responses</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>responses.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl<span class="w"> </span>--path-selection<span class="w"> </span>longest
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># Export with metadata</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>full_export.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl<span class="w"> </span>--include-metadata
+</code></pre></div>
+<h3 id="export-with-filtering">Export with Filtering<a class="headerlink" href="#export-with-filtering" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Export specific conversations</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>selected.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--ids<span class="w"> </span>conv1<span class="w"> </span>conv2<span class="w"> </span>conv3
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Filter by source</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>openai_only.json<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--filter-source<span class="w"> </span><span class="s2">&quot;ChatGPT&quot;</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Filter by model</span>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>gpt4_convs.json<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--filter-model<span class="w"> </span><span class="s2">&quot;GPT-4&quot;</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Filter by tags</span>
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>work_chats.json<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--filter-tags<span class="w"> </span><span class="s2">&quot;work,important&quot;</span>
+</code></pre></div>
+<h3 id="export-with-sanitization">Export with Sanitization<a class="headerlink" href="#export-with-sanitization" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Remove secrets before sharing</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>clean_export.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--format<span class="w"> </span>jsonl<span class="w"> </span>--sanitize
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># This removes:</span>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># - API keys (OpenAI, Anthropic, AWS, etc.)</span>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="c1"># - Passwords and tokens</span>
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="c1"># - SSH keys</span>
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="c1"># - Database URLs</span>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># - Credit card numbers (if any)</span>
+</code></pre></div>
+<h3 id="export-to-hugo-static-site">Export to Hugo (Static Site)<a class="headerlink" href="#export-to-hugo-static-site" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Export all conversations as Hugo page bundles</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>content/conversations/<span class="w"> </span>--format<span class="w"> </span>hugo<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Export only starred conversations (curated for blog)</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>content/conversations/<span class="w"> </span>--format<span class="w"> </span>hugo<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--starred
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># Export specific conversations</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>content/conversations/<span class="w"> </span>--format<span class="w"> </span>hugo<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--ids<span class="w"> </span>conv1<span class="w"> </span>conv2
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># Mark as drafts for review</span>
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>content/conversations/<span class="w"> </span>--format<span class="w"> </span>hugo<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--draft
+</code></pre></div>
+<p>Each conversation becomes a Hugo page bundle:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>content/conversations/
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>  2024-01-15-debugging-rust-abc123/
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    index.md        # Frontmatter + markdown content
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>    images/         # Copied media files
+</code></pre></div></p>
+<h3 id="export-to-html5-interactive-app">Export to HTML5 (Interactive App)<a class="headerlink" href="#export-to-html5-interactive-app" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Single self-contained HTML file (default, recommended)</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive.html<span class="w"> </span>--format<span class="w"> </span>html<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Separate media files for smaller HTML</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive.html<span class="w"> </span>--format<span class="w"> </span>html<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--media-dir<span class="w"> </span>media
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="c1"># Creates: archive.html + media/ folder</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="c1"># Multi-file export (requires web server)</span>
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>archive/<span class="w"> </span>--format<span class="w"> </span>html<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--no-embed
+</code></pre></div>
+<h2 id="understanding-the-tree-structure">🌳 Understanding the Tree Structure<a class="headerlink" href="#understanding-the-tree-structure" title="Permanent link">&para;</a></h2>
+<p>CTK stores all conversations as trees, which provides several benefits:</p>
+<h3 id="linear-conversations-single-path-trees">Linear Conversations → Single-Path Trees<a class="headerlink" href="#linear-conversations-single-path-trees" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>User: &quot;What is Python?&quot;
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>  └── Assistant: &quot;Python is a programming language...&quot;
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>      └── User: &quot;How do I install it?&quot;
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>          └── Assistant: &quot;You can install Python by...&quot;
+</code></pre></div>
+<h3 id="branching-conversations-eg-chatgpt-regenerations">Branching Conversations (e.g., ChatGPT regenerations)<a class="headerlink" href="#branching-conversations-eg-chatgpt-regenerations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>User: &quot;Write a poem&quot;
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>  ├── Assistant (v1): &quot;Roses are red...&quot;
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>  └── Assistant (v2): &quot;In fields of gold...&quot;  [regenerated]
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>      └── User: &quot;Make it longer&quot;
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>          └── Assistant: &quot;In fields of gold, where sunshine...&quot;
+</code></pre></div>
+<h3 id="path-selection-for-export">Path Selection for Export<a class="headerlink" href="#path-selection-for-export" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Export longest path (default)</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>out.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--path-selection<span class="w"> </span>longest
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># Export first path (original)</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>out.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--path-selection<span class="w"> </span>first
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="c1"># Export most recent path</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a>ctk<span class="w"> </span><span class="nb">export</span><span class="w"> </span>out.jsonl<span class="w"> </span>--db<span class="w"> </span>chats.db<span class="w"> </span>--path-selection<span class="w"> </span>last
+</code></pre></div>
+<h2 id="advanced-usage">🔧 Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permanent link">&para;</a></h2>
+<h3 id="python-api">Python API<a class="headerlink" href="#python-api" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ctk</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConversationDB</span><span class="p">,</span> <span class="n">registry</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># Load conversations</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="k">with</span> <span class="n">ConversationDB</span><span class="p">(</span><span class="s2">&quot;chats.db&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>    <span class="c1"># Search</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>    <span class="n">results</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">search_conversations</span><span class="p">(</span><span class="s2">&quot;python async&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>    <span class="c1"># Load specific conversation</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>    <span class="n">conv</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_conversation</span><span class="p">(</span><span class="s2">&quot;conv_id_123&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a>
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>    <span class="c1"># Get all paths in a branching conversation</span>
+<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a>    <span class="n">paths</span> <span class="o">=</span> <span class="n">conv</span><span class="o">.</span><span class="n">get_all_paths</span><span class="p">()</span>
+<a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a>
+<a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a>    <span class="c1"># Get longest path</span>
+<a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a>    <span class="n">longest</span> <span class="o">=</span> <span class="n">conv</span><span class="o">.</span><span class="n">get_longest_path</span><span class="p">()</span>
+<a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a>
+<a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a>    <span class="c1"># Add new message to existing conversation</span>
+<a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">ctk</span><span class="w"> </span><span class="kn">import</span> <span class="n">Message</span><span class="p">,</span> <span class="n">MessageContent</span><span class="p">,</span> <span class="n">MessageRole</span>
+<a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a>
+<a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a>    <span class="n">msg</span> <span class="o">=</span> <span class="n">Message</span><span class="p">(</span>
+<a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a>        <span class="n">role</span><span class="o">=</span><span class="n">MessageRole</span><span class="o">.</span><span class="n">USER</span><span class="p">,</span>
+<a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a>        <span class="n">content</span><span class="o">=</span><span class="n">MessageContent</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="s2">&quot;New question&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a>    <span class="p">)</span>
+<a id="__codelineno-30-24" name="__codelineno-30-24" href="#__codelineno-30-24"></a>    <span class="n">conv</span><span class="o">.</span><span class="n">add_message</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="s2">&quot;previous_msg_id&quot;</span><span class="p">)</span>
+<a id="__codelineno-30-25" name="__codelineno-30-25" href="#__codelineno-30-25"></a>    <span class="n">db</span><span class="o">.</span><span class="n">save_conversation</span><span class="p">(</span><span class="n">conv</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="batch-operations">Batch Operations<a class="headerlink" href="#batch-operations" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ctk</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConversationDB</span><span class="p">,</span> <span class="n">registry</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Import all exports from a directory</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="k">with</span> <span class="n">ConversationDB</span><span class="p">(</span><span class="s2">&quot;all_chats.db&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>    <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s2">&quot;exports/*.json&quot;</span><span class="p">):</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>        <span class="nb">format</span> <span class="o">=</span> <span class="s2">&quot;openai&quot;</span> <span class="k">if</span> <span class="s2">&quot;chatgpt&quot;</span> <span class="ow">in</span> <span class="n">file</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>        <span class="n">convs</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">import_file</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">)</span>
+<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a>
+<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a>        <span class="k">for</span> <span class="n">conv</span> <span class="ow">in</span> <span class="n">convs</span><span class="p">:</span>
+<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>            <span class="c1"># Add file source as tag</span>
+<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a>            <span class="n">conv</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;file:</span><span class="si">{</span><span class="n">file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>            <span class="n">db</span><span class="o">.</span><span class="n">save_conversation</span><span class="p">(</span><span class="n">conv</span><span class="p">)</span>
+<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a>
+<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a>    <span class="c1"># Get statistics</span>
+<a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a>    <span class="n">stats</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_statistics</span><span class="p">()</span>
+<a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="n">stats</span><span class="p">[</span><span class="s1">&#39;total_conversations&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> conversations&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="custom-sanitization-rules">Custom Sanitization Rules<a class="headerlink" href="#custom-sanitization-rules" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ctk.core.sanitizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sanitizer</span><span class="p">,</span> <span class="n">SanitizationRule</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="c1"># Create custom sanitizer</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="n">sanitizer</span> <span class="o">=</span> <span class="n">Sanitizer</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="c1"># Add company-specific patterns</span>
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="n">sanitizer</span><span class="o">.</span><span class="n">add_rule</span><span class="p">(</span><span class="n">SanitizationRule</span><span class="p">(</span>
+<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal_urls&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a>    <span class="n">pattern</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;https://internal\.company\.com/[^\s]+&#39;</span><span class="p">),</span>
+<a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a>    <span class="n">replacement</span><span class="o">=</span><span class="s2">&quot;[INTERNAL_URL]&quot;</span>
+<a id="__codelineno-32-12" name="__codelineno-32-12" href="#__codelineno-32-12"></a><span class="p">))</span>
+<a id="__codelineno-32-13" name="__codelineno-32-13" href="#__codelineno-32-13"></a>
+<a id="__codelineno-32-14" name="__codelineno-32-14" href="#__codelineno-32-14"></a><span class="n">sanitizer</span><span class="o">.</span><span class="n">add_rule</span><span class="p">(</span><span class="n">SanitizationRule</span><span class="p">(</span>
+<a id="__codelineno-32-15" name="__codelineno-32-15" href="#__codelineno-32-15"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;employee_ids&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-16" name="__codelineno-32-16" href="#__codelineno-32-16"></a>    <span class="n">pattern</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;EMP\d</span><span class="si">{6}</span><span class="s1">&#39;</span><span class="p">),</span>
+<a id="__codelineno-32-17" name="__codelineno-32-17" href="#__codelineno-32-17"></a>    <span class="n">replacement</span><span class="o">=</span><span class="s2">&quot;[EMPLOYEE_ID]&quot;</span>
+<a id="__codelineno-32-18" name="__codelineno-32-18" href="#__codelineno-32-18"></a><span class="p">))</span>
+</code></pre></div>
+<h2 id="available-plugins">🔌 Available Plugins<a class="headerlink" href="#available-plugins" title="Permanent link">&para;</a></h2>
+<h3 id="importers">Importers<a class="headerlink" href="#importers" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>openai</strong> - ChatGPT exports (preserves full tree structure)</li>
+<li><strong>anthropic</strong> - Claude exports</li>
+<li><strong>gemini</strong> - Google Gemini/Bard</li>
+<li><strong>copilot</strong> - GitHub Copilot from VS Code</li>
+<li><strong>jsonl</strong> - Generic JSONL format for local LLMs</li>
+<li><strong>filesystem_coding</strong> - Auto-detect coding agent data</li>
+<li><strong>coding_agent</strong> - Generic coding assistant format</li>
+</ul>
+<h3 id="exporters">Exporters<a class="headerlink" href="#exporters" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>jsonl</strong> - JSONL for fine-tuning (multiple formats)</li>
+<li><strong>json</strong> - Native CTK format, OpenAI, Anthropic, or generic JSON</li>
+<li><strong>markdown</strong> - Human-readable with tree visualization</li>
+<li><strong>html</strong> - Interactive HTML5 app with browsing, search, and media gallery</li>
+<li><strong>hugo</strong> - Hugo page bundles for static site generation</li>
+</ul>
+<h3 id="list-available-plugins">List Available Plugins<a class="headerlink" href="#list-available-plugins" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>ctk<span class="w"> </span>plugins
+</code></pre></div>
+<h2 id="creating-custom-plugins">🛠️ Creating Custom Plugins<a class="headerlink" href="#creating-custom-plugins" title="Permanent link">&para;</a></h2>
+<h3 id="custom-importer">Custom Importer<a class="headerlink" href="#custom-importer" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># File: ctk/integrations/importers/my_format.py</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ctk.core.plugin</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImporterPlugin</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ctk.core.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConversationTree</span><span class="p">,</span> <span class="n">Message</span><span class="p">,</span> <span class="n">MessageContent</span><span class="p">,</span> <span class="n">MessageRole</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyFormatImporter</span><span class="p">(</span><span class="n">ImporterPlugin</span><span class="p">):</span>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a>    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;my_format&quot;</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a>    <span class="n">description</span> <span class="o">=</span> <span class="s2">&quot;Import from My Custom Format&quot;</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>    <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a>
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if data is your format&quot;&quot;&quot;</span>
+<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a>        <span class="k">return</span> <span class="s2">&quot;my_format_marker&quot;</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-34-13" name="__codelineno-34-13" href="#__codelineno-34-13"></a>
+<a id="__codelineno-34-14" name="__codelineno-34-14" href="#__codelineno-34-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">import_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<a id="__codelineno-34-15" name="__codelineno-34-15" href="#__codelineno-34-15"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert data to ConversationTree objects&quot;&quot;&quot;</span>
+<a id="__codelineno-34-16" name="__codelineno-34-16" href="#__codelineno-34-16"></a>        <span class="n">conversations</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-34-17" name="__codelineno-34-17" href="#__codelineno-34-17"></a>
+<a id="__codelineno-34-18" name="__codelineno-34-18" href="#__codelineno-34-18"></a>        <span class="c1"># Parse your format</span>
+<a id="__codelineno-34-19" name="__codelineno-34-19" href="#__codelineno-34-19"></a>        <span class="n">tree</span> <span class="o">=</span> <span class="n">ConversationTree</span><span class="p">(</span>
+<a id="__codelineno-34-20" name="__codelineno-34-20" href="#__codelineno-34-20"></a>            <span class="nb">id</span><span class="o">=</span><span class="s2">&quot;conv_1&quot;</span><span class="p">,</span>
+<a id="__codelineno-34-21" name="__codelineno-34-21" href="#__codelineno-34-21"></a>            <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Imported Conversation&quot;</span>
+<a id="__codelineno-34-22" name="__codelineno-34-22" href="#__codelineno-34-22"></a>        <span class="p">)</span>
+<a id="__codelineno-34-23" name="__codelineno-34-23" href="#__codelineno-34-23"></a>
+<a id="__codelineno-34-24" name="__codelineno-34-24" href="#__codelineno-34-24"></a>        <span class="c1"># Add messages</span>
+<a id="__codelineno-34-25" name="__codelineno-34-25" href="#__codelineno-34-25"></a>        <span class="n">msg</span> <span class="o">=</span> <span class="n">Message</span><span class="p">(</span>
+<a id="__codelineno-34-26" name="__codelineno-34-26" href="#__codelineno-34-26"></a>            <span class="n">role</span><span class="o">=</span><span class="n">MessageRole</span><span class="o">.</span><span class="n">USER</span><span class="p">,</span>
+<a id="__codelineno-34-27" name="__codelineno-34-27" href="#__codelineno-34-27"></a>            <span class="n">content</span><span class="o">=</span><span class="n">MessageContent</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="s2">&quot;Hello&quot;</span><span class="p">)</span>
+<a id="__codelineno-34-28" name="__codelineno-34-28" href="#__codelineno-34-28"></a>        <span class="p">)</span>
+<a id="__codelineno-34-29" name="__codelineno-34-29" href="#__codelineno-34-29"></a>        <span class="n">tree</span><span class="o">.</span><span class="n">add_message</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+<a id="__codelineno-34-30" name="__codelineno-34-30" href="#__codelineno-34-30"></a>
+<a id="__codelineno-34-31" name="__codelineno-34-31" href="#__codelineno-34-31"></a>        <span class="n">conversations</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tree</span><span class="p">)</span>
+<a id="__codelineno-34-32" name="__codelineno-34-32" href="#__codelineno-34-32"></a>        <span class="k">return</span> <span class="n">conversations</span>
+</code></pre></div>
+<p>The plugin is automatically discovered when placed in the integrations folder!</p>
+<h2 id="database-schema">🗄️ Database Schema<a class="headerlink" href="#database-schema" title="Permanent link">&para;</a></h2>
+<p>CTK uses SQLite with the following structure:</p>
+<ul>
+<li><strong>conversations</strong> - Metadata, title, timestamps, source, model</li>
+<li><strong>messages</strong> - Content, role, parent/child relationships</li>
+<li><strong>tags</strong> - Searchable tags per conversation</li>
+<li><strong>paths</strong> - Cached conversation paths for fast retrieval</li>
+</ul>
+<h2 id="privacy-security">🔐 Privacy &amp; Security<a class="headerlink" href="#privacy-security" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>100% Local</strong> - No data leaves your machine</li>
+<li><strong>No Analytics</strong> - No telemetry or tracking</li>
+<li><strong>Optional Sanitization</strong> - Remove sensitive data before sharing</li>
+<li><strong>Configurable Rules</strong> - Add custom patterns to mask</li>
+</ul>
+<h2 id="roadmap">🗺️ Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h2>
+<h3 id="completed">Completed ✅<a class="headerlink" href="#completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Terminal UI with conversation management</li>
+<li>[x] Rich console output with tables</li>
+<li>[x] Natural language queries (ask command)</li>
+<li>[x] Star/pin/archive organization</li>
+<li>[x] Multiple export formats (JSONL, JSON, Markdown, HTML5, Hugo)</li>
+<li>[x] MCP tool integration</li>
+<li>[x] Auto-tagging with LLM</li>
+<li>[x] Database merge/diff operations</li>
+<li>[x] Shell-first mode with VFS navigation</li>
+<li>[x] Hugo static site export</li>
+</ul>
+<h3 id="in-progress">In Progress 🔨<a class="headerlink" href="#in-progress" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Embeddings and similarity search (complex-network-rag integration)</li>
+<li>[ ] Unit and integration test coverage</li>
+<li>[ ] Performance optimization for large databases</li>
+</ul>
+<h3 id="planned">Planned 📋<a class="headerlink" href="#planned" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Web-based UI (complement to TUI)</li>
+<li>[ ] Conversation deduplication utilities</li>
+<li>[ ] LangChain/LlamaIndex integration</li>
+<li>[ ] Advanced analytics dashboard</li>
+</ul>
+<h2 id="development">🧪 Development<a class="headerlink" href="#development" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Run all tests</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>make<span class="w"> </span><span class="nb">test</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="c1"># Run unit tests only</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>make<span class="w"> </span>test-unit
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="c1"># Run integration tests only</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>make<span class="w"> </span>test-integration
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a><span class="c1"># Run with coverage report</span>
+<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a>make<span class="w"> </span>coverage
+<a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a>
+<a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a><span class="c1"># Format code (black + isort)</span>
+<a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a>make<span class="w"> </span>format
+<a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a>
+<a id="__codelineno-35-16" name="__codelineno-35-16" href="#__codelineno-35-16"></a><span class="c1"># Lint code (flake8 + mypy)</span>
+<a id="__codelineno-35-17" name="__codelineno-35-17" href="#__codelineno-35-17"></a>make<span class="w"> </span>lint
+<a id="__codelineno-35-18" name="__codelineno-35-18" href="#__codelineno-35-18"></a>
+<a id="__codelineno-35-19" name="__codelineno-35-19" href="#__codelineno-35-19"></a><span class="c1"># Clean build artifacts</span>
+<a id="__codelineno-35-20" name="__codelineno-35-20" href="#__codelineno-35-20"></a>make<span class="w"> </span>clean
+<a id="__codelineno-35-21" name="__codelineno-35-21" href="#__codelineno-35-21"></a>
+<a id="__codelineno-35-22" name="__codelineno-35-22" href="#__codelineno-35-22"></a><span class="c1"># View all Makefile targets</span>
+<a id="__codelineno-35-23" name="__codelineno-35-23" href="#__codelineno-35-23"></a>make<span class="w"> </span><span class="nb">help</span>
+</code></pre></div>
+<h2 id="license">📝 License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
+<p>MIT</p>
+<h2 id="contributing">🤝 Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h2>
+<p>Contributions welcome! To add support for a new provider:</p>
+<ol>
+<li>Create importer in <code>ctk/integrations/importers/provider_name.py</code></li>
+<li>Implement <code>validate()</code> and <code>import_data()</code> methods</li>
+<li>Add tests in <code>tests/</code></li>
+<li>Submit PR</li>
+</ol>
+<h2 id="acknowledgments">🙏 Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>
+<p>Built to solve the fragmentation of AI conversations across platforms. Special thanks to all contributors!</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": ".", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+    
+  </body>
+</html>
