@@ -119,6 +119,40 @@ class TestCLICommandBehaviors:
                 if os.path.exists(export_path):
                     os.unlink(export_path)
 
+    @patch('ctk.cli.ConversationDB')
+    @patch('ctk.cli.registry')
+    def test_export_limit_zero_means_no_limit(self, mock_registry, mock_db_class):
+        """Test export treats --limit 0 as unlimited (no SQL LIMIT)."""
+        args = MagicMock()
+        args.db = "test-db"
+        args.output = "out.jsonl"
+        args.format = "jsonl"
+        args.ids = None
+        args.limit = 0
+        args.filter_source = None
+        args.filter_model = None
+        args.filter_tags = None
+        args.sanitize = False
+        args.path_selection = "longest"
+        args.include_metadata = False
+        args.starred = False
+        args.pinned = False
+
+        db = MagicMock()
+        db.__enter__.return_value = db
+        db.__exit__.return_value = False
+        db.list_conversations.return_value = [MagicMock(id="conv-1")]
+        db.load_conversation.return_value = MagicMock()
+        mock_db_class.return_value = db
+
+        exporter = MagicMock()
+        mock_registry.get_exporter.return_value = exporter
+
+        result = cmd_export(args)
+
+        assert result == 0
+        db.list_conversations.assert_called_once_with(limit=None)
+
     def test_list_command_displays_conversations(self):
         """Test list command displays available conversations"""
         import os

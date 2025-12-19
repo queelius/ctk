@@ -389,3 +389,51 @@ class TestMarkdownExporter:
         exporter = MarkdownExporter()
         assert exporter.validate([])
         assert exporter.validate(None)
+
+    @pytest.mark.unit
+    def test_export_to_directory(self, sample_conversation, temp_dir):
+        """Test exporting multiple conversations to separate files in a directory"""
+        # Create two conversations
+        conv2 = ConversationTree(id="conv_002", title="Second Conversation")
+        msg = Message(
+            id="msg_100",
+            role=MessageRole.USER,
+            content=MessageContent(text="Another conversation")
+        )
+        conv2.add_message(msg)
+
+        exporter = MarkdownExporter()
+        output_dir = temp_dir / "md_export"
+
+        # Export to directory (path without extension triggers directory mode)
+        exporter.export_to_file([sample_conversation, conv2], str(output_dir))
+
+        # Check directory was created
+        assert output_dir.exists()
+        assert output_dir.is_dir()
+
+        # Check files were created
+        md_files = list(output_dir.glob("*.md"))
+        assert len(md_files) == 2
+
+        # Check content of files
+        for md_file in md_files:
+            content = md_file.read_text()
+            assert len(content) > 0
+            assert "## Conversation" in content
+
+    @pytest.mark.unit
+    def test_export_single_file_vs_directory(self, sample_conversation, temp_dir):
+        """Test that .md extension produces single file, no extension produces directory"""
+        exporter = MarkdownExporter()
+
+        # Single file mode (with .md extension)
+        single_file = temp_dir / "single.md"
+        exporter.export_to_file([sample_conversation], str(single_file))
+        assert single_file.is_file()
+
+        # Directory mode (no extension)
+        dir_path = temp_dir / "multiple"
+        exporter.export_to_file([sample_conversation], str(dir_path))
+        assert dir_path.is_dir()
+        assert len(list(dir_path.glob("*.md"))) == 1

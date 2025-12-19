@@ -3456,9 +3456,11 @@ function renderMediaGallery() {
         // Click conversation link to navigate
         div.querySelector('.media-item-conversation').addEventListener('click', (e) => {
             e.stopPropagation();
-            showConversation(item.conversationId);
-            // Switch to browse tab
-            document.querySelector('.tab[data-tab="browse"]').click();
+            const conv = CONVERSATIONS.find(c => c.id === item.conversationId);
+            if (conv) {
+                document.querySelector('[data-tab="browse"]').click();
+                setTimeout(() => showConversation(conv), 100);
+            }
         });
 
         container.appendChild(div);

@@ -4,7 +4,10 @@ Markdown exporter for CTK conversations
 
 from typing import List, Dict, Any, Optional, TextIO
 import io
+import os
+import re
 from datetime import datetime
+from pathlib import Path
 
 from ctk.core.plugin import ExporterPlugin
 from ctk.core.models import ConversationTree, Message, MessageRole
@@ -25,6 +28,71 @@ class MarkdownExporter(ExporterPlugin):
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export conversations to markdown"""
         return self.export_conversations(conversations, **kwargs)
+
+    def export_to_file(self, conversations: List[ConversationTree], file_path: str, **kwargs) -> None:
+        """
+        Export conversations to markdown file(s).
+
+        If file_path is a directory (or has no extension), exports one file per conversation.
+        Otherwise exports all conversations to a single file.
+        """
+        path = Path(file_path)
+
+        # Determine if we should output to directory (one file per conversation)
+        # Directory mode if: path is existing directory, ends with /, or has no extension
+        is_directory_mode = (
+            path.is_dir() or
+            file_path.endswith('/') or
+            file_path.endswith(os.sep) or
+            (not path.suffix and not path.exists())
+        )
+
+        if is_directory_mode:
+            self._export_to_directory(conversations, path, **kwargs)
+        else:
+            # Single file mode
+            content = self.export_conversations(conversations, **kwargs)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding='utf-8')
+
+    def _export_to_directory(
+        self,
+        conversations: List[ConversationTree],
+        output_dir: Path,
+        **kwargs
+    ) -> None:
+        """Export each conversation to its own markdown file"""
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for conv in conversations:
+            # Generate filename: YYYY-MM-DD-title-id.md
+            filename = self._generate_filename(conv)
+            file_path = output_dir / filename
+
+            # Export single conversation
+            content = self.export_conversations([conv], **kwargs)
+            file_path.write_text(content, encoding='utf-8')
+
+    def _generate_filename(self, conv: ConversationTree) -> str:
+        """Generate a filename for a conversation"""
+        # Get date prefix
+        date_str = ""
+        if conv.metadata and conv.metadata.created_at:
+            date_str = conv.metadata.created_at.strftime("%Y-%m-%d-")
+
+        # Sanitize title
+        title = conv.title or "untitled"
+        # Remove or replace problematic characters
+        sanitized = re.sub(r'[^\w\s-]', '', title.lower())
+        sanitized = re.sub(r'[\s_]+', '-', sanitized)
+        sanitized = re.sub(r'-+', '-', sanitized).strip('-')
+        # Truncate to reasonable length
+        sanitized = sanitized[:50]
+
+        # Add short ID for uniqueness
+        short_id = conv.id[:8] if conv.id else "unknown"
+
+        return f"{date_str}{sanitized}-{short_id}.md"
 
     def export_conversations(
         self,

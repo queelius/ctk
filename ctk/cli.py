@@ -230,6 +230,8 @@ def cmd_export(args):
     with db:
         # Load conversations
         conversations = []
+        # CLI convention: --limit 0 means "no limit"
+        export_limit = None if getattr(args, 'limit', None) in (None, 0) else args.limit
         
         if args.ids:
             # Export specific conversations
@@ -241,7 +243,7 @@ def cmd_export(args):
                     print(f"Warning: Conversation {conv_id} not found")
         else:
             # Export all or filtered conversations
-            conv_list = db.list_conversations(limit=args.limit)
+            conv_list = db.list_conversations(limit=export_limit)
             for conv_info in conv_list:
                 conv = db.load_conversation(conv_info.id)
                 if conv:
