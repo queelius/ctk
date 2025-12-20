@@ -232,8 +232,19 @@ def cmd_export(args):
         conversations = []
         # CLI convention: --limit 0 means "no limit"
         export_limit = None if getattr(args, 'limit', None) in (None, 0) else args.limit
-        
-        if args.ids:
+
+        # Check for view-based export first
+        if hasattr(args, 'view') and args.view:
+            from ctk.core.views import ViewStore
+            store = ViewStore(args.db)
+            evaluated = store.evaluate(args.view, db)
+            if not evaluated:
+                print(f"Error: View '{args.view}' not found")
+                return 1
+            conversations = evaluated.conversations
+            if evaluated.missing_ids:
+                print(f"Warning: {len(evaluated.missing_ids)} conversations not found")
+        elif args.ids:
             # Export specific conversations
             for conv_id in args.ids:
                 conv = db.load_conversation(conv_id)
@@ -436,6 +447,217 @@ def cmd_stats(args):
                 print(f"  {model_info['model']:30} {model_info['count']:5,} conversations")
 
         return 0
+
+
+def cmd_view(args):
+    """View management commands"""
+    from ctk.core.views import ViewStore, View, ViewItem, ViewQuery
+
+    if not args.db:
+        print("Error: Database path required")
+        return 1
+
+    store = ViewStore(args.db)
+    action = args.view_action
+
+    if action == "list":
+        views = store.list_views_detailed()
+        if not views:
+            print("No views found. Create one with: ctk view create <name> --db <db>")
+            return 0
+
+        print(f"{'Name':<20} {'Type':<10} {'Items':<8} {'Description'}")
+        print("-" * 70)
+        for v in views:
+            desc = (v['description'] or '')[:30]
+            print(f"{v['name']:<20} {v['selection_type']:<10} {v['item_count']:<8} {desc}")
+        return 0
+
+    elif action == "create":
+        if not args.name:
+            print("Error: View name required")
+            return 1
+
+        if store.exists(args.name):
+            print(f"Error: View '{args.name}' already exists")
+            return 1
+
+        # Parse query options if provided
+        query = None
+        if any([args.tags, args.source, args.model, args.starred, args.pinned]):
+            query = {
+                "tags": args.tags.split(",") if args.tags else None,
+                "source": args.source,
+                "model": args.model,
+                "starred": args.starred,
+                "pinned": args.pinned,
+            }
+
+        view = store.create_view(
+            name=args.name,
+            description=args.description,
+            items=args.ids if args.ids else None,
+            query=query,
+            author=args.author
+        )
+
+        if args.track_changes:
+            view.track_changes = True
+
+        store.save(view)
+        print(f"Created view: {args.name}")
+        return 0
+
+    elif action == "show":
+        if not args.name:
+            print("Error: View name required")
+            return 1
+
+        view = store.load(args.name)
+        if not view:
+            print(f"Error: View '{args.name}' not found")
+            return 1
+
+        print(f"Name: {view.name}")
+        print(f"Description: {view.description or '(none)'}")
+        print(f"Type: {view.selection_type.value}")
+        print(f"Created: {view.created}")
+        print(f"Updated: {view.updated}")
+
+        if view.items:
+            print(f"\nItems ({len(view.get_items())} conversations):")
+            for item in view.items:
+                if hasattr(item, 'id'):
+                    note = f" - {item.note}" if item.note else ""
+                    title = f" ({item.title})" if item.title else ""
+                    print(f"  {item.id[:8]}{title}{note}")
+                elif hasattr(item, 'title'):
+                    print(f"  [Section: {item.title}]")
+
+        if view.query:
+            print(f"\nQuery:")
+            if view.query.tags:
+                print(f"  Tags: {view.query.tags}")
+            if view.query.source:
+                print(f"  Source: {view.query.source}")
+            if view.query.starred:
+                print(f"  Starred: {view.query.starred}")
+
+        return 0
+
+    elif action == "add":
+        if not args.name or not args.ids:
+            print("Error: View name and conversation IDs required")
+            return 1
+
+        if not store.exists(args.name):
+            print(f"Error: View '{args.name}' not found")
+            return 1
+
+        db = ConversationDB(args.db)
+        with db:
+            for conv_id in args.ids:
+                if store.add_to_view(args.name, conv_id, title=args.title, note=args.note, db=db):
+                    print(f"Added {conv_id[:8]} to {args.name}")
+                else:
+                    print(f"Failed to add {conv_id[:8]}")
+
+        return 0
+
+    elif action == "remove":
+        if not args.name or not args.ids:
+            print("Error: View name and conversation IDs required")
+            return 1
+
+        for conv_id in args.ids:
+            if store.remove_from_view(args.name, conv_id):
+                print(f"Removed {conv_id[:8]} from {args.name}")
+            else:
+                print(f"Not found: {conv_id[:8]}")
+
+        return 0
+
+    elif action == "delete":
+        if not args.name:
+            print("Error: View name required")
+            return 1
+
+        if store.delete(args.name):
+            print(f"Deleted view: {args.name}")
+        else:
+            print(f"View not found: {args.name}")
+
+        return 0
+
+    elif action == "check":
+        if not args.name:
+            # Check all views
+            views = store.list_views()
+            if not views:
+                print("No views to check")
+                return 0
+
+            db = ConversationDB(args.db)
+            with db:
+                for name in views:
+                    result = store.check_view(name, db)
+                    if result.get("error"):
+                        print(f"{name}: {result['error']}")
+                    elif result["issues"] > 0:
+                        print(f"{name}: {result['issues']} issues (missing: {len(result['missing_ids'])}, drift: {result['drift_count']})")
+                    else:
+                        print(f"{name}: OK ({result['resolved_items']} items)")
+        else:
+            db = ConversationDB(args.db)
+            with db:
+                result = store.check_view(args.name, db)
+                if result.get("error"):
+                    print(f"Error: {result['error']}")
+                    return 1
+
+                print(f"View: {result['name']}")
+                print(f"Items: {result['total_items']} defined, {result['resolved_items']} resolved")
+
+                if result['missing_ids']:
+                    print(f"\nMissing conversations ({len(result['missing_ids'])}):")
+                    for mid in result['missing_ids']:
+                        print(f"  {mid}")
+
+                if result['drift_count'] > 0:
+                    print(f"\nContent drift detected: {result['drift_count']} items")
+
+                if result['issues'] == 0:
+                    print("\nNo issues found.")
+
+        return 0
+
+    elif action == "eval":
+        if not args.name:
+            print("Error: View name required")
+            return 1
+
+        db = ConversationDB(args.db)
+        with db:
+            evaluated = store.evaluate(args.name, db)
+            if not evaluated:
+                print(f"Error: View '{args.name}' not found")
+                return 1
+
+            print(f"View: {args.name}")
+            print(f"Conversations: {len(evaluated)}")
+            print()
+
+            for item in evaluated.items:
+                section_str = f" [{item.section}]" if item.section else ""
+                note_str = f" - {item.item.note}" if item.item.note else ""
+                drift_str = " [DRIFT]" if item.drift_detected else ""
+                print(f"{item.index + 1}. {item.effective_title}{section_str}{note_str}{drift_str}")
+
+        return 0
+
+    else:
+        print(f"Unknown action: {action}")
+        return 1
 
 
 def cmd_plugins(args):
@@ -2086,6 +2308,7 @@ def main():
     export_parser.add_argument('--format', '-f', default='jsonl',
                                help='Export format: json, markdown, jsonl, html, hugo (default: jsonl)')
     export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
+    export_parser.add_argument('--view', help='Export conversations from a named view')
     export_parser.add_argument('--limit', type=int, default=0, help='Maximum conversations (0 = all, default: all)')
     export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
     export_parser.add_argument('--filter-model', help='Filter by model (e.g., gpt-4, claude-3)')
@@ -2166,7 +2389,56 @@ def main():
                              help='Show activity timeline')
     stats_parser.add_argument('--show-models', action='store_true',
                              help='Show model breakdown')
-    
+
+    # View command (subcommands)
+    view_parser = subparsers.add_parser('view', help='Manage curated views of conversations')
+    view_parser.add_argument('--db', '-d', required=True, help='Database path')
+    view_subparsers = view_parser.add_subparsers(dest='view_action', help='View action')
+
+    # view list
+    view_list = view_subparsers.add_parser('list', help='List all views')
+
+    # view create
+    view_create = view_subparsers.add_parser('create', help='Create a new view')
+    view_create.add_argument('name', help='View name')
+    view_create.add_argument('--description', '-D', help='View description')
+    view_create.add_argument('--author', help='Author name')
+    view_create.add_argument('--ids', nargs='+', help='Initial conversation IDs')
+    view_create.add_argument('--tags', help='Filter by tags (comma-separated)')
+    view_create.add_argument('--source', help='Filter by source')
+    view_create.add_argument('--model', help='Filter by model')
+    view_create.add_argument('--starred', action='store_true', help='Filter starred only')
+    view_create.add_argument('--pinned', action='store_true', help='Filter pinned only')
+    view_create.add_argument('--track-changes', action='store_true', help='Track content changes')
+
+    # view show
+    view_show = view_subparsers.add_parser('show', help='Show view details')
+    view_show.add_argument('name', help='View name')
+
+    # view add
+    view_add = view_subparsers.add_parser('add', help='Add conversations to a view')
+    view_add.add_argument('name', help='View name')
+    view_add.add_argument('ids', nargs='+', help='Conversation IDs to add')
+    view_add.add_argument('--title', help='Title override for added items')
+    view_add.add_argument('--note', help='Note for added items')
+
+    # view remove
+    view_remove = view_subparsers.add_parser('remove', help='Remove conversations from a view')
+    view_remove.add_argument('name', help='View name')
+    view_remove.add_argument('ids', nargs='+', help='Conversation IDs to remove')
+
+    # view delete
+    view_delete = view_subparsers.add_parser('delete', help='Delete a view')
+    view_delete.add_argument('name', help='View name')
+
+    # view check
+    view_check = view_subparsers.add_parser('check', help='Check view for issues')
+    view_check.add_argument('name', nargs='?', help='View name (or check all)')
+
+    # view eval
+    view_eval = view_subparsers.add_parser('eval', help='Evaluate and list view contents')
+    view_eval.add_argument('name', help='View name')
+
     # Plugins command
     plugins_parser = subparsers.add_parser('plugins', help='List available plugins')
 
@@ -2301,6 +2573,7 @@ def main():
         'list': cmd_list,
         'search': cmd_search,
         'stats': cmd_stats,
+        'view': cmd_view,
         'plugins': cmd_plugins,
         'tags': cmd_tags,
         'auto-tag': cmd_auto_tag,
@@ -2382,6 +2655,7 @@ def _get_command_handlers():
         'list': cmd_list,
         'search': cmd_search,
         'stats': cmd_stats,
+        'view': cmd_view,
         'plugins': cmd_plugins,
     }
 

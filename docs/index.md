@@ -39,6 +39,7 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 - **🤖 Natural Language Queries**: Use `/ask` or `ctk ask` for LLM-powered queries
 - **🏷️ Smart Tagging**: Auto-tags by provider, model, language; manual tags; LLM auto-tagging
 - **⭐ Organization**: Star, pin, and archive conversations for easy filtering
+- **📁 Views**: Create curated, reusable collections with queries, set operations, and metadata overrides
 
 ### Interactive Features
 - **💬 Chat TUI**: Beautiful terminal UI with conversation browsing, editing, and chat
@@ -51,7 +52,7 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/ctk.git
+git clone https://github.com/queelius/ctk.git
 cd ctk
 make setup
 source .venv/bin/activate
@@ -592,10 +593,13 @@ CTK uses SQLite with the following structure:
 - [x] Database merge/diff operations
 - [x] Shell-first mode with VFS navigation
 - [x] Hugo static site export
+- [x] Views system for curated collections (YAML DSL, queries, set operations)
+- [x] Per-file markdown export
+- [x] VFS integration for views (`/views/` directory)
 
 ### In Progress 🔨
-- [ ] Embeddings and similarity search (complex-network-rag integration)
-- [ ] Unit and integration test coverage
+- [ ] Embeddings and similarity search
+- [ ] Improved test coverage
 - [ ] Performance optimization for large databases
 
 ### Planned 📋

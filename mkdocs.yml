@@ -1,8 +1,9 @@
 site_name: CTK - Conversation Toolkit
-site_description: A powerful toolkit for managing AI conversations from multiple providers
-site_url: https://yourusername.github.io/ctk/
-repo_url: https://github.com/yourusername/ctk
-repo_name: ctk
+site_description: Unified CLI for managing AI conversations from ChatGPT, Claude, Gemini, and more
+site_url: https://queelius.github.io/ctk/
+repo_url: https://github.com/queelius/ctk
+repo_name: queelius/ctk
+edit_uri: edit/master/docs/
 
 theme:
   name: material
@@ -52,6 +53,7 @@ nav:
     - Importing Conversations: guide/importing.md
     - Searching & Filtering: guide/searching.md
     - Exporting: guide/exporting.md
+    - Views: guide/views.md
     - Shell Mode: guide/shell-mode.md
     - Chat TUI: guide/chat-tui.md
   - Reference:

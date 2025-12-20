@@ -618,3 +618,89 @@ class TestVFSPathDataclass:
         assert path.message_path is None
         assert path.file_name is None
         assert path.is_directory is True  # Default value
+
+
+class TestViewsPath:
+    """Test parsing /views paths"""
+
+    @pytest.mark.unit
+    def test_parse_views_directory(self):
+        """Test parsing /views directory"""
+        path = VFSPathParser.parse('/views')
+
+        assert path.path_type == PathType.VIEWS
+        assert path.is_directory is True
+        assert path.segments == ['views']
+
+    @pytest.mark.unit
+    def test_parse_view_directory(self):
+        """Test parsing specific view directory"""
+        path = VFSPathParser.parse('/views/my-view')
+
+        assert path.path_type == PathType.VIEW_DIR
+        assert path.view_name == 'my-view'
+        assert path.is_directory is True
+
+    @pytest.mark.unit
+    def test_parse_conversation_in_view(self):
+        """Test parsing conversation within view"""
+        path = VFSPathParser.parse('/views/my-view/abc123')
+
+        assert path.path_type == PathType.CONVERSATION_ROOT
+        assert path.view_name == 'my-view'
+        assert path.conversation_id == 'abc123'
+        assert path.is_directory is True
+
+    @pytest.mark.unit
+    def test_parse_message_in_view(self):
+        """Test parsing message node within view conversation"""
+        path = VFSPathParser.parse('/views/my-view/abc123/m1')
+
+        assert path.path_type == PathType.MESSAGE_NODE
+        assert path.view_name == 'my-view'
+        assert path.conversation_id == 'abc123'
+        assert path.message_path == ['m1']
+
+    @pytest.mark.unit
+    def test_parse_nested_message_in_view(self):
+        """Test parsing nested message nodes within view"""
+        path = VFSPathParser.parse('/views/my-view/abc123/m1/m2')
+
+        assert path.path_type == PathType.MESSAGE_NODE
+        assert path.view_name == 'my-view'
+        assert path.conversation_id == 'abc123'
+        assert path.message_path == ['m1', 'm2']
+
+    @pytest.mark.unit
+    def test_parse_metadata_file_in_view(self):
+        """Test parsing metadata file within view conversation"""
+        path = VFSPathParser.parse('/views/my-view/abc123/m1/text')
+
+        assert path.path_type == PathType.MESSAGE_FILE
+        assert path.view_name == 'my-view'
+        assert path.conversation_id == 'abc123'
+        assert path.message_path == ['m1']
+        assert path.file_name == 'text'
+        assert path.is_directory is False
+
+    @pytest.mark.unit
+    def test_parse_view_with_dashes(self):
+        """Test parsing view name with dashes"""
+        path = VFSPathParser.parse('/views/my-complex-view-name')
+
+        assert path.path_type == PathType.VIEW_DIR
+        assert path.view_name == 'my-complex-view-name'
+
+    @pytest.mark.unit
+    def test_vfs_path_view_name_field(self):
+        """Test VFSPath view_name optional field"""
+        path = VFSPath(
+            raw_path='/views/test',
+            normalized_path='/views/test',
+            segments=['views', 'test'],
+            path_type=PathType.VIEW_DIR,
+            view_name='test',
+            is_directory=True
+        )
+
+        assert path.view_name == 'test'

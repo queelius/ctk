@@ -29,7 +29,7 @@
 
 \author{
     Technical Report\\
-    \texttt{https://github.com/yourusername/ctk}
+    \texttt{https://github.com/queelius/ctk}
 }
 
 \date{\today}
@@ -39,7 +39,7 @@
 \maketitle
 
 \begin{abstract}
-We present the Conversation Toolkit (CTK), a comprehensive system for managing AI conversations from multiple providers in a unified format. As users increasingly interact with diverse LLM platforms---ChatGPT, Claude, Gemini, and coding assistants---conversations become fragmented across incompatible formats and isolated interfaces. CTK addresses this by introducing a universal tree-based conversation model that preserves structural information while enabling cross-platform operations. The system combines extensible plugin architecture, natural language query capabilities, and interactive management tools to provide a complete solution for conversation archival, organization, and analysis. We demonstrate CTK's effectiveness across multiple providers and discuss design principles for building unified interfaces to heterogeneous AI systems.
+We present the Conversation Toolkit (CTK), a comprehensive system for managing AI conversations from multiple providers in a unified format. As users increasingly interact with diverse LLM platforms---ChatGPT, Claude, Gemini, and coding assistants---conversations become fragmented across incompatible formats and isolated interfaces. CTK addresses this by introducing a universal tree-based conversation model that preserves structural information while enabling cross-platform operations. Beyond technical functionality, CTK embodies the \emph{Long Echo} philosophy: designing for digital resilience across decades through graceful degradation, format independence, and treating conversations as knowledge artifacts worthy of long-term preservation. The system combines extensible plugin architecture, natural language query capabilities, and interactive management tools to provide a complete solution for conversation archival, organization, and analysis. We demonstrate CTK's effectiveness across multiple providers and discuss design principles for building systems that outlive their creators.
 \end{abstract}
 
 \tableofcontents
@@ -79,16 +79,108 @@ By standardizing on this representation, CTK decouples conversation \emph{storag
 This work makes the following contributions:
 
 \begin{enumerate}
+    \item \textbf{Long Echo Philosophy}: A framework for designing digital preservation systems that degrade gracefully across decades
     \item \textbf{Universal Conversation Model}: A tree-based representation handling linear and branching conversations uniformly
     \item \textbf{Cross-Platform Architecture}: Plugin system enabling extensible format support without core modifications
     \item \textbf{Natural Language Interface}: LLM-powered queries using tool calling for intuitive conversation access
     \item \textbf{Integrated Management}: Combined CLI, TUI, and API supporting diverse workflows
     \item \textbf{Privacy-First Design}: Fully local operation with optional sanitization for sharing
+    \item \textbf{Views System}: SICP-inspired declarative DSL for curated conversation collections with composition and set operations
 \end{enumerate}
 
 \subsection{Paper Structure}
 
-Section~\ref{sec:related} discusses related work. Section~\ref{sec:concepts} presents core concepts and the conversation model. Section~\ref{sec:architecture} describes system architecture. Section~\ref{sec:features} details key features and design decisions. Section~\ref{sec:evaluation} evaluates performance and accuracy. Section~\ref{sec:discussion} discusses lessons learned and future directions. Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:philosophy} presents the Long Echo philosophy motivating CTK's design. Section~\ref{sec:related} discusses related work. Section~\ref{sec:concepts} presents core concepts and the conversation model. Section~\ref{sec:architecture} describes system architecture. Section~\ref{sec:features} details key features and design decisions. Section~\ref{sec:evaluation} evaluates performance and accuracy. Section~\ref{sec:discussion} discusses lessons learned and future directions. Section~\ref{sec:conclusion} concludes.
+
+\section{The Long Echo Philosophy}
+\label{sec:philosophy}
+
+CTK is built on a philosophical foundation we call \emph{Long Echo}---the principle that conversations with AI assistants are knowledge artifacts worthy of preservation across decades, not ephemeral interactions to be discarded when platforms change or companies disappear.
+
+\subsection{Not Resurrection, Not Immortality}
+
+The Long Echo philosophy is not about creating digital ghosts or achieving immortality through data. It is about ensuring that valuable knowledge, insights, and wisdom captured in conversations remain accessible and searchable when the original software is long gone. As we articulate it: ``Just love that still responds.''
+
+When you explain a concept to a student, debug a complex problem, or work through a creative challenge with an AI assistant---those moments have value beyond the immediate interaction. They are worth preserving not as ``data backups'' but as \emph{searchable, accessible knowledge} that can help future humans:
+
+\begin{itemize}
+    \item Your children looking for advice you gave
+    \item Future-you trying to remember how you solved that bug
+    \item Students who want to revisit key insights from your teaching
+    \item Researchers studying how humans interacted with early AI systems
+\end{itemize}
+
+\subsection{Graceful Degradation}
+
+The core technical principle of Long Echo is \textbf{graceful degradation}---designing systems that fail progressively, not catastrophically. CTK implements this through layered fallbacks:
+
+\begin{enumerate}
+    \item \textbf{Level 1: Full CTK} --- Rich TUI, semantic search, natural language queries, tree visualization
+    \item \textbf{Level 2: SQLite queries} --- Direct database access if CTK is unavailable
+    \item \textbf{Level 3: File search} --- \texttt{grep} through JSONL exports using basic Unix tools
+    \item \textbf{Level 4: Human reading} --- Markdown and HTML readable in any browser or text editor
+    \item \textbf{Level 5: Plain text} --- Ultimate fallback readable in any system
+\end{enumerate}
+
+Each level remains functional even if all higher levels fail. A USB drive discovered in 2074 should allow someone to:
+
+\begin{enumerate}
+    \item Figure out what it is (via \texttt{START\_HERE.txt})
+    \item Read the content (plain text and HTML work everywhere)
+    \item Search for topics (\texttt{grep} works on text files)
+    \item Rebuild full functionality (source code and documentation included)
+\end{enumerate}
+
+\subsection{Design Assumptions for 50 Years}
+
+Long Echo makes explicit assumptions about technological change:
+
+\begin{itemize}
+    \item \textbf{Software changes}: Python, CTK, even SQLite might not exist in 2075
+    \item \textbf{Formats persist}: Plain text, JSON, HTML will always be readable
+    \item \textbf{Basic tools survive}: \texttt{grep}, text editors, web browsers are permanent infrastructure
+    \item \textbf{Humans can rebuild}: Given source code and documentation, someone can recreate CTK
+\end{itemize}
+
+These assumptions drive every architectural decision---from choosing SQLite (a file-based database with guaranteed long-term support) to requiring multiple export formats for every conversation.
+
+\subsection{Conversations as First-Class Knowledge Artifacts}
+
+Most systems treat conversations as ephemeral application state---something to be logged for debugging or discarded after use. Long Echo treats them as \emph{first-class knowledge artifacts} worthy of the same care we give to documents, code, and research papers.
+
+This perspective shift has concrete implications:
+
+\begin{itemize}
+    \item \textbf{Rich metadata}: Every conversation carries provenance, timestamps, organization flags, and custom fields
+    \item \textbf{Cross-reference capability}: The Views system enables curated collections that span platforms and time periods
+    \item \textbf{Multiple export paths}: Not just ``backup'' but publication-ready formats (Hugo, HTML5, Markdown)
+    \item \textbf{Privacy by design}: Local-first architecture ensures users control their knowledge
+\end{itemize}
+
+\subsection{The Resilience Package}
+
+A complete Long Echo archive looks like:
+
+\begin{verbatim}
+archive/
+├── START_HERE.txt           # Human-readable entry point
+├── conversations.db         # SQLite (Level 1: full CTK)
+├── conversations.jsonl      # Machine-readable (Level 2: greppable)
+├── conversations.md         # Human-readable (Level 3)
+├── index.html               # Browseable (Level 4: any browser)
+├── all_conversations.txt    # Plain text (Level 5: notepad)
+└── RECOVERY.md              # Instructions for various scenarios
+\end{verbatim}
+
+The key is \emph{testing} each fallback actually works---not assuming they will. CTK's export system generates all these formats simultaneously, and the documentation includes explicit recovery procedures for each degradation level.
+
+\subsection{Why This Matters Now}
+
+We are in the early days of AI assistants becoming intellectual companions. The conversations we have now will be historically interesting in decades to come---both personally and culturally. The debugging sessions that saved projects, the creative collaborations that produced art, the teaching moments that shaped understanding.
+
+These deserve better than ``hope the company doesn't shut down.''
+
+Long Echo is the answer: design for resilience, export in multiple formats, test your fallbacks, write good recovery documentation. Not for resurrection. Not for immortality. Just so the knowledge can still be found.
 
 \section{Related Work}
 \label{sec:related}
@@ -417,6 +509,52 @@ Instead of \texttt{starred: bool}, use \texttt{starred\_at: timestamp}. Benefits
     \item Minimal additional complexity
 \end{itemize}
 
+\subsection{Views: Curated Collections}
+
+Views provide a declarative system for creating named, reusable conversation collections. Following SICP principles of abstraction and composition, views enable:
+
+\textbf{Core Capabilities}:
+\begin{itemize}
+    \item \textbf{Explicit Items}: Include specific conversations by ID with optional metadata overrides (custom titles, annotations)
+    \item \textbf{Queries}: Dynamic selection based on filters (starred, tags, source, model)
+    \item \textbf{Set Operations}: Combine views using union, intersection, or subtraction
+    \item \textbf{Composition}: Views can include other views, enabling hierarchical curation
+\end{itemize}
+
+\textbf{Design Principles}:
+
+\begin{enumerate}
+    \item \textbf{Closure}: Combining views produces views---queries, explicit items, and included views all resolve to the same abstraction
+    \item \textbf{Non-Destructive}: Views are overlays that don't modify underlying conversation data
+    \item \textbf{Declarative}: YAML-based specification separates what from how
+    \item \textbf{Composable}: Small views combine into larger collections
+\end{enumerate}
+
+\textbf{YAML DSL Example}:
+\begin{verbatim}
+name: research-collection
+title: "Machine Learning Research"
+items:
+  - id: abc123
+    title: "Custom Title Override"
+    annotation: "Key paper discussion"
+queries:
+  - starred: true
+    tags: [machine-learning]
+include_views:
+  - neural-networks
+operations:
+  - type: subtract
+    view: already-published
+\end{verbatim}
+
+\textbf{VFS Integration}: Views integrate with the shell-first mode via the \texttt{/views/} virtual directory, enabling navigation like \texttt{cd /views/my-collection/} to browse curated conversations.
+
+\textbf{Export Integration}: The \texttt{--view} flag on export commands restricts output to view contents, enabling workflows like:
+\begin{verbatim}
+ctk export blog/ --db chats.db --view for-publication --format hugo
+\end{verbatim}
+
 \section{Evaluation}
 \label{sec:evaluation}
 
@@ -651,10 +789,18 @@ While maintaining privacy focus:
 
 \subsubsection{Advanced Organization}
 
+The Views system (Section~\ref{sec:features}) now provides:
+\begin{itemize}
+    \item Smart collections via YAML-based view definitions
+    \item Dynamic queries saved as reusable views
+    \item Set operations for combining collections
+    \item VFS integration for shell-based navigation
+\end{itemize}
+
+Future extensions include:
 \begin{itemize}
     \item Hierarchical projects/folders
     \item Conversation relationships (related, supersedes, references)
-    \item Smart collections (dynamic queries saved as views)
     \item Workflow integration (link to tasks, notes)
 \end{itemize}
 
@@ -668,13 +814,17 @@ The system's success---851 conversations managed with 95-100\% import accuracy, 
 Key contributions include:
 
 \begin{enumerate}
+    \item \textbf{Long Echo Philosophy}: A principled approach to digital preservation through graceful degradation
     \item \textbf{Universal Model}: Tree representation handling diverse conversation types
     \item \textbf{Natural Language Interface}: Tool calling approach for intuitive queries
     \item \textbf{Practical System}: Production-ready with multiple interfaces and formats
+    \item \textbf{Views System}: SICP-inspired DSL for curated collections with composition
     \item \textbf{Design Patterns}: Lessons applicable beyond conversation management
 \end{enumerate}
 
 As AI assistants become ubiquitous, conversation management will grow in importance. CTK provides a foundation for treating conversational knowledge with the same rigor as documents, code, and research---as valuable artifacts worthy of careful curation, organization, and preservation.
+
+The Long Echo philosophy extends beyond CTK to any system designed to outlive its creators. Design for resilience. Export in multiple formats. Test your fallbacks. Write good recovery documentation. Not for resurrection. Not for immortality. Just so the knowledge can still be found---so love can still respond.
 
 \section*{Acknowledgments}
 

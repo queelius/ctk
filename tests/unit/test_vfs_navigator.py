@@ -1116,3 +1116,192 @@ class TestVFSNavigatorModelListing:
 
         names = [e.name for e in entries]
         assert names == ["alpha", "beta", "zeta"]
+
+
+class TestVFSNavigatorViewsListing:
+    """Test views directory listings"""
+
+    @pytest.fixture
+    def mock_db(self):
+        """Create mock database"""
+        return Mock(spec=ConversationDB)
+
+    @pytest.fixture
+    def mock_view_store(self):
+        """Create mock view store"""
+        from ctk.core.views import ViewStore
+        return Mock(spec=ViewStore)
+
+    @pytest.fixture
+    def navigator_with_views(self, mock_db, mock_view_store):
+        """Create navigator with view store"""
+        nav = VFSNavigator(mock_db)
+        nav._view_store = mock_view_store
+        return nav
+
+    @pytest.mark.unit
+    def test_list_root_includes_views_when_store_available(self, mock_db, mock_view_store):
+        """Test root listing includes views when view store is available"""
+        nav = VFSNavigator(mock_db)
+        nav._view_store = mock_view_store
+
+        entries = nav._list_root()
+
+        names = [e.name for e in entries]
+        assert "views" in names
+        assert "chats" in names
+
+    @pytest.mark.unit
+    def test_list_root_excludes_views_when_no_store(self, mock_db):
+        """Test root listing excludes views when no view store"""
+        nav = VFSNavigator(mock_db)
+        # Don't set view store
+
+        entries = nav._list_root()
+
+        names = [e.name for e in entries]
+        assert "views" not in names
+        assert "chats" in names
+
+    @pytest.mark.unit
+    def test_list_views_shows_all_views(self, navigator_with_views, mock_view_store):
+        """Test /views shows all available views"""
+        from ctk.core.views import View
+        mock_view = Mock(spec=View)
+        mock_view.title = "Test View"
+        mock_view.created_at = datetime.now()
+        mock_view.updated_at = datetime.now()
+
+        mock_view_store.list_views.return_value = ["test-view", "another-view"]
+        mock_view_store.load.return_value = mock_view
+
+        entries = navigator_with_views._list_views()
+
+        assert len(entries) == 2
+        names = [e.name for e in entries]
+        assert "test-view" in names
+        assert "another-view" in names
+        assert all(e.is_directory for e in entries)
+
+    @pytest.mark.unit
+    def test_list_views_empty_when_no_views(self, navigator_with_views, mock_view_store):
+        """Test /views returns empty list when no views exist"""
+        mock_view_store.list_views.return_value = []
+
+        entries = navigator_with_views._list_views()
+
+        assert len(entries) == 0
+
+    @pytest.mark.unit
+    def test_list_views_returns_empty_when_no_store(self, mock_db):
+        """Test _list_views returns empty when no view store"""
+        nav = VFSNavigator(mock_db)
+        # Don't set view store
+
+        entries = nav._list_views()
+
+        assert len(entries) == 0
+
+    @pytest.mark.unit
+    def test_list_view_contents_shows_conversations(self, navigator_with_views, mock_view_store, mock_db):
+        """Test /views/<name> shows conversations in the view"""
+        from ctk.core.views import EvaluatedView, EvaluatedViewItem
+
+        # Setup evaluated view with items
+        mock_item = Mock(spec=EvaluatedViewItem)
+        mock_item.conversation_id = "conv_001"
+        mock_item.title_override = None
+
+        mock_evaluated = Mock(spec=EvaluatedView)
+        mock_evaluated.items = [mock_item]
+
+        mock_view_store.evaluate.return_value = mock_evaluated
+
+        # Setup conversation in database
+        mock_conv = Mock()
+        mock_conv.title = "Test Conversation"
+        mock_conv.created_at = datetime.now()
+        mock_conv.updated_at = datetime.now()
+        mock_conv.tags = []
+        mock_conv.starred_at = None
+        mock_conv.pinned_at = None
+        mock_conv.archived_at = None
+        mock_conv.source = "openai"
+        mock_conv.model = "gpt-4"
+
+        mock_db.load_conversation.return_value = mock_conv
+
+        entries = navigator_with_views._list_view_contents("test-view")
+
+        assert len(entries) == 1
+        assert entries[0].conversation_id == "conv_001"
+        assert entries[0].title == "Test Conversation"
+        assert entries[0].is_directory is True
+        mock_view_store.evaluate.assert_called_once_with("test-view", mock_db)
+
+    @pytest.mark.unit
+    def test_list_view_contents_uses_title_override(self, navigator_with_views, mock_view_store, mock_db):
+        """Test view contents use title override when available"""
+        from ctk.core.views import EvaluatedView, EvaluatedViewItem
+
+        mock_item = Mock(spec=EvaluatedViewItem)
+        mock_item.conversation_id = "conv_001"
+        mock_item.title_override = "Custom Title"
+
+        mock_evaluated = Mock(spec=EvaluatedView)
+        mock_evaluated.items = [mock_item]
+
+        mock_view_store.evaluate.return_value = mock_evaluated
+
+        mock_conv = Mock()
+        mock_conv.title = "Original Title"
+        mock_conv.created_at = datetime.now()
+        mock_conv.updated_at = datetime.now()
+        mock_conv.tags = []
+        mock_conv.starred_at = None
+        mock_conv.pinned_at = None
+        mock_conv.archived_at = None
+        mock_conv.source = "openai"
+        mock_conv.model = "gpt-4"
+
+        mock_db.load_conversation.return_value = mock_conv
+
+        entries = navigator_with_views._list_view_contents("test-view")
+
+        assert entries[0].title == "Custom Title"
+
+    @pytest.mark.unit
+    def test_list_view_contents_skips_missing_conversations(self, navigator_with_views, mock_view_store, mock_db):
+        """Test view contents silently skip conversations that no longer exist"""
+        from ctk.core.views import EvaluatedView, EvaluatedViewItem
+
+        mock_item = Mock(spec=EvaluatedViewItem)
+        mock_item.conversation_id = "nonexistent"
+        mock_item.title_override = None
+
+        mock_evaluated = Mock(spec=EvaluatedView)
+        mock_evaluated.items = [mock_item]
+
+        mock_view_store.evaluate.return_value = mock_evaluated
+        mock_db.load_conversation.return_value = None  # Conversation not found
+
+        entries = navigator_with_views._list_view_contents("test-view")
+
+        assert len(entries) == 0
+
+    @pytest.mark.unit
+    def test_list_view_contents_raises_when_view_not_found(self, navigator_with_views, mock_view_store, mock_db):
+        """Test view contents raises error when view not found"""
+        mock_view_store.evaluate.return_value = None
+
+        with pytest.raises(ValueError, match="View not found"):
+            navigator_with_views._list_view_contents("nonexistent")
+
+    @pytest.mark.unit
+    def test_list_view_contents_raises_when_no_store(self, mock_db):
+        """Test view contents raises error when no view store"""
+        nav = VFSNavigator(mock_db)
+        # Don't set view store
+
+        with pytest.raises(ValueError, match="View store not available"):
+            nav._list_view_contents("test-view")

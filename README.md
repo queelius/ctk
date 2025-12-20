@@ -39,6 +39,7 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 - **🤖 Natural Language Queries**: Use `/ask` or `ctk ask` for LLM-powered queries
 - **🏷️ Smart Tagging**: Auto-tags by provider, model, language; manual tags; LLM auto-tagging
 - **⭐ Organization**: Star, pin, and archive conversations for easy filtering
+- **📁 Views**: Create curated, reusable collections with YAML DSL, queries, and set operations
 
 ### Interactive Features
 - **💬 Chat TUI**: Beautiful terminal UI with conversation browsing, editing, and chat
@@ -51,7 +52,7 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/ctk.git
+git clone https://github.com/queelius/ctk.git
 cd ctk
 make setup
 source .venv/bin/activate
@@ -224,6 +225,53 @@ ctk archive --unarchive abc123 --db chats.db
 ctk title abc123 "New descriptive title" --db chats.db
 ```
 
+## 📁 Views: Curated Collections
+
+Views let you create named, reusable collections of conversations with queries, metadata overrides, and set operations.
+
+### Create and Manage Views
+```bash
+# Create a view
+ctk view create favorites --db chats.db --title "My Favorites"
+
+# Add conversations to view
+ctk view add favorites abc123 def456 --db chats.db
+
+# Add with custom title override
+ctk view add favorites ghi789 --db chats.db --title "Important Discussion"
+
+# List all views
+ctk view list --db chats.db
+
+# Show view contents
+ctk view eval favorites --db chats.db
+
+# Remove from view
+ctk view remove favorites abc123 --db chats.db
+```
+
+### Export with Views
+```bash
+# Export only conversations in a view
+ctk export archive.html --db chats.db --view favorites --format html
+
+# Export to markdown (one file per conversation)
+ctk export docs/ --db chats.db --view favorites --format markdown
+
+# Export to Hugo
+ctk export content/posts/ --db chats.db --view favorites --format hugo
+```
+
+### Navigate Views in Shell Mode
+```bash
+ctk chat --db chats.db
+
+# In shell mode:
+cd /views/                    # List all views
+cd /views/favorites/          # List conversations in view
+cd abc123                     # Navigate into conversation
+```
+
 ## 💬 Interactive Chat TUI
 
 Launch the terminal UI for interactive conversation management and chat:
@@ -355,6 +403,16 @@ ctk export clean_export.jsonl --db chats.db --format jsonl --sanitize
 # - SSH keys
 # - Database URLs
 # - Credit card numbers (if any)
+```
+
+### Export to Markdown
+```bash
+# Single file with all conversations
+ctk export all_chats.md --db chats.db --format markdown
+
+# Per-file export (one markdown file per conversation)
+ctk export docs/ --db chats.db --format markdown
+# Creates: docs/2024-01-15_title_abc123.md, docs/2024-01-16_title_def456.md, ...
 ```
 
 ### Export to Hugo (Static Site)
@@ -592,10 +650,13 @@ CTK uses SQLite with the following structure:
 - [x] Database merge/diff operations
 - [x] Shell-first mode with VFS navigation
 - [x] Hugo static site export
+- [x] Views system for curated collections (YAML DSL, queries, set operations)
+- [x] Per-file markdown export (directory output)
+- [x] VFS integration for views (`/views/` directory)
 
 ### In Progress 🔨
-- [ ] Embeddings and similarity search (complex-network-rag integration)
-- [ ] Unit and integration test coverage
+- [ ] Embeddings and similarity search
+- [ ] Improved test coverage
 - [ ] Performance optimization for large databases
 
 ### Planned 📋

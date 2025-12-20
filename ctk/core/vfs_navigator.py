@@ -11,6 +11,7 @@ from time import time
 
 from .vfs import VFSPath, VFSPathParser, PathType
 from .database import ConversationDB
+from .views import ViewStore
 
 
 @dataclass
@@ -41,17 +42,34 @@ class VFSNavigator:
     # Cache TTL in seconds
     CACHE_TTL = 2.0
 
-    def __init__(self, db: ConversationDB):
+    def __init__(self, db: ConversationDB, views_dir: Optional[str] = None):
         """
         Initialize VFS navigator.
 
         Args:
             db: ConversationDB instance
+            views_dir: Optional path to views directory (defaults to views/ in db directory)
         """
         self.db = db
+        self._views_dir = views_dir
+        self._view_store: Optional[ViewStore] = None
 
         # Cache: path_key -> (timestamp, entries)
         self._cache: Dict[str, Tuple[float, List[VFSEntry]]] = {}
+
+    @property
+    def view_store(self) -> Optional[ViewStore]:
+        """Lazy-load ViewStore from views directory"""
+        if self._view_store is None and self._views_dir:
+            self._view_store = ViewStore(self._views_dir)
+        elif self._view_store is None and hasattr(self.db, 'db_path') and self.db.db_path:
+            # Try to derive views dir from database path
+            from pathlib import Path
+            db_dir = Path(self.db.db_path).parent
+            views_path = db_dir / "views"
+            if views_path.exists():
+                self._view_store = ViewStore(str(views_path))
+        return self._view_store
 
     def clear_cache(self):
         """Clear the directory listing cache"""
@@ -156,6 +174,10 @@ class VFSNavigator:
             entries = self._list_source(vfs_path.segments)
         elif vfs_path.path_type == PathType.MODEL:
             entries = self._list_model(vfs_path.segments)
+        elif vfs_path.path_type == PathType.VIEWS:
+            entries = self._list_views()
+        elif vfs_path.path_type == PathType.VIEW_DIR:
+            entries = self._list_view_contents(vfs_path.view_name)
         else:
             raise ValueError(f"Cannot list directory type: {vfs_path.path_type}")
 
@@ -166,7 +188,7 @@ class VFSNavigator:
 
     def _list_root(self) -> List[VFSEntry]:
         """List root directory (/)"""
-        return [
+        entries = [
             VFSEntry(name="chats", is_directory=True),
             VFSEntry(name="tags", is_directory=True),
             VFSEntry(name="starred", is_directory=True),
@@ -176,6 +198,10 @@ class VFSNavigator:
             VFSEntry(name="source", is_directory=True),
             VFSEntry(name="model", is_directory=True),
         ]
+        # Only show views directory if view store is available
+        if self.view_store is not None:
+            entries.append(VFSEntry(name="views", is_directory=True))
+        return entries
 
     def _list_chats(self) -> List[VFSEntry]:
         """List /chats/ directory"""
@@ -615,3 +641,65 @@ class VFSNavigator:
                 ))
 
             return entries
+
+    def _list_views(self) -> List[VFSEntry]:
+        """
+        List /views/ directory.
+
+        Shows all available named views.
+        """
+        if self.view_store is None:
+            return []
+
+        entries = []
+        for view_name in self.view_store.list_views():
+            # Load view to get metadata
+            view = self.view_store.load(view_name)
+            entries.append(VFSEntry(
+                name=view_name,
+                is_directory=True,
+                title=view.title if view else None,
+                created_at=view.created_at if view else None,
+                updated_at=view.updated_at if view else None
+            ))
+
+        return entries
+
+    def _list_view_contents(self, view_name: str) -> List[VFSEntry]:
+        """
+        List /views/<name>/ directory.
+
+        Shows all conversations in the named view (evaluated).
+        """
+        if self.view_store is None:
+            raise ValueError("View store not available")
+
+        # Evaluate the view to get conversations
+        evaluated = self.view_store.evaluate(view_name, self.db)
+        if evaluated is None:
+            raise ValueError(f"View not found: {view_name}")
+
+        entries = []
+        for item in evaluated.items:
+            # Load conversation to get full metadata
+            conv = self.db.load_conversation(item.conversation_id)
+            if conv is None:
+                # Conversation no longer exists - skip silently
+                continue
+
+            entries.append(VFSEntry(
+                name=item.conversation_id,
+                is_directory=True,  # Conversations are directories
+                conversation_id=item.conversation_id,
+                title=item.title_override or conv.title,  # Use override if available
+                created_at=conv.created_at,
+                updated_at=conv.updated_at,
+                tags=conv.tags,
+                starred=conv.starred_at is not None,
+                pinned=conv.pinned_at is not None,
+                archived=conv.archived_at is not None,
+                source=conv.source,
+                model=conv.model
+            ))
+
+        return entries

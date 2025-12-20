@@ -9,12 +9,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="conversation-tk",
-    version="2.4.1",
+    version="2.5.0",
     author="CTK Contributors",
     description="A robust toolkit for managing tree-based conversations from multiple sources",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/ctk",
+    url="https://github.com/queelius/ctk",
     packages=find_packages(exclude=['export', 'tests']),
     classifiers=[
         "Development Status :: 4 - Beta",

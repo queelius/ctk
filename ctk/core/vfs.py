@@ -23,6 +23,8 @@ class PathType(Enum):
     RECENT = "recent"            # /recent/* - time-based views (read-only)
     SOURCE = "source"            # /source/* - grouped by source (read-only)
     MODEL = "model"              # /model/* - grouped by model (read-only)
+    VIEWS = "views"              # /views/ - named views
+    VIEW_DIR = "view_dir"        # /views/<name>/ - contents of a view
     CONVERSATION = "conversation"  # Conversation reference (symlink-like)
     CONVERSATION_ROOT = "conversation_root"  # Conversation as directory (e.g., /chats/abc123/)
     MESSAGE_NODE = "message_node"  # Message node in tree (e.g., /chats/abc123/m5/)
@@ -43,6 +45,8 @@ class VFSPath:
         /chats/abc123/m5/text -> type=MESSAGE_FILE, message_path=['m5'], file_name='text'
         /tags/physics/simulator -> type=TAG_DIR, segments=['tags', 'physics', 'simulator']
         /starred/ -> type=STARRED, segments=['starred']
+        /views/ -> type=VIEWS, segments=['views']
+        /views/my-view/ -> type=VIEW_DIR, segments=['views', 'my-view'], view_name='my-view'
     """
     raw_path: str
     normalized_path: str
@@ -50,6 +54,7 @@ class VFSPath:
     path_type: PathType
     conversation_id: Optional[str] = None
     tag_path: Optional[str] = None  # For tags: "physics/simulator"
+    view_name: Optional[str] = None  # For views: "my-view"
     message_path: Optional[List[str]] = None  # For message nodes: ['m5', 'm10']
     file_name: Optional[str] = None  # For message files: 'text', 'role', 'timestamp', 'id'
     is_directory: bool = True
@@ -597,6 +602,64 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_segments,
                     is_directory=True
+                )
+
+        # /views/*
+        elif first == "views":
+            if len(segments) == 1:
+                # /views/ directory
+                return VFSPath(
+                    raw_path=path,
+                    normalized_path=normalized,
+                    segments=segments,
+                    path_type=PathType.VIEWS,
+                    is_directory=True
+                )
+            elif len(segments) == 2:
+                # /views/<name>/ - view directory listing conversations
+                view_name = segments[1]
+                return VFSPath(
+                    raw_path=path,
+                    normalized_path=normalized,
+                    segments=segments,
+                    path_type=PathType.VIEW_DIR,
+                    view_name=view_name,
+                    is_directory=True
+                )
+            elif len(segments) == 3:
+                # /views/<name>/<id> - conversation as directory
+                view_name = segments[1]
+                conv_id = segments[2]
+                return VFSPath(
+                    raw_path=path,
+                    normalized_path=normalized,
+                    segments=segments,
+                    path_type=PathType.CONVERSATION_ROOT,
+                    view_name=view_name,
+                    conversation_id=conv_id,
+                    is_directory=True
+                )
+            else:
+                # /views/<name>/<id>/m1/m2/... - message nodes or metadata files
+                view_name = segments[1]
+                conv_id = segments[2]
+                remaining_segments = segments[3:]
+
+                # Parse message segments with metadata file detection
+                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
+                    remaining_segments, normalized
+                )
+
+                return VFSPath(
+                    raw_path=path,
+                    normalized_path=normalized,
+                    segments=segments,
+                    path_type=path_type,
+                    view_name=view_name,
+                    conversation_id=conv_id,
+                    message_path=message_path,
+                    file_name=file_name,
+                    is_directory=(path_type == PathType.MESSAGE_NODE)
                 )
 
         else:
