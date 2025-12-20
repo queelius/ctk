@@ -137,6 +137,7 @@ class TestCLICommandBehaviors:
         args.include_metadata = False
         args.starred = False
         args.pinned = False
+        args.view = None  # Prevent MagicMock from creating truthy view attribute
 
         db = MagicMock()
         db.__enter__.return_value = db
