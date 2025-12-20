@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://queelius.github.io/ctk/guide/shell-mode/">
       
       
-        <link rel="prev" href="../exporting/">
+        <link rel="prev" href="../views/">
       
       
         <link rel="next" href="../chat-tui/">
@@ -491,6 +491,29 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../views/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Views
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -571,6 +594,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#views-in-shell-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Views in Shell Mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#search" class="md-nav__link">
     <span class="md-ellipsis">
       Search
@@ -598,6 +630,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Visualization
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#piping" class="md-nav__link">
     <span class="md-ellipsis">
       Piping
@@ -607,9 +648,27 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#chat-mode" class="md-nav__link">
     <span class="md-ellipsis">
       Chat Mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Session
     </span>
   </a>
   
@@ -950,6 +1009,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#views-in-shell-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Views in Shell Mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#search" class="md-nav__link">
     <span class="md-ellipsis">
       Search
@@ -977,6 +1045,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#visualization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Visualization
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#piping" class="md-nav__link">
     <span class="md-ellipsis">
       Piping
@@ -986,9 +1063,27 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#chat-mode" class="md-nav__link">
     <span class="md-ellipsis">
       Chat Mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example Session
     </span>
   </a>
   
@@ -1029,8 +1124,14 @@
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>├── archived/           # Archived conversations
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── tags/               # Conversations by tag
 <a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>├── recent/             # Recent conversations
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>├── source/             # By source (ChatGPT, Claude, etc.)
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>└── model/              # By model (GPT-4, Claude-3, etc.)
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>│   ├── today/
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>│   ├── this-week/
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>│   ├── this-month/
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>│   └── older/
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>├── source/             # By source (ChatGPT, Claude, etc.)
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>├── model/              # By model (GPT-4, Claude-3, etc.)
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>└── views/              # Named views (curated collections)
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    └── &lt;view-name&gt;/    # Conversations in view
 </code></pre></div>
 <h2 id="navigation-commands">Navigation Commands<a class="headerlink" href="#navigation-commands" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd</span><span class="w"> </span>/chats<span class="w">               </span><span class="c1"># Go to conversations</span>
@@ -1042,37 +1143,97 @@
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>ls<span class="w">                      </span><span class="c1"># List contents</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>ls<span class="w"> </span>-l<span class="w">                   </span><span class="c1"># Long format with metadata</span>
 </code></pre></div>
+<h2 id="views-in-shell-mode">Views in Shell Mode<a class="headerlink" href="#views-in-shell-mode" title="Permanent link">&para;</a></h2>
+<p>Navigate curated views like regular directories:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">cd</span><span class="w"> </span>/views/<span class="w">                    </span><span class="c1"># List all views</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>ls<span class="w">                            </span><span class="c1"># Shows: my-favorites, research-2024, ...</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">cd</span><span class="w"> </span>/views/my-favorites/<span class="w">       </span><span class="c1"># Enter a view</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>ls<span class="w">                            </span><span class="c1"># Shows conversations in this view</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nb">cd</span><span class="w"> </span>abc123<span class="w">                     </span><span class="c1"># Navigate into a conversation</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>cat<span class="w"> </span>m1/text<span class="w">                   </span><span class="c1"># Read message content</span>
+</code></pre></div>
+<p>Views provide the same navigation as <code>/chats/</code>, but only show the curated subset:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># List conversations in a view</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">cd</span><span class="w"> </span>/views/research-notes
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>ls<span class="w"> </span>-l
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Search within a view&#39;s conversations</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>find<span class="w"> </span>-content<span class="w"> </span><span class="s2">&quot;machine learning&quot;</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># View shows title overrides from view definition</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>ls<span class="w">  </span><span class="c1"># Shows custom titles if defined in view</span>
+</code></pre></div>
 <h2 id="search">Search<a class="headerlink" href="#search" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>find<span class="w"> </span>-name<span class="w"> </span><span class="s2">&quot;*python*&quot;</span><span class="w">           </span><span class="c1"># Find by title</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>find<span class="w"> </span>-content<span class="w"> </span><span class="s2">&quot;async&quot;</span><span class="w">           </span><span class="c1"># Find by content</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>find<span class="w"> </span>-role<span class="w"> </span>user<span class="w">                 </span><span class="c1"># Find user messages</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>find<span class="w"> </span>-l<span class="w">                         </span><span class="c1"># Rich table output</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>find<span class="w"> </span>-limit<span class="w"> </span><span class="m">10</span><span class="w">                  </span><span class="c1"># Limit results</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>find<span class="w"> </span>-name<span class="w"> </span><span class="s2">&quot;*python*&quot;</span><span class="w">           </span><span class="c1"># Find by title</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>find<span class="w"> </span>-content<span class="w"> </span><span class="s2">&quot;async&quot;</span><span class="w">           </span><span class="c1"># Find by content</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>find<span class="w"> </span>-role<span class="w"> </span>user<span class="w">                 </span><span class="c1"># Find user messages</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>find<span class="w"> </span>-l<span class="w">                         </span><span class="c1"># Rich table output</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>find<span class="w"> </span>-limit<span class="w"> </span><span class="m">10</span><span class="w">                  </span><span class="c1"># Limit results</span>
 </code></pre></div>
 <h2 id="unix-commands">Unix Commands<a class="headerlink" href="#unix-commands" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>cat<span class="w"> </span>text<span class="w">                </span><span class="c1"># Show message content</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>head<span class="w"> </span><span class="m">5</span><span class="w">                  </span><span class="c1"># First 5 lines</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>tail<span class="w"> </span><span class="m">10</span><span class="w">                 </span><span class="c1"># Last 10 lines</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>grep<span class="w"> </span><span class="s2">&quot;pattern&quot;</span><span class="w">          </span><span class="c1"># Search in output</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>cat<span class="w"> </span>text<span class="w">                </span><span class="c1"># Show message content</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>cat<span class="w"> </span>role<span class="w">                </span><span class="c1"># Show message role</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>cat<span class="w"> </span>timestamp<span class="w">           </span><span class="c1"># Show message time</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>cat<span class="w"> </span>id<span class="w">                  </span><span class="c1"># Show message ID</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>head<span class="w"> </span><span class="m">5</span><span class="w">                  </span><span class="c1"># First 5 lines</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>tail<span class="w"> </span><span class="m">10</span><span class="w">                 </span><span class="c1"># Last 10 lines</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>grep<span class="w"> </span><span class="s2">&quot;pattern&quot;</span><span class="w">          </span><span class="c1"># Search in output</span>
 </code></pre></div>
 <h2 id="organization">Organization<a class="headerlink" href="#organization" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>star<span class="w">                    </span><span class="c1"># Star current conversation</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>unstar<span class="w">                  </span><span class="c1"># Unstar</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>pin<span class="w">                     </span><span class="c1"># Pin</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>unpin<span class="w">                   </span><span class="c1"># Unpin</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>archive<span class="w">                 </span><span class="c1"># Archive</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>unarchive<span class="w">               </span><span class="c1"># Unarchive</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>title<span class="w"> </span><span class="s2">&quot;New Title&quot;</span><span class="w">       </span><span class="c1"># Rename</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>star<span class="w">                    </span><span class="c1"># Star current conversation</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>unstar<span class="w">                  </span><span class="c1"># Unstar</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>pin<span class="w">                     </span><span class="c1"># Pin</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>unpin<span class="w">                   </span><span class="c1"># Unpin</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>archive<span class="w">                 </span><span class="c1"># Archive</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>unarchive<span class="w">               </span><span class="c1"># Unarchive</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>title<span class="w"> </span><span class="s2">&quot;New Title&quot;</span><span class="w">       </span><span class="c1"># Rename</span>
+</code></pre></div>
+<h2 id="visualization">Visualization<a class="headerlink" href="#visualization" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tree<span class="w">                    </span><span class="c1"># Show conversation tree structure</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>paths<span class="w">                   </span><span class="c1"># List all paths in branching conversation</span>
 </code></pre></div>
 <h2 id="piping">Piping<a class="headerlink" href="#piping" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ls<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>python<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span><span class="m">5</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>find<span class="w"> </span>-name<span class="w"> </span><span class="s2">&quot;*ai*&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span><span class="m">10</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>cat<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;error&quot;</span>
+<p>Commands support Unix-style piping:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ls<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>python<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span><span class="m">5</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>find<span class="w"> </span>-name<span class="w"> </span><span class="s2">&quot;*ai*&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span><span class="m">10</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>cat<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;error&quot;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>ls<span class="w"> </span>-l<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>starred
+</code></pre></div>
+<h2 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$CWD</span><span class="w">               </span><span class="c1"># Current working directory</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$CONV_ID</span><span class="w">           </span><span class="c1"># Current conversation ID</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$MODEL</span><span class="w">             </span><span class="c1"># Current LLM model</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$PROVIDER</span><span class="w">          </span><span class="c1"># Current LLM provider</span>
 </code></pre></div>
 <h2 id="chat-mode">Chat Mode<a class="headerlink" href="#chat-mode" title="Permanent link">&para;</a></h2>
-<p>From shell mode, start chatting:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>chat<span class="w">                    </span><span class="c1"># Start chat in current conversation</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>/exit<span class="w">                   </span><span class="c1"># Return to shell mode</span>
+<p>From shell mode, start an interactive chat:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>chat<span class="w">                    </span><span class="c1"># Start chat in current conversation</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>/exit<span class="w">                   </span><span class="c1"># Return to shell mode (or Ctrl+D)</span>
+</code></pre></div>
+<h2 id="example-session">Example Session<a class="headerlink" href="#example-session" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>$<span class="w"> </span>ctk<span class="w"> </span>chat<span class="w"> </span>--db<span class="w"> </span>chats.db
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>ctk:/$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>/views/research-2024
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>ctk:/views/research-2024$<span class="w"> </span>ls<span class="w"> </span>-l
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>abc123<span class="w">  </span>Understanding<span class="w"> </span>Transformers<span class="w">     </span><span class="m">2024</span>-03-15<span class="w">  </span>⭐
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>def456<span class="w">  </span>Neural<span class="w"> </span>Network<span class="w"> </span>Optimization<span class="w">    </span><span class="m">2024</span>-04-02
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>ctk:/views/research-2024$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>abc123
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>ctk:/views/research-2024/abc123$<span class="w"> </span>tree
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>m1<span class="w"> </span><span class="o">[</span>user<span class="o">]</span><span class="w"> </span>What<span class="w"> </span>are<span class="w"> </span>transformers?
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>└──<span class="w"> </span>m2<span class="w"> </span><span class="o">[</span>assistant<span class="o">]</span><span class="w"> </span>Transformers<span class="w"> </span>are<span class="w"> </span>a<span class="w"> </span><span class="nb">type</span><span class="w"> </span>of...
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">    </span>└──<span class="w"> </span>m3<span class="w"> </span><span class="o">[</span>user<span class="o">]</span><span class="w"> </span>How<span class="w"> </span>does<span class="w"> </span>attention<span class="w"> </span>work?
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">        </span>└──<span class="w"> </span>m4<span class="w"> </span><span class="o">[</span>assistant<span class="o">]</span><span class="w"> </span>Attention<span class="w"> </span>mechanisms...
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>ctk:/views/research-2024/abc123$<span class="w"> </span>cat<span class="w"> </span>m2/text
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>Transformers<span class="w"> </span>are<span class="w"> </span>a<span class="w"> </span><span class="nb">type</span><span class="w"> </span>of<span class="w"> </span>neural<span class="w"> </span>network<span class="w"> </span>architecture...
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>
+<a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>ctk:/views/research-2024/abc123$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>/starred
+<a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>ctk:/starred$<span class="w"> </span>find<span class="w"> </span>-content<span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="w"> </span>-l
+<a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>ID<span class="w">        </span>Title<span class="w">                    </span>Date<span class="w">        </span>Source
+<a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>abc789<span class="w">    </span>Python<span class="w"> </span>Best<span class="w"> </span>Practices<span class="w">    </span><span class="m">2024</span>-01-10<span class="w">  </span>ChatGPT
 </code></pre></div>
 <p>See the <a href="../../reference/shell-commands/">Shell Commands Reference</a> for complete documentation.</p>
 
