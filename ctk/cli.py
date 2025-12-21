@@ -2278,6 +2278,161 @@ def cmd_duplicate(args):
         return 1
 
 
+def cmd_sql(args):
+    """Execute SQL queries with Rich table output"""
+    import sqlite3
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+
+    if not args.db:
+        print("Error: Database path required")
+        return 1
+
+    # Resolve database path - support both directory and file paths
+    db_path = Path(args.db)
+    if db_path.is_dir():
+        db_file = db_path / "conversations.db"
+    elif db_path.suffix == '.db':
+        db_file = db_path
+    else:
+        db_file = db_path / "conversations.db"
+
+    if not db_file.exists():
+        print(f"Error: Database not found: {db_file}")
+        return 1
+
+    try:
+        # Open database in read-only mode
+        conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+        cursor = conn.cursor()
+
+        # Show schema if requested
+        if args.schema:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            tables = [row[0] for row in cursor.fetchall()]
+
+            console.print("\n[bold cyan]Database Schema[/bold cyan]\n")
+
+            for table_name in tables:
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+
+                table = Table(title=f"[bold]{table_name}[/bold]", show_header=True)
+                table.add_column("Column", style="cyan")
+                table.add_column("Type", style="green")
+                table.add_column("PK", style="yellow")
+                table.add_column("Nullable", style="dim")
+
+                for col in columns:
+                    # col: (cid, name, type, notnull, default_value, pk)
+                    is_pk = "✓" if col[5] else ""
+                    nullable = "" if col[3] else "✓"
+                    table.add_row(col[1], col[2], is_pk, nullable)
+
+                console.print(table)
+                console.print()
+
+            conn.close()
+            return 0
+
+        # Interactive mode
+        if args.interactive:
+            console.print("[bold cyan]CTK SQL Interactive Mode[/bold cyan]")
+            console.print("Type SQL queries, 'schema' to see tables, or 'exit' to quit.\n")
+
+            while True:
+                try:
+                    query = input("sql> ").strip()
+                    if not query:
+                        continue
+                    if query.lower() in ('exit', 'quit', 'q'):
+                        break
+                    if query.lower() == 'schema':
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                        tables = [row[0] for row in cursor.fetchall()]
+                        console.print(f"Tables: {', '.join(tables)}")
+                        continue
+
+                    cursor.execute(query)
+                    rows = cursor.fetchall()
+                    keys = [desc[0] for desc in cursor.description] if cursor.description else []
+
+                    if rows:
+                        _display_sql_results(console, rows, keys, args.format, args.limit)
+                    else:
+                        console.print("[dim]No results[/dim]")
+
+                except KeyboardInterrupt:
+                    console.print("\n")
+                    break
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
+
+            conn.close()
+            return 0
+
+        # Single query mode
+        if not args.query:
+            print("Error: Query required (or use --interactive)")
+            return 1
+
+        cursor.execute(args.query)
+        rows = cursor.fetchall()
+        keys = [desc[0] for desc in cursor.description] if cursor.description else []
+
+        if rows:
+            _display_sql_results(console, rows, keys, args.format, args.limit)
+        else:
+            console.print("[dim]No results[/dim]")
+
+        conn.close()
+        return 0
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+
+def _display_sql_results(console, rows, keys, format_type, limit):
+    """Display SQL query results in the specified format"""
+    from rich.table import Table
+    import json
+
+    # Apply limit
+    if limit and limit > 0:
+        rows = rows[:limit]
+
+    if format_type == 'json':
+        data = []
+        for row in rows:
+            if hasattr(row, '_asdict'):
+                data.append(row._asdict())
+            elif hasattr(row, '_mapping'):
+                data.append(dict(row._mapping))
+            else:
+                data.append(dict(zip(keys, row)))
+        print(json.dumps(data, indent=2, default=str))
+
+    elif format_type == 'csv':
+        print(','.join(str(k) for k in keys))
+        for row in rows:
+            print(','.join(str(v) if v is not None else '' for v in row))
+
+    else:  # table (default)
+        table = Table(show_header=True, header_style="bold cyan")
+
+        for key in keys:
+            table.add_column(str(key))
+
+        for row in rows:
+            table.add_row(*[str(v) if v is not None else "" for v in row])
+
+        console.print(table)
+        console.print(f"\n[dim]{len(rows)} row(s)[/dim]")
+
+
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
@@ -2549,6 +2704,18 @@ def main():
     duplicate_parser.add_argument('--db', '-d', required=True, help='Database path')
     duplicate_parser.add_argument('--title', help='Title for duplicated conversation')
 
+    # SQL command - direct SQL queries with Rich output
+    sql_parser = subparsers.add_parser('sql', help='Execute SQL queries on database')
+    sql_parser.add_argument('query', nargs='?', help='SQL query to execute')
+    sql_parser.add_argument('--db', '-d', required=True, help='Database path')
+    sql_parser.add_argument('--format', '-f', choices=['table', 'json', 'csv'],
+                           default='table', help='Output format (default: table)')
+    sql_parser.add_argument('--limit', '-n', type=int, help='Limit number of rows')
+    sql_parser.add_argument('--schema', '-s', action='store_true',
+                           help='Show database schema')
+    sql_parser.add_argument('--interactive', '-i', action='store_true',
+                           help='Interactive SQL mode')
+
     # Database operations command
     from ctk.cli_db import add_db_commands
     add_db_commands(subparsers)
@@ -2590,6 +2757,7 @@ def main():
         'star': cmd_star,
         'pin': cmd_pin,
         'duplicate': cmd_duplicate,
+        'sql': cmd_sql,
     }
 
     # Special handling for db subcommands
