@@ -2724,6 +2724,14 @@ def main():
     from ctk.cli_net import add_net_commands
     add_net_commands(subparsers)
 
+    # Conversation command group
+    from ctk.cli_conv import add_conv_commands
+    add_conv_commands(subparsers)
+
+    # Library command group
+    from ctk.cli_lib import add_lib_commands
+    add_lib_commands(subparsers)
+
     args = parser.parse_args()
     
     if args.verbose:
@@ -2811,6 +2819,16 @@ def main():
             print("Error: No network operation specified")
             print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers")
             return 1
+
+    # Special handling for conv subcommands
+    if args.command == 'conv':
+        from ctk.cli_conv import dispatch_conv_command
+        return dispatch_conv_command(args)
+
+    # Special handling for lib subcommands
+    if args.command == 'lib':
+        from ctk.cli_lib import dispatch_lib_command
+        return dispatch_lib_command(args)
 
     return commands[args.command](args)
 
