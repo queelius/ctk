@@ -929,12 +929,15 @@ class RestInterface(BaseInterface):
                         "children": [build_tree_node(c) for c in children]
                     }
 
+                # Get root messages from IDs
+                root_messages = [conv.message_map[mid] for mid in conv.root_message_ids if mid in conv.message_map]
+
                 tree = {
                     "id": conv.id,
                     "title": conv.title,
                     "branch_count": conv.count_branches(),
                     "path_count": len(conv.get_all_paths()),
-                    "roots": [build_tree_node(m) for m in conv.root_messages]
+                    "roots": [build_tree_node(m) for m in root_messages]
                 }
 
             return InterfaceResponse.success(data=tree)
