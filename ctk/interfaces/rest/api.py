@@ -104,13 +104,33 @@ class RestInterface(BaseInterface):
 
         @self.app.route('/api/conversations/search', methods=['POST'])
         def search_conversations_route():
-            """Search conversations"""
+            """Search conversations with advanced filters"""
             data = request.get_json()
             query = data.get('query', '')
             limit = data.get('limit', 100)
-            filters = data.get('filters', {})
+            offset = data.get('offset', 0)
 
-            response = self.search_conversations(query, limit, filters)
+            # Advanced search options
+            options = {
+                'title_only': data.get('title_only', False),
+                'content_only': data.get('content_only', False),
+                'date_from': data.get('date_from'),
+                'date_to': data.get('date_to'),
+                'min_messages': data.get('min_messages'),
+                'max_messages': data.get('max_messages'),
+                'has_branches': data.get('has_branches'),
+                'source': data.get('source'),
+                'model': data.get('model'),
+                'project': data.get('project'),
+                'tags': data.get('tags'),
+                'starred': data.get('starred'),
+                'pinned': data.get('pinned'),
+                'archived': data.get('archived'),
+                'order_by': data.get('order_by', 'updated_at'),
+                'ascending': data.get('ascending', False),
+            }
+
+            response = self.search_conversations(query, limit, options, offset=offset)
             return self._format_response(response)
 
         @self.app.route('/api/import', methods=['POST'])
@@ -194,6 +214,218 @@ class RestInterface(BaseInterface):
                 "importers": [{"name": i.name, "description": i.description} for i in importers],
                 "exporters": [{"name": e.name, "description": e.description} for e in exporters]
             })
+
+        # ============================================================
+        # Organization Endpoints
+        # ============================================================
+
+        @self.app.route('/api/conversations/<conversation_id>/star', methods=['POST'])
+        def star_conversation_route(conversation_id: str):
+            """Star a conversation"""
+            response = self.star_conversation(conversation_id, star=True)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/star', methods=['DELETE'])
+        def unstar_conversation_route(conversation_id: str):
+            """Unstar a conversation"""
+            response = self.star_conversation(conversation_id, star=False)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/pin', methods=['POST'])
+        def pin_conversation_route(conversation_id: str):
+            """Pin a conversation"""
+            response = self.pin_conversation(conversation_id, pin=True)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/pin', methods=['DELETE'])
+        def unpin_conversation_route(conversation_id: str):
+            """Unpin a conversation"""
+            response = self.pin_conversation(conversation_id, pin=False)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/archive', methods=['POST'])
+        def archive_conversation_route(conversation_id: str):
+            """Archive a conversation"""
+            response = self.archive_conversation(conversation_id, archive=True)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/archive', methods=['DELETE'])
+        def unarchive_conversation_route(conversation_id: str):
+            """Unarchive a conversation"""
+            response = self.archive_conversation(conversation_id, archive=False)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/title', methods=['PUT'])
+        def rename_conversation_route(conversation_id: str):
+            """Rename a conversation"""
+            data = request.get_json()
+            title = data.get('title', '')
+            response = self.rename_conversation(conversation_id, title)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/duplicate', methods=['POST'])
+        def duplicate_conversation_route(conversation_id: str):
+            """Duplicate a conversation"""
+            data = request.get_json() or {}
+            new_title = data.get('title')
+            response = self.duplicate_conversation(conversation_id, new_title)
+            return self._format_response(response)
+
+        # ============================================================
+        # Tag Management Endpoints
+        # ============================================================
+
+        @self.app.route('/api/tags', methods=['GET'])
+        def list_tags_route():
+            """List all tags with counts"""
+            response = self.list_tags()
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/tags', methods=['POST'])
+        def add_tags_route(conversation_id: str):
+            """Add tags to a conversation"""
+            data = request.get_json()
+            tags = data.get('tags', [])
+            response = self.add_tags(conversation_id, tags)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/tags/<tag>', methods=['DELETE'])
+        def remove_tag_route(conversation_id: str, tag: str):
+            """Remove a tag from a conversation"""
+            response = self.remove_tag(conversation_id, tag)
+            return self._format_response(response)
+
+        @self.app.route('/api/tags/<path:tag>/conversations', methods=['GET'])
+        def list_conversations_by_tag_route(tag: str):
+            """List conversations with a specific tag"""
+            limit = request.args.get('limit', 100, type=int)
+            offset = request.args.get('offset', 0, type=int)
+            response = self.list_conversations_by_tag(tag, limit, offset)
+            return self._format_response(response)
+
+        # ============================================================
+        # Metadata Endpoints
+        # ============================================================
+
+        @self.app.route('/api/models', methods=['GET'])
+        def list_models_route():
+            """List all models with counts"""
+            response = self.list_models()
+            return self._format_response(response)
+
+        @self.app.route('/api/sources', methods=['GET'])
+        def list_sources_route():
+            """List all sources with counts"""
+            response = self.list_sources()
+            return self._format_response(response)
+
+        @self.app.route('/api/timeline', methods=['GET'])
+        def get_timeline_route():
+            """Get conversation timeline/analytics"""
+            granularity = request.args.get('granularity', 'day')
+            limit = request.args.get('limit', 30, type=int)
+            response = self.get_timeline(granularity, limit)
+            return self._format_response(response)
+
+        # ============================================================
+        # Tree/Path Endpoints
+        # ============================================================
+
+        @self.app.route('/api/conversations/<conversation_id>/tree', methods=['GET'])
+        def get_conversation_tree_route(conversation_id: str):
+            """Get conversation tree structure"""
+            response = self.get_conversation_tree(conversation_id)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/paths', methods=['GET'])
+        def list_conversation_paths_route(conversation_id: str):
+            """List all paths in a conversation"""
+            response = self.list_conversation_paths(conversation_id)
+            return self._format_response(response)
+
+        @self.app.route('/api/conversations/<conversation_id>/paths/<int:path_index>', methods=['GET'])
+        def get_conversation_path_route(conversation_id: str, path_index: int):
+            """Get a specific path from a conversation"""
+            response = self.get_conversation_path(conversation_id, path_index)
+            return self._format_response(response)
+
+        # ============================================================
+        # Views Endpoints
+        # ============================================================
+
+        @self.app.route('/api/views', methods=['GET'])
+        def list_views_route():
+            """List all views"""
+            response = self.list_views()
+            return self._format_response(response)
+
+        @self.app.route('/api/views', methods=['POST'])
+        def create_view_route():
+            """Create a new view"""
+            content_type = request.content_type or ''
+            if 'yaml' in content_type:
+                # YAML body
+                yaml_content = request.get_data(as_text=True)
+                response = self.create_view_from_yaml(yaml_content)
+            else:
+                # JSON body
+                data = request.get_json()
+                response = self.create_view(data)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>', methods=['GET'])
+        def get_view_route(view_name: str):
+            """Get view definition"""
+            format_type = request.args.get('format', 'json')
+            response = self.get_view(view_name, format_type)
+            if response.status == ResponseStatus.SUCCESS and format_type == 'yaml':
+                return Response(response.data, mimetype='text/yaml')
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>', methods=['PUT'])
+        def update_view_route(view_name: str):
+            """Update a view"""
+            content_type = request.content_type or ''
+            if 'yaml' in content_type:
+                yaml_content = request.get_data(as_text=True)
+                response = self.update_view_from_yaml(view_name, yaml_content)
+            else:
+                data = request.get_json()
+                response = self.update_view(view_name, data)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>', methods=['DELETE'])
+        def delete_view_route(view_name: str):
+            """Delete a view"""
+            response = self.delete_view(view_name)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>/eval', methods=['GET'])
+        def evaluate_view_route(view_name: str):
+            """Evaluate view and return resolved conversations"""
+            response = self.evaluate_view(view_name)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>/conversations', methods=['POST'])
+        def add_to_view_route(view_name: str):
+            """Add conversations to a view"""
+            data = request.get_json()
+            conversation_ids = data.get('conversation_ids', [])
+            options = data.get('options', {})
+            response = self.add_to_view(view_name, conversation_ids, options)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>/conversations/<conversation_id>', methods=['DELETE'])
+        def remove_from_view_route(view_name: str, conversation_id: str):
+            """Remove a conversation from a view"""
+            response = self.remove_from_view(view_name, conversation_id)
+            return self._format_response(response)
+
+        @self.app.route('/api/views/<view_name>/check', methods=['GET'])
+        def check_view_route(view_name: str):
+            """Validate view and check for drift"""
+            response = self.check_view(view_name)
+            return self._format_response(response)
 
     def _format_response(self, response: InterfaceResponse) -> Response:
         """Format InterfaceResponse for Flask"""
@@ -294,18 +526,49 @@ class RestInterface(BaseInterface):
         self,
         query: str,
         limit: int = 100,
-        filters: Optional[Dict[str, Any]] = None,
+        options: Optional[Dict[str, Any]] = None,
+        offset: int = 0,
         **kwargs
     ) -> InterfaceResponse:
-        """Search conversations"""
+        """Search conversations with advanced filters"""
         try:
             results = []
+            total = 0
+            options = options or {}
+
             if self.db:
                 with self.db as db:
-                    results = db.search_conversations(query, limit=limit)
+                    # Use advanced search with all options
+                    results = db.search_conversations(
+                        query_text=query,
+                        limit=limit,
+                        offset=offset,
+                        title_only=options.get('title_only', False),
+                        content_only=options.get('content_only', False),
+                        date_from=options.get('date_from'),
+                        date_to=options.get('date_to'),
+                        source=options.get('source'),
+                        project=options.get('project'),
+                        model=options.get('model'),
+                        tags=options.get('tags'),
+                        min_messages=options.get('min_messages'),
+                        max_messages=options.get('max_messages'),
+                        has_branches=options.get('has_branches'),
+                        archived=options.get('archived'),
+                        starred=options.get('starred'),
+                        pinned=options.get('pinned'),
+                        order_by=options.get('order_by', 'updated_at'),
+                        ascending=options.get('ascending', False)
+                    )
+                    total = len(results)
 
             return InterfaceResponse.success(
-                data=[r.to_dict() for r in results],
+                data={
+                    "conversations": [r.to_dict() for r in results],
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset
+                },
                 message=f"Found {len(results)} conversations"
             )
         except Exception as e:
@@ -454,5 +717,507 @@ class RestInterface(BaseInterface):
                 stats = db.get_statistics()
 
             return InterfaceResponse.success(data=stats)
+        except Exception as e:
+            return self.handle_error(e)
+
+    # ================================================================
+    # Organization Methods
+    # ================================================================
+
+    def star_conversation(self, conversation_id: str, star: bool = True) -> InterfaceResponse:
+        """Star or unstar a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.star_conversation(conversation_id, star=star)
+
+            action = "starred" if star else "unstarred"
+            return InterfaceResponse.success(message=f"Conversation {conversation_id} {action}")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def pin_conversation(self, conversation_id: str, pin: bool = True) -> InterfaceResponse:
+        """Pin or unpin a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.pin_conversation(conversation_id, pin=pin)
+
+            action = "pinned" if pin else "unpinned"
+            return InterfaceResponse.success(message=f"Conversation {conversation_id} {action}")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def archive_conversation(self, conversation_id: str, archive: bool = True) -> InterfaceResponse:
+        """Archive or unarchive a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.archive_conversation(conversation_id, archive=archive)
+
+            action = "archived" if archive else "unarchived"
+            return InterfaceResponse.success(message=f"Conversation {conversation_id} {action}")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def rename_conversation(self, conversation_id: str, title: str) -> InterfaceResponse:
+        """Rename a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.update_conversation_metadata(conversation_id, title=title)
+
+            return InterfaceResponse.success(message=f"Conversation {conversation_id} renamed to '{title}'")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def duplicate_conversation(self, conversation_id: str, new_title: Optional[str] = None) -> InterfaceResponse:
+        """Duplicate a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                new_conv = db.duplicate_conversation(conversation_id, new_title=new_title)
+
+            return InterfaceResponse.success(
+                data={"new_conversation_id": new_conv.id if new_conv else None},
+                message=f"Conversation duplicated"
+            )
+        except Exception as e:
+            return self.handle_error(e)
+
+    # ================================================================
+    # Tag Management Methods
+    # ================================================================
+
+    def list_tags(self) -> InterfaceResponse:
+        """List all tags with counts"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                tags = db.get_all_tags(with_counts=True)
+
+            return InterfaceResponse.success(data={"tags": tags})
+        except Exception as e:
+            return self.handle_error(e)
+
+    def add_tags(self, conversation_id: str, tags: List[str]) -> InterfaceResponse:
+        """Add tags to a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.add_tags(conversation_id, tags)
+
+            return InterfaceResponse.success(message=f"Added {len(tags)} tags to conversation {conversation_id}")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def remove_tag(self, conversation_id: str, tag: str) -> InterfaceResponse:
+        """Remove a tag from a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                db.remove_tag(conversation_id, tag)
+
+            return InterfaceResponse.success(message=f"Removed tag '{tag}' from conversation {conversation_id}")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def list_conversations_by_tag(self, tag: str, limit: int = 100, offset: int = 0) -> InterfaceResponse:
+        """List conversations with a specific tag"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                conversations = db.list_conversations_by_tag(tag)
+                # Apply pagination manually
+                total = len(conversations)
+                conversations = conversations[offset:offset + limit]
+
+            return InterfaceResponse.success(
+                data={
+                    "conversations": [c.to_dict() if hasattr(c, 'to_dict') else c for c in conversations],
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset
+                }
+            )
+        except Exception as e:
+            return self.handle_error(e)
+
+    # ================================================================
+    # Metadata Methods
+    # ================================================================
+
+    def list_models(self) -> InterfaceResponse:
+        """List all models with counts"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                models = db.get_models()
+
+            return InterfaceResponse.success(data={"models": models})
+        except Exception as e:
+            return self.handle_error(e)
+
+    def list_sources(self) -> InterfaceResponse:
+        """List all sources with counts"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                sources = db.get_sources()
+
+            return InterfaceResponse.success(data={"sources": sources})
+        except Exception as e:
+            return self.handle_error(e)
+
+    def get_timeline(self, granularity: str = 'day', limit: int = 30) -> InterfaceResponse:
+        """Get conversation timeline/analytics"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                timeline = db.get_conversation_timeline(granularity=granularity, limit=limit)
+
+            return InterfaceResponse.success(data={"timeline": timeline})
+        except Exception as e:
+            return self.handle_error(e)
+
+    # ================================================================
+    # Tree/Path Methods
+    # ================================================================
+
+    def get_conversation_tree(self, conversation_id: str) -> InterfaceResponse:
+        """Get conversation tree structure"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                conv = db.load_conversation(conversation_id)
+                if not conv:
+                    return InterfaceResponse.error(f"Conversation {conversation_id} not found")
+
+                # Build tree structure
+                def build_tree_node(message):
+                    children = conv.get_children(message.id)
+                    return {
+                        "id": message.id,
+                        "role": message.role.value if hasattr(message.role, 'value') else str(message.role),
+                        "preview": (message.content.text[:100] + "...") if message.content.text and len(message.content.text) > 100 else (message.content.text or ""),
+                        "children": [build_tree_node(c) for c in children]
+                    }
+
+                tree = {
+                    "id": conv.id,
+                    "title": conv.title,
+                    "branch_count": conv.count_branches(),
+                    "path_count": len(conv.get_all_paths()),
+                    "roots": [build_tree_node(m) for m in conv.root_messages]
+                }
+
+            return InterfaceResponse.success(data=tree)
+        except Exception as e:
+            return self.handle_error(e)
+
+    def list_conversation_paths(self, conversation_id: str) -> InterfaceResponse:
+        """List all paths in a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                conv = db.load_conversation(conversation_id)
+                if not conv:
+                    return InterfaceResponse.error(f"Conversation {conversation_id} not found")
+
+                paths = []
+                for i, path in enumerate(conv.get_all_paths()):
+                    paths.append({
+                        "path_index": i,
+                        "length": len(path),
+                        "message_ids": [m.id for m in path],
+                        "preview": f"{path[0].content.text[:50]}..." if path and path[0].content.text else ""
+                    })
+
+            return InterfaceResponse.success(data={"paths": paths, "total": len(paths)})
+        except Exception as e:
+            return self.handle_error(e)
+
+    def get_conversation_path(self, conversation_id: str, path_index: int) -> InterfaceResponse:
+        """Get a specific path from a conversation"""
+        try:
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                conv = db.load_conversation(conversation_id)
+                if not conv:
+                    return InterfaceResponse.error(f"Conversation {conversation_id} not found")
+
+                paths = conv.get_all_paths()
+                if path_index < 0 or path_index >= len(paths):
+                    return InterfaceResponse.error(f"Path index {path_index} out of range (0-{len(paths)-1})")
+
+                path = paths[path_index]
+                path_data = {
+                    "path_index": path_index,
+                    "length": len(path),
+                    "messages": [m.to_dict() for m in path]
+                }
+
+            return InterfaceResponse.success(data=path_data)
+        except Exception as e:
+            return self.handle_error(e)
+
+    # ================================================================
+    # Views Methods
+    # ================================================================
+
+    def _get_view_store(self):
+        """Get or create ViewStore for this database"""
+        if not self.db_path:
+            return None
+        from ctk.core.views import ViewStore
+        return ViewStore(self.db_path)
+
+    def list_views(self) -> InterfaceResponse:
+        """List all views"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            views = view_store.list_views_detailed()
+            return InterfaceResponse.success(data={"views": views})
+        except Exception as e:
+            return self.handle_error(e)
+
+    def create_view(self, data: Dict[str, Any]) -> InterfaceResponse:
+        """Create a new view from JSON data"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            name = data.get('name')
+            if not name:
+                return InterfaceResponse.error("View name is required")
+
+            title = data.get('title', name)
+            description = data.get('description', '')
+
+            view = view_store.create_view(name, title=title, description=description)
+            view_store.save(view)
+
+            return InterfaceResponse.success(
+                data={"name": name},
+                message=f"View '{name}' created"
+            )
+        except Exception as e:
+            return self.handle_error(e)
+
+    def create_view_from_yaml(self, yaml_content: str) -> InterfaceResponse:
+        """Create a new view from YAML content"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            import yaml
+            data = yaml.safe_load(yaml_content)
+            name = data.get('name')
+            if not name:
+                return InterfaceResponse.error("View name is required in YAML")
+
+            from ctk.core.views import View
+            view = View.from_dict(data)
+            view_store.save(view)
+
+            return InterfaceResponse.success(
+                data={"name": name},
+                message=f"View '{name}' created from YAML"
+            )
+        except Exception as e:
+            return self.handle_error(e)
+
+    def get_view(self, view_name: str, format_type: str = 'json') -> InterfaceResponse:
+        """Get view definition"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            view = view_store.load(view_name)
+            if not view:
+                return InterfaceResponse.error(f"View '{view_name}' not found")
+
+            if format_type == 'yaml':
+                import yaml
+                return InterfaceResponse.success(data=yaml.dump(view.to_dict(), default_flow_style=False))
+            else:
+                return InterfaceResponse.success(data=view.to_dict())
+        except Exception as e:
+            return self.handle_error(e)
+
+    def update_view(self, view_name: str, data: Dict[str, Any]) -> InterfaceResponse:
+        """Update a view from JSON data"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            view = view_store.load(view_name)
+            if not view:
+                return InterfaceResponse.error(f"View '{view_name}' not found")
+
+            # Update fields
+            if 'title' in data:
+                view.title = data['title']
+            if 'description' in data:
+                view.description = data['description']
+
+            view_store.save(view)
+            return InterfaceResponse.success(message=f"View '{view_name}' updated")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def update_view_from_yaml(self, view_name: str, yaml_content: str) -> InterfaceResponse:
+        """Update a view from YAML content"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            import yaml
+            data = yaml.safe_load(yaml_content)
+
+            from ctk.core.views import View
+            view = View.from_dict(data)
+            view.name = view_name  # Ensure name matches URL
+            view_store.save(view)
+
+            return InterfaceResponse.success(message=f"View '{view_name}' updated from YAML")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def delete_view(self, view_name: str) -> InterfaceResponse:
+        """Delete a view"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            if not view_store.load(view_name):
+                return InterfaceResponse.error(f"View '{view_name}' not found")
+
+            view_store.delete(view_name)
+            return InterfaceResponse.success(message=f"View '{view_name}' deleted")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def evaluate_view(self, view_name: str) -> InterfaceResponse:
+        """Evaluate view and return resolved conversations"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                evaluated = view_store.evaluate(view_name, db)
+                if not evaluated:
+                    return InterfaceResponse.error(f"View '{view_name}' not found")
+
+                items = []
+                for item in evaluated.items:
+                    items.append({
+                        "conversation_id": item.conversation_id,
+                        "title": item.title_override,
+                        "annotation": item.annotation,
+                        "path": item.path
+                    })
+
+            return InterfaceResponse.success(data={
+                "name": view_name,
+                "title": evaluated.title,
+                "item_count": len(items),
+                "items": items
+            })
+        except Exception as e:
+            return self.handle_error(e)
+
+    def add_to_view(self, view_name: str, conversation_ids: List[str], options: Dict[str, Any] = None) -> InterfaceResponse:
+        """Add conversations to a view"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            options = options or {}
+            for conv_id in conversation_ids:
+                view_store.add_to_view(
+                    view_name,
+                    conv_id,
+                    title_override=options.get('title'),
+                    annotation=options.get('annotation'),
+                    path=options.get('path')
+                )
+
+            return InterfaceResponse.success(message=f"Added {len(conversation_ids)} conversations to view '{view_name}'")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def remove_from_view(self, view_name: str, conversation_id: str) -> InterfaceResponse:
+        """Remove a conversation from a view"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            view_store.remove_from_view(view_name, conversation_id)
+            return InterfaceResponse.success(message=f"Removed conversation from view '{view_name}'")
+        except Exception as e:
+            return self.handle_error(e)
+
+    def check_view(self, view_name: str) -> InterfaceResponse:
+        """Validate view and check for drift"""
+        try:
+            view_store = self._get_view_store()
+            if not view_store:
+                return InterfaceResponse.error("Database not initialized")
+
+            if not self.db:
+                return InterfaceResponse.error("Database not initialized")
+
+            with self.db as db:
+                result = view_store.check_view(view_name, db)
+                if result is None:
+                    return InterfaceResponse.error(f"View '{view_name}' not found")
+
+            return InterfaceResponse.success(data=result)
         except Exception as e:
             return self.handle_error(e)

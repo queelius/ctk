@@ -240,6 +240,23 @@
         .upload-label:hover {
             background: #6a4190;
         }
+
+        .org-buttons {
+            float: right;
+        }
+
+        .org-buttons button {
+            padding: 3px 8px;
+            margin-left: 3px;
+            font-size: 12px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .org-buttons button:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -325,7 +342,8 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:5000/api';
+        // Auto-detect API base - works for both dev and production
+        const API_BASE = window.location.origin + '/api';
 
         // Load initial data
         window.onload = () => {
@@ -397,7 +415,7 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    displayConversations(data.data);
+                    displayConversations(data.data.conversations || data.data);
                 }
             } catch (error) {
                 console.error('Search failed:', error);
@@ -413,8 +431,9 @@
             }
 
             list.innerHTML = conversations.map(conv => `
-                <div class="conversation-item" onclick="viewConversation('${conv.id}')">
-                    <div class="conversation-title">
+                <div class="conversation-item">
+                    <div class="conversation-title" onclick="viewConversation('${conv.id}')" style="cursor:pointer;">
+                        ${conv.starred_at ? '⭐ ' : ''}${conv.pinned_at ? '📌 ' : ''}${conv.archived_at ? '📦 ' : ''}
                         ${conv.title || 'Untitled Conversation'}
                     </div>
                     <div class="conversation-meta">
@@ -422,9 +441,47 @@
                         ${conv.model ? `<span class="tag">${conv.model}</span>` : ''}
                         ${conv.message_count ? `${conv.message_count} messages` : ''}
                         ${conv.updated_at ? ` • ${new Date(conv.updated_at).toLocaleDateString()}` : ''}
+                        <span class="org-buttons">
+                            <button onclick="event.stopPropagation(); toggleStar('${conv.id}', ${!conv.starred_at})" title="${conv.starred_at ? 'Unstar' : 'Star'}">${conv.starred_at ? '★' : '☆'}</button>
+                            <button onclick="event.stopPropagation(); togglePin('${conv.id}', ${!conv.pinned_at})" title="${conv.pinned_at ? 'Unpin' : 'Pin'}">${conv.pinned_at ? '📌' : '📍'}</button>
+                            <button onclick="event.stopPropagation(); toggleArchive('${conv.id}', ${!conv.archived_at})" title="${conv.archived_at ? 'Unarchive' : 'Archive'}">📦</button>
+                        </span>
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function toggleStar(id, star) {
+            try {
+                await fetch(`${API_BASE}/conversations/${id}/star`, {
+                    method: star ? 'POST' : 'DELETE'
+                });
+                loadConversations();
+            } catch (error) {
+                console.error('Failed to toggle star:', error);
+            }
+        }
+
+        async function togglePin(id, pin) {
+            try {
+                await fetch(`${API_BASE}/conversations/${id}/pin`, {
+                    method: pin ? 'POST' : 'DELETE'
+                });
+                loadConversations();
+            } catch (error) {
+                console.error('Failed to toggle pin:', error);
+            }
+        }
+
+        async function toggleArchive(id, archive) {
+            try {
+                await fetch(`${API_BASE}/conversations/${id}/archive`, {
+                    method: archive ? 'POST' : 'DELETE'
+                });
+                loadConversations();
+            } catch (error) {
+                console.error('Failed to toggle archive:', error);
+            }
         }
 
         async function viewConversation(id) {
