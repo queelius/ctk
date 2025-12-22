@@ -207,8 +207,9 @@ def cmd_tags(args):
         table.add_column("Tag", style="cyan")
         table.add_column("Count", justify="right")
 
-        for tag in sorted(tags, key=lambda t: t.get('count', 0), reverse=True):
-            table.add_row(tag['name'], str(tag.get('count', 0)))
+        # Note: get_all_tags returns 'usage_count' not 'count'
+        for tag in sorted(tags, key=lambda t: t.get('usage_count', 0), reverse=True):
+            table.add_row(tag['name'], str(tag.get('usage_count', 0)))
 
         console.print(table)
         return 0

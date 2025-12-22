@@ -2496,55 +2496,6 @@ def main():
     export_parser.add_argument('--no-date-prefix', action='store_false', dest='date_prefix', default=True,
                                help='Hugo: do not include date prefix in directory names')
 
-    # List command
-    list_parser = subparsers.add_parser('list', help='List conversations')
-    list_parser.add_argument('--db', '-d', required=True, help='Database path')
-    list_parser.add_argument('--limit', type=int, default=None, help='Maximum results (default: all)')
-    list_parser.add_argument('--json', action='store_true', help='Output as JSON')
-    list_parser.add_argument('--archived', action='store_true', help='Show only archived conversations')
-    list_parser.add_argument('--starred', action='store_true', help='Show only starred conversations')
-    list_parser.add_argument('--pinned', action='store_true', help='Show only pinned conversations')
-    list_parser.add_argument('--include-archived', action='store_true', help='Include archived in results (default: exclude)')
-    list_parser.add_argument('--source', help='Filter by source platform')
-    list_parser.add_argument('--project', help='Filter by project name')
-    list_parser.add_argument('--model', help='Filter by model used')
-    list_parser.add_argument('--tags', help='Filter by tags (comma-separated)')
-    
-    # Search command with advanced options
-    search_parser = subparsers.add_parser('search', help='Advanced search for conversations')
-    search_parser.add_argument('query', nargs='?', help='Search query text')
-    search_parser.add_argument('--db', '-d', required=True, help='Database path')
-    search_parser.add_argument('--limit', type=int, default=None, help='Maximum results (default: all)')
-    search_parser.add_argument('--offset', type=int, default=0, help='Number of results to skip')
-    search_parser.add_argument('--title-only', action='store_true', help='Search only in titles')
-    search_parser.add_argument('--content-only', action='store_true', help='Search only in message content')
-    search_parser.add_argument('--date-from', help='Filter by created after (YYYY-MM-DD)')
-    search_parser.add_argument('--date-to', help='Filter by created before (YYYY-MM-DD)')
-    search_parser.add_argument('--source', help='Filter by source platform')
-    search_parser.add_argument('--project', help='Filter by project name')
-    search_parser.add_argument('--model', help='Filter by model used')
-    search_parser.add_argument('--tags', help='Filter by tags (comma-separated)')
-    search_parser.add_argument('--min-messages', type=int, help='Minimum number of messages')
-    search_parser.add_argument('--max-messages', type=int, help='Maximum number of messages')
-    search_parser.add_argument('--has-branches', action='store_true', help='Only branching conversations')
-    search_parser.add_argument('--archived', action='store_true', help='Show only archived conversations')
-    search_parser.add_argument('--starred', action='store_true', help='Show only starred conversations')
-    search_parser.add_argument('--pinned', action='store_true', help='Show only pinned conversations')
-    search_parser.add_argument('--include-archived', action='store_true', help='Include archived in results (default: exclude)')
-    search_parser.add_argument('--order-by', choices=['created_at', 'updated_at', 'title', 'message_count'],
-                              default='updated_at', help='Field to order by')
-    search_parser.add_argument('--ascending', action='store_true', help='Sort in ascending order')
-    search_parser.add_argument('--format', choices=['table', 'json', 'csv'], default='table',
-                              help='Output format')
-
-    # Stats command with enhancements
-    stats_parser = subparsers.add_parser('stats', help='Show enhanced database statistics')
-    stats_parser.add_argument('--db', '-d', required=True, help='Database path')
-    stats_parser.add_argument('--timeline', choices=['day', 'week', 'month', 'year'],
-                             help='Show activity timeline')
-    stats_parser.add_argument('--show-models', action='store_true',
-                             help='Show model breakdown')
-
     # View command (subcommands)
     view_parser = subparsers.add_parser('view', help='Manage curated views of conversations')
     view_parser.add_argument('--db', '-d', required=True, help='Database path')
@@ -2597,13 +2548,6 @@ def main():
     # Plugins command
     plugins_parser = subparsers.add_parser('plugins', help='List available plugins')
 
-    # Tags command
-    tags_parser = subparsers.add_parser('tags', help='Manage and view tags')
-    tags_parser.add_argument('--db', '-d', required=True, help='Database path')
-    tags_parser.add_argument('--conversation-id', '-c', help='Conversation ID for tag operations')
-    tags_parser.add_argument('--add', help='Add tags (comma-separated)')
-    tags_parser.add_argument('--remove', help='Remove tags (comma-separated)')
-
     # Auto-tag command
     auto_tag_parser = subparsers.add_parser('auto-tag', help='Auto-tag conversations using LLM')
     auto_tag_parser.add_argument('--db', '-d', required=True, help='Database path')
@@ -2620,14 +2564,6 @@ def main():
     auto_tag_parser.add_argument('--source', help='Filter by source')
     auto_tag_parser.add_argument('--title', help='Filter by title (partial match)')
     auto_tag_parser.add_argument('--no-tags', action='store_true', help='Only conversations without tags')
-
-    # Models command
-    models_parser = subparsers.add_parser('models', help='List all models used')
-    models_parser.add_argument('--db', '-d', required=True, help='Database path')
-
-    # Sources command
-    sources_parser = subparsers.add_parser('sources', help='List all conversation sources')
-    sources_parser.add_argument('--db', '-d', required=True, help='Database path')
 
     # Chat command
     chat_parser = subparsers.add_parser('chat', help='Interactive chat with LLM and MCP tools')
@@ -2648,61 +2584,6 @@ def main():
                             help='LLM provider (default: ollama)')
     say_parser.add_argument('--base-url', help='Base URL for provider')
     say_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling')
-
-    # Show command
-    show_parser = subparsers.add_parser('show', help='Show a specific conversation')
-    show_parser.add_argument('id', help='Conversation ID (full or partial)')
-    show_parser.add_argument('--db', '-d', required=True, help='Database path')
-    show_parser.add_argument('--path', default='longest',
-                            help='Path to display: longest, latest, or path number (0-N)')
-    show_parser.add_argument('--no-color', action='store_true', help='Disable colored output')
-    show_parser.add_argument('--no-markdown', action='store_true', help='Disable markdown rendering')
-
-    # Delete command
-    delete_parser = subparsers.add_parser('delete', help='Delete a conversation')
-    delete_parser.add_argument('id', help='Conversation ID (full or partial)')
-    delete_parser.add_argument('--db', '-d', required=True, help='Database path')
-    delete_parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation')
-
-    # Tree command
-    tree_parser = subparsers.add_parser('tree', help='Show conversation tree structure')
-    tree_parser.add_argument('id', help='Conversation ID (full or partial)')
-    tree_parser.add_argument('--db', '-d', required=True, help='Database path')
-
-    # Paths command
-    paths_parser = subparsers.add_parser('paths', help='List all paths in a conversation')
-    paths_parser.add_argument('id', help='Conversation ID (full or partial)')
-    paths_parser.add_argument('--db', '-d', required=True, help='Database path')
-
-    # Title command
-    title_parser = subparsers.add_parser('title', help='Rename a conversation')
-    title_parser.add_argument('id', help='Conversation ID (full or partial)')
-    title_parser.add_argument('new_title', help='New title for conversation')
-    title_parser.add_argument('--db', '-d', required=True, help='Database path')
-
-    # Archive command
-    archive_parser = subparsers.add_parser('archive', help='Archive/unarchive conversations')
-    archive_parser.add_argument('id', help='Conversation ID (full or partial)')
-    archive_parser.add_argument('--db', '-d', required=True, help='Database path')
-    archive_parser.add_argument('--unarchive', action='store_true', help='Unarchive instead of archive')
-
-    # Star command
-    star_parser = subparsers.add_parser('star', help='Star/unstar conversations')
-    star_parser.add_argument('id', help='Conversation ID (full or partial)')
-    star_parser.add_argument('--db', '-d', required=True, help='Database path')
-    star_parser.add_argument('--unstar', action='store_true', help='Unstar instead of star')
-
-    # Pin command
-    pin_parser = subparsers.add_parser('pin', help='Pin/unpin conversations')
-    pin_parser.add_argument('id', help='Conversation ID (full or partial)')
-    pin_parser.add_argument('--db', '-d', required=True, help='Database path')
-    pin_parser.add_argument('--unpin', action='store_true', help='Unpin instead of pin')
-
-    # Duplicate command
-    duplicate_parser = subparsers.add_parser('duplicate', help='Duplicate a conversation')
-    duplicate_parser.add_argument('id', help='Conversation ID (full or partial)')
-    duplicate_parser.add_argument('--db', '-d', required=True, help='Database path')
-    duplicate_parser.add_argument('--title', help='Title for duplicated conversation')
 
     # SQL command - direct SQL queries with Rich output
     sql_parser = subparsers.add_parser('sql', help='Execute SQL queries on database')
@@ -2742,29 +2623,17 @@ def main():
         return 1
     
     # Dispatch to command handler
+    # Note: Many commands moved to groups:
+    #   ctk conv - show, tree, paths, star, pin, archive, title, delete, duplicate, tag, untag
+    #   ctk lib  - list, search, stats, tags, models, sources
     commands = {
         'import': cmd_import,
         'export': cmd_export,
-        'list': cmd_list,
-        'search': cmd_search,
-        'stats': cmd_stats,
         'view': cmd_view,
         'plugins': cmd_plugins,
-        'tags': cmd_tags,
         'auto-tag': cmd_auto_tag,
         'say': cmd_say,
-        'models': cmd_models,
-        'sources': cmd_sources,
         'chat': cmd_chat,
-        'show': cmd_show,
-        'delete': cmd_delete,
-        'tree': cmd_tree_view,
-        'paths': cmd_paths,
-        'title': cmd_title,
-        'archive': cmd_archive,
-        'star': cmd_star,
-        'pin': cmd_pin,
-        'duplicate': cmd_duplicate,
         'sql': cmd_sql,
     }
 
