@@ -18,6 +18,7 @@ class ViewSelectionType(Enum):
     """How a view selects its conversations."""
     ITEMS = "items"           # Explicit list of conversation IDs
     QUERY = "query"           # Dynamic query against database
+    SQL = "sql"               # Raw SQL query returning conversation IDs
     UNION = "union"           # Union of other views
     INTERSECT = "intersect"   # Intersection of other views
     SUBTRACT = "subtract"     # Set difference (A - B)
@@ -198,6 +199,7 @@ class View:
     # Selection (exactly one of these should be set)
     items: Optional[List[SequenceItem]] = None      # Explicit list
     query: Optional[ViewQuery] = None                # Dynamic query
+    sql: Optional[str] = None                        # Raw SQL (must SELECT conversation IDs)
     composition: Optional[ViewComposition] = None    # Set operation on views
 
     # Additional filtering (applied after selection)
@@ -223,6 +225,8 @@ class View:
             return ViewSelectionType.ITEMS
         elif self.query is not None:
             return ViewSelectionType.QUERY
+        elif self.sql is not None:
+            return ViewSelectionType.SQL
         elif self.composition is not None:
             op = self.composition.operation
             if op == "union":
@@ -458,6 +462,7 @@ def parse_view(data: Dict[str, Any]) -> View:
         version=data.get("version", 1),
         items=items,
         query=_parse_query(data.get("select") or data.get("query")),
+        sql=data.get("sql"),  # SQL-based view selection
         composition=_parse_composition(data),
         where=_parse_query(data.get("where")),
         order=order,
@@ -601,6 +606,9 @@ def serialize_view(view: View) -> Dict[str, Any]:
 
     if view.query:
         result["select"] = _serialize_query(view.query)
+
+    if view.sql:
+        result["sql"] = view.sql
 
     if view.composition:
         result[view.composition.operation] = view.composition.view_names
@@ -903,6 +911,8 @@ class ViewEvaluator:
             return self._resolve_items(view)
         elif selection_type == ViewSelectionType.QUERY:
             return self._resolve_query(view)
+        elif selection_type == ViewSelectionType.SQL:
+            return self._resolve_sql(view)
         elif selection_type in (ViewSelectionType.UNION, ViewSelectionType.INTERSECT, ViewSelectionType.SUBTRACT):
             return self._resolve_composition(view)
         else:
@@ -935,6 +945,77 @@ class ViewEvaluator:
                 all_convs.append(conv)
 
         return all_convs
+
+    def _resolve_sql(self, view: View) -> List[Any]:
+        """
+        Resolve SQL-based selection.
+
+        The SQL query must return rows with an 'id' column containing conversation IDs.
+        Only SELECT statements are allowed for safety.
+
+        Example SQL:
+            SELECT c.id FROM conversations c
+            JOIN messages m ON c.id = m.conversation_id
+            GROUP BY c.id
+            HAVING COUNT(m.id) > 50
+        """
+        if not view.sql:
+            return []
+
+        sql = view.sql.strip()
+
+        # Safety check: only allow SELECT statements
+        sql_upper = sql.upper()
+        if not sql_upper.startswith('SELECT'):
+            raise ValueError("SQL view queries must be SELECT statements")
+
+        # Disallow dangerous keywords
+        dangerous = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE']
+        for keyword in dangerous:
+            if keyword in sql_upper:
+                raise ValueError(f"SQL view queries cannot contain {keyword}")
+
+        # Execute the SQL query using the database's session
+        import sqlite3
+        from pathlib import Path
+
+        # Get the database file path
+        db_path = Path(self.db.db_dir) / "conversations.db"
+
+        conversations = []
+        try:
+            # Open read-only connection
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            cursor = conn.cursor()
+            cursor.execute(sql)
+
+            # Get column names to find the 'id' column
+            columns = [desc[0].lower() for desc in cursor.description]
+            id_index = None
+            for i, col in enumerate(columns):
+                if col in ('id', 'conversation_id', 'conv_id'):
+                    id_index = i
+                    break
+
+            if id_index is None:
+                # Assume first column is the ID
+                id_index = 0
+
+            # Fetch IDs and load conversations
+            rows = cursor.fetchall()
+            conn.close()
+
+            for row in rows:
+                conv_id = row[id_index]
+                if conv_id:
+                    conv = self.db.load_conversation(conv_id)
+                    if conv:
+                        conversations.append(conv)
+
+        except Exception as e:
+            raise ValueError(f"SQL query error: {e}")
+
+        return conversations
 
     def _resolve_composition(self, view: View) -> List[Any]:
         """Resolve view composition (union, intersect, subtract)."""
