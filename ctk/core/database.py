@@ -81,7 +81,49 @@ class ConversationDB:
     def _init_schema(self):
         """Initialize database schema"""
         Base.metadata.create_all(self.engine)
+        self._migrate_schema()
         logger.info(f"Database schema initialized at {self.db_path}")
+
+    def _migrate_schema(self):
+        """Apply any necessary schema migrations for existing databases"""
+        with self.engine.connect() as conn:
+            # Check if we need to add new columns to conversations table
+            try:
+                # Try to detect if slug column exists
+                result = conn.execute(text(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'"
+                ))
+                row = result.fetchone()
+                if row:
+                    table_sql = row[0] or ""
+
+                    # Add slug column if missing
+                    if 'slug' not in table_sql.lower():
+                        try:
+                            conn.execute(text(
+                                "ALTER TABLE conversations ADD COLUMN slug VARCHAR"
+                            ))
+                            logger.info("Added 'slug' column to conversations table")
+                        except Exception as e:
+                            # Column might already exist (race condition or detection failed)
+                            if "duplicate column" not in str(e).lower():
+                                logger.debug(f"Could not add slug column: {e}")
+
+                    # Add summary column if missing
+                    if 'summary' not in table_sql.lower():
+                        try:
+                            conn.execute(text(
+                                "ALTER TABLE conversations ADD COLUMN summary TEXT"
+                            ))
+                            logger.info("Added 'summary' column to conversations table")
+                        except Exception as e:
+                            if "duplicate column" not in str(e).lower():
+                                logger.debug(f"Could not add summary column: {e}")
+
+                    conn.commit()
+            except Exception as e:
+                # Not SQLite or other issue - skip migration
+                logger.debug(f"Schema migration skipped: {e}")
     
     @contextmanager
     def session_scope(self):
@@ -143,7 +185,23 @@ class ConversationDB:
             conv_model.source = conversation.metadata.source
             conv_model.model = conversation.metadata.model
             conv_model.project = conversation.metadata.project
-            
+            conv_model.summary = conversation.metadata.summary
+
+            # Auto-generate slug from title if not present
+            if not conversation.metadata.slug and conversation.title:
+                from ctk.core.slug import generate_slug, make_unique_slug
+                base_slug = generate_slug(conversation.title)
+                if base_slug:
+                    # Check for existing slugs to make unique
+                    existing_slugs = set(
+                        s[0] for s in session.query(ConversationModel.slug)
+                        .filter(ConversationModel.slug.isnot(None))
+                        .filter(ConversationModel.id != conversation.id)
+                        .all()
+                    )
+                    conversation.metadata.slug = make_unique_slug(base_slug, existing_slugs)
+            conv_model.slug = conversation.metadata.slug
+
             # Store full metadata as JSON
             conv_model.metadata_json = conversation.metadata.to_dict()
             
@@ -225,6 +283,8 @@ class ConversationDB:
             metadata.starred_at = conv_model.starred_at
             metadata.pinned_at = conv_model.pinned_at
             metadata.archived_at = conv_model.archived_at
+            metadata.slug = conv_model.slug
+            metadata.summary = conv_model.summary
 
             # Load tags
             metadata.tags = [tag.name for tag in conv_model.tags]
@@ -270,7 +330,74 @@ class ConversationDB:
             
             logger.info(f"Loaded conversation {conversation_id} with {len(messages)} messages")
             return conversation
-    
+
+    def resolve_conversation(self, id_or_slug: str) -> Optional[str]:
+        """
+        Resolve a conversation ID, slug, or partial ID/slug to a full conversation ID.
+
+        Args:
+            id_or_slug: Full ID, partial ID, slug, or partial slug
+
+        Returns:
+            Full conversation ID, or None if not found or ambiguous
+        """
+        with self.session_scope() as session:
+            # Try exact ID match first
+            conv = session.get(ConversationModel, id_or_slug)
+            if conv:
+                return conv.id
+
+            # Try exact slug match
+            conv = session.query(ConversationModel).filter(
+                ConversationModel.slug == id_or_slug
+            ).first()
+            if conv:
+                return conv.id
+
+            # Try ID prefix match
+            matches = session.query(ConversationModel).filter(
+                ConversationModel.id.startswith(id_or_slug)
+            ).limit(10).all()
+            if len(matches) == 1:
+                return matches[0].id
+            if len(matches) > 1:
+                return None  # Ambiguous
+
+            # Try slug prefix match
+            matches = session.query(ConversationModel).filter(
+                ConversationModel.slug.isnot(None),
+                ConversationModel.slug.startswith(id_or_slug)
+            ).limit(10).all()
+            if len(matches) == 1:
+                return matches[0].id
+
+            # Try partial slug match (word-based)
+            from ctk.core.slug import slug_matches
+            all_with_slugs = session.query(ConversationModel).filter(
+                ConversationModel.slug.isnot(None)
+            ).all()
+            slug_match_results = [c for c in all_with_slugs if slug_matches(c.slug, id_or_slug)]
+            if len(slug_match_results) == 1:
+                return slug_match_results[0].id
+
+            return None
+
+    def find_by_slug(self, slug: str) -> Optional[str]:
+        """
+        Find a conversation by its exact slug.
+
+        Args:
+            slug: The slug to search for
+
+        Returns:
+            Conversation ID if found, None otherwise
+        """
+        with self.session_scope() as session:
+            conv = session.query(ConversationModel).filter(
+                ConversationModel.slug == slug
+            ).first()
+            return conv.id if conv else None
+
     def list_conversations(self,
                          limit: Optional[int] = None,
                          offset: int = 0,

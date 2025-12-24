@@ -13,6 +13,8 @@ import logging
 import json
 from glob import glob
 
+from sqlalchemy import text
+
 from ctk.core.db_operations import (
     DatabaseOperations,
     DuplicateStrategy,
@@ -22,6 +24,23 @@ from ctk.core.db_operations import (
 from ctk.core.database import ConversationDB
 
 logger = logging.getLogger(__name__)
+
+
+def get_db_size(db_path: str) -> int:
+    """Get database file size in bytes"""
+    path = Path(db_path)
+    if path.exists():
+        return path.stat().st_size
+    return 0
+
+
+def format_size(size_bytes: int) -> str:
+    """Format bytes as human-readable size"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
 
 
 def add_db_commands(subparsers):
@@ -36,6 +55,78 @@ def add_db_commands(subparsers):
         dest='db_command',
         help='Database operation to perform'
     )
+
+    # INIT command
+    init_parser = db_subparsers.add_parser(
+        'init',
+        help='Initialize a new database'
+    )
+    init_parser.add_argument(
+        'path',
+        nargs='?',
+        help='Path for new database (default: uses configured path)'
+    )
+    init_parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Overwrite existing database'
+    )
+    init_parser.set_defaults(func=cmd_init)
+
+    # INFO command
+    info_parser = db_subparsers.add_parser(
+        'info',
+        help='Show database information'
+    )
+    info_parser.add_argument(
+        'path',
+        nargs='?',
+        help='Database path (default: uses configured path)'
+    )
+    info_parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Output as JSON'
+    )
+    info_parser.set_defaults(func=cmd_info)
+
+    # VACUUM command
+    vacuum_parser = db_subparsers.add_parser(
+        'vacuum',
+        help='Reclaim unused space and optimize database'
+    )
+    vacuum_parser.add_argument(
+        'path',
+        nargs='?',
+        help='Database path (default: uses configured path)'
+    )
+    vacuum_parser.add_argument(
+        '--analyze',
+        action='store_true',
+        help='Also run ANALYZE to update query statistics'
+    )
+    vacuum_parser.set_defaults(func=cmd_vacuum)
+
+    # BACKUP command
+    backup_parser = db_subparsers.add_parser(
+        'backup',
+        help='Create a backup of the database'
+    )
+    backup_parser.add_argument(
+        'output',
+        nargs='?',
+        help='Backup destination (default: timestamped file)'
+    )
+    backup_parser.add_argument(
+        '--source',
+        help='Source database (default: uses configured path)'
+    )
+    backup_parser.add_argument(
+        '--compress',
+        action='store_true',
+        help='Compress backup with gzip'
+    )
+    backup_parser.set_defaults(func=cmd_backup)
 
     # MERGE command
     merge_parser = db_subparsers.add_parser(
@@ -694,4 +785,271 @@ def cmd_query(args):
     except Exception as e:
         print(f"Query failed: {e}")
         logger.exception("Query execution failed")
+        return 1
+
+
+def get_default_db_path() -> str:
+    """Get default database path from config"""
+    from ctk.core.config import get_config
+    config = get_config()
+    db_path = config.get('database.default_path', '~/.ctk/conversations.db')
+    return str(Path(db_path).expanduser())
+
+
+def resolve_db_path(path_arg: Optional[str]) -> tuple[Path, Path]:
+    """
+    Resolve database path, handling directory structure.
+
+    ConversationDB expects a directory for SQLite, which will contain:
+    - conversations.db (the actual SQLite file)
+    - media/ (for attachments)
+
+    Returns:
+        Tuple of (db_dir, db_file) paths
+    """
+    db_path = path_arg if path_arg else get_default_db_path()
+    path = Path(db_path).expanduser()
+
+    # If it looks like a file path (has .db suffix), use parent as dir
+    if path.suffix == '.db':
+        db_dir = path.parent
+        db_file = path
+    else:
+        # It's a directory path
+        db_dir = path
+        db_file = path / "conversations.db"
+
+    return db_dir, db_file
+
+
+def cmd_init(args):
+    """Initialize a new database"""
+    from rich.console import Console
+    import shutil
+    console = Console()
+
+    # Get database path
+    db_dir, db_file = resolve_db_path(args.path)
+
+    # Check if exists
+    if db_file.exists() and not args.force:
+        console.print(f"[yellow]Database already exists:[/yellow] {db_file}")
+        console.print("Use --force to overwrite")
+        return 1
+
+    # Remove existing if force
+    if db_dir.exists() and args.force:
+        shutil.rmtree(db_dir)
+        console.print(f"[yellow]Removed existing database directory[/yellow]")
+
+    try:
+        # Create new database (ConversationDB handles directory creation)
+        with ConversationDB(str(db_dir)) as db:
+            stats = db.get_statistics()
+
+        console.print(f"[green]✓ Initialized database:[/green] {db_file}")
+        console.print(f"  Directory: {db_dir}")
+        console.print(f"  Size: {format_size(get_db_size(str(db_file)))}")
+        return 0
+
+    except Exception as e:
+        console.print(f"[red]Error initializing database:[/red] {e}")
+        logger.exception("Database initialization failed")
+        return 1
+
+
+def cmd_info(args):
+    """Show database information"""
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+
+    # Get database path
+    db_dir, db_file = resolve_db_path(args.path)
+
+    if not db_file.exists():
+        console.print(f"[red]Database not found:[/red] {db_file}")
+        return 1
+
+    try:
+        with ConversationDB(str(db_dir)) as db:
+            stats = db.get_statistics()
+
+            # Get additional info via raw SQL
+            with db.session_scope() as session:
+                # Get table sizes
+                table_info = session.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                )).fetchall()
+
+                # Get SQLite version
+                sqlite_version = session.execute(text("SELECT sqlite_version()")).fetchone()[0]
+
+                # Get page size and count
+                page_size = session.execute(text("PRAGMA page_size")).fetchone()[0]
+                page_count = session.execute(text("PRAGMA page_count")).fetchone()[0]
+
+                # Get freelist count (unused pages)
+                freelist = session.execute(text("PRAGMA freelist_count")).fetchone()[0]
+
+        if args.json:
+            info = {
+                "path": str(db_file),
+                "size_bytes": get_db_size(str(db_file)),
+                "size_human": format_size(get_db_size(str(db_file))),
+                "sqlite_version": sqlite_version,
+                "page_size": page_size,
+                "page_count": page_count,
+                "freelist_pages": freelist,
+                "tables": [t[0] for t in table_info],
+                **stats
+            }
+            print(json.dumps(info, indent=2, default=str))
+            return 0
+
+        # Rich table output
+        console.print(f"\n[bold cyan]Database Information[/bold cyan]")
+        console.print(f"  Path: {db_file}")
+        console.print(f"  Size: {format_size(get_db_size(str(db_file)))}")
+        console.print(f"  SQLite version: {sqlite_version}")
+        console.print()
+
+        console.print("[bold]Content Statistics:[/bold]")
+        console.print(f"  Conversations: {stats.get('total_conversations', 0)}")
+        console.print(f"  Messages: {stats.get('total_messages', 0)}")
+        if stats.get('messages_by_role'):
+            for role, count in stats['messages_by_role'].items():
+                console.print(f"    {role}: {count}")
+        console.print()
+
+        console.print("[bold]Storage Details:[/bold]")
+        console.print(f"  Page size: {page_size} bytes")
+        console.print(f"  Total pages: {page_count}")
+        console.print(f"  Used space: {format_size(page_size * (page_count - freelist))}")
+        console.print(f"  Free pages: {freelist} ({format_size(page_size * freelist)})")
+        console.print()
+
+        console.print("[bold]Tables:[/bold]")
+        for table in table_info:
+            console.print(f"  • {table[0]}")
+
+        return 0
+
+    except Exception as e:
+        console.print(f"[red]Error reading database:[/red] {e}")
+        logger.exception("Database info failed")
+        return 1
+
+
+def cmd_vacuum(args):
+    """Vacuum database to reclaim space"""
+    from rich.console import Console
+
+    console = Console()
+
+    # Get database path
+    db_dir, db_file = resolve_db_path(args.path)
+
+    if not db_file.exists():
+        console.print(f"[red]Database not found:[/red] {db_file}")
+        return 1
+
+    size_before = get_db_size(str(db_file))
+
+    try:
+        console.print(f"Vacuuming {db_file}...")
+
+        with ConversationDB(str(db_dir)) as db:
+            with db.session_scope() as session:
+                # Run VACUUM
+                session.execute(text("VACUUM"))
+
+                if args.analyze:
+                    console.print("Running ANALYZE...")
+                    session.execute(text("ANALYZE"))
+
+        size_after = get_db_size(str(db_file))
+        saved = size_before - size_after
+
+        console.print(f"\n[green]✓ Vacuum completed[/green]")
+        console.print(f"  Before: {format_size(size_before)}")
+        console.print(f"  After:  {format_size(size_after)}")
+
+        if saved > 0:
+            console.print(f"  Saved:  {format_size(saved)} ({100 * saved / size_before:.1f}%)")
+        else:
+            console.print(f"  [dim]No space reclaimed[/dim]")
+
+        return 0
+
+    except Exception as e:
+        console.print(f"[red]Error during vacuum:[/red] {e}")
+        logger.exception("Vacuum failed")
+        return 1
+
+
+def cmd_backup(args):
+    """Create database backup"""
+    import shutil
+    import gzip
+    from rich.console import Console
+
+    console = Console()
+
+    # Get source database path
+    source_dir, source_file = resolve_db_path(args.source)
+
+    if not source_file.exists():
+        console.print(f"[red]Source database not found:[/red] {source_file}")
+        return 1
+
+    # Determine output path
+    if args.output:
+        output_path = Path(args.output).expanduser()
+        # If output looks like a directory, append filename
+        if not output_path.suffix:
+            output_path = output_path / source_file.name
+        if args.compress and not output_path.suffix.endswith('.gz'):
+            output_path = Path(str(output_path) + '.gz')
+        output_file = output_path
+    else:
+        # Generate timestamped backup name
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{source_file.stem}_backup_{timestamp}{source_file.suffix}"
+        if args.compress:
+            backup_name += ".gz"
+        output_file = source_file.parent / backup_name
+
+    # Ensure output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        console.print(f"Backing up {source_file}...")
+
+        if args.compress:
+            # Compressed backup
+            with open(source_file, 'rb') as f_in:
+                with gzip.open(output_file, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+        else:
+            # Simple copy
+            shutil.copy2(source_file, output_file)
+
+        source_size = get_db_size(str(source_file))
+        output_size = get_db_size(str(output_file))
+
+        console.print(f"\n[green]✓ Backup created[/green]")
+        console.print(f"  Source: {source_file} ({format_size(source_size)})")
+        console.print(f"  Backup: {output_file} ({format_size(output_size)})")
+
+        if args.compress and output_size < source_size:
+            ratio = 100 * (1 - output_size / source_size)
+            console.print(f"  Compression: {ratio:.1f}% reduction")
+
+        return 0
+
+    except Exception as e:
+        console.print(f"[red]Error creating backup:[/red] {e}")
+        logger.exception("Backup failed")
         return 1

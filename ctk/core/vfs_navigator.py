@@ -21,6 +21,7 @@ class VFSEntry:
     is_directory: bool
     conversation_id: Optional[str] = None
     title: Optional[str] = None
+    slug: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     tags: Optional[List[str]] = None
@@ -85,10 +86,17 @@ class VFSNavigator:
 
     def resolve_prefix(self, prefix: str, vfs_path: VFSPath) -> Optional[str]:
         """
-        Resolve a partial conversation ID prefix to full ID.
+        Resolve a partial conversation ID or slug to full ID.
+
+        Matching order:
+        1. Exact ID match
+        2. Exact slug match
+        3. ID prefix match
+        4. Slug prefix match
+        5. Slug word-based partial match (e.g., "python-hints" matches "discussion-python-type-hints")
 
         Args:
-            prefix: Partial conversation ID (e.g., "466a")
+            prefix: Partial conversation ID or slug (e.g., "466a" or "python-hints")
             vfs_path: Current VFS path context
 
         Returns:
@@ -97,30 +105,77 @@ class VFSNavigator:
         Raises:
             ValueError: If multiple matches or no matches
         """
+        from .slug import slug_matches
+
         # Get list of conversations in current context
         try:
             entries = self.list_directory(vfs_path)
         except:
             return None
 
-        # Find all conversation entries that match prefix
-        matches = []
+        # Try exact ID match first
+        for entry in entries:
+            if entry.conversation_id == prefix:
+                return entry.conversation_id
+
+        # Try exact slug match
+        for entry in entries:
+            if entry.slug and entry.slug == prefix:
+                return entry.conversation_id
+
+        # Try ID prefix match
+        id_matches = []
         for entry in entries:
             if entry.conversation_id and entry.conversation_id.startswith(prefix):
-                matches.append(entry.conversation_id)
+                id_matches.append((entry.conversation_id, entry.slug, entry.title))
 
-        if len(matches) == 0:
-            raise ValueError(f"No conversation found matching prefix: {prefix}")
-        elif len(matches) == 1:
-            return matches[0]
+        if len(id_matches) == 1:
+            return id_matches[0][0]
+
+        # Try slug prefix match
+        slug_matches_list = []
+        for entry in entries:
+            if entry.slug and entry.slug.startswith(prefix):
+                slug_matches_list.append((entry.conversation_id, entry.slug, entry.title))
+
+        if len(slug_matches_list) == 1:
+            return slug_matches_list[0][0]
+
+        # Try word-based slug matching (more flexible)
+        word_matches = []
+        for entry in entries:
+            if entry.slug and slug_matches(entry.slug, prefix):
+                word_matches.append((entry.conversation_id, entry.slug, entry.title))
+
+        if len(word_matches) == 1:
+            return word_matches[0][0]
+
+        # Combine all matches for error message, preserving order and uniqueness
+        seen = set()
+        all_matches = []
+        for match in id_matches + slug_matches_list + word_matches:
+            if match[0] not in seen:
+                seen.add(match[0])
+                all_matches.append(match)
+
+        if len(all_matches) == 0:
+            raise ValueError(f"No conversation found matching '{prefix}' (ID or slug)")
+        elif len(all_matches) == 1:
+            return all_matches[0][0]
         else:
-            # Multiple matches - show options
-            match_list = "\n  ".join(matches[:5])
-            if len(matches) > 5:
-                match_list += f"\n  ... and {len(matches) - 5} more"
+            # Multiple matches - show options with slugs
+            match_list = []
+            for conv_id, slug, title in all_matches[:5]:
+                if slug:
+                    match_list.append(f"{conv_id[:8]}... ({slug}) {title or ''}")
+                else:
+                    match_list.append(f"{conv_id[:8]}... {title or ''}")
+            match_str = "\n  ".join(match_list)
+            if len(all_matches) > 5:
+                match_str += f"\n  ... and {len(all_matches) - 5} more"
             raise ValueError(
-                f"Prefix '{prefix}' matches {len(matches)} conversations:\n  {match_list}\n"
-                f"Please provide more characters to uniquely identify the conversation."
+                f"'{prefix}' matches {len(all_matches)} conversations:\n  {match_str}\n"
+                f"Please be more specific (use ID prefix or full slug)."
             )
 
     def list_directory(self, vfs_path: VFSPath) -> List[VFSEntry]:
@@ -215,6 +270,7 @@ class VFSNavigator:
                 is_directory=True,  # Changed: conversations are now directories
                 conversation_id=conv.id,
                 title=conv.title,
+                slug=getattr(conv, 'slug', None),
                 created_at=conv.created_at,
                 updated_at=conv.updated_at,
                 tags=conv.tags,

@@ -50,8 +50,12 @@ class ConversationModel(Base):
 
     # Basic fields
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    slug: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Summary (LLM-generated)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Metadata
     version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -103,6 +107,7 @@ class ConversationModel(Base):
         Index('idx_conv_starred', 'starred_at'),
         Index('idx_conv_pinned', 'pinned_at'),
         Index('idx_conv_archived', 'archived_at'),
+        Index('idx_conv_slug', 'slug'),
     )
 
     def to_dict(self) -> dict:
@@ -110,8 +115,10 @@ class ConversationModel(Base):
         return {
             'id': self.id,
             'title': self.title,
+            'slug': self.slug,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'summary': self.summary,
             'version': self.version,
             'format': self.format,
             'source': self.source,

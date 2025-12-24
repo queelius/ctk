@@ -176,7 +176,7 @@ class TestVFSNavigatorPrefixResolution:
         vfs_path = Mock(spec=VFSPath)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
-            with pytest.raises(ValueError, match="No conversation found matching prefix"):
+            with pytest.raises(ValueError, match="No conversation found matching"):
                 navigator.resolve_prefix("xyz", vfs_path)
 
     @pytest.mark.unit

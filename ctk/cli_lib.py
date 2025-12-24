@@ -40,6 +40,8 @@ def cmd_list(args):
             kwargs['source'] = args.source
         if args.model:
             kwargs['model'] = args.model
+        if args.tags:
+            kwargs['tags'] = [t.strip() for t in args.tags.split(',')]
 
         conversations = db.list_conversations(**kwargs)
 
@@ -104,21 +106,24 @@ def cmd_search(args):
     with ConversationDB(args.db) as db:
         # Build search parameters
         kwargs = {
-            'query': args.query,
+            'query_text': args.query,
             'limit': args.limit or 50,
         }
         if args.title_only:
-            kwargs['search_content'] = False
+            kwargs['title_only'] = True
         if args.content_only:
-            kwargs['search_title'] = False
+            kwargs['content_only'] = True
         if args.source:
             kwargs['source'] = args.source
         if args.model:
             kwargs['model'] = args.model
-        if args.tags:
-            kwargs['tags'] = [t.strip() for t in args.tags.split(',')]
 
         results = db.search_conversations(**kwargs)
+
+        # Filter by tags if specified (post-filter since DB doesn't support)
+        if args.tags:
+            tag_list = [t.strip() for t in args.tags.split(',')]
+            results = [c for c in results if c.tags and any(t in c.tags for t in tag_list)]
 
         if args.json:
             data = []
@@ -190,13 +195,42 @@ def cmd_stats(args):
 
 
 def cmd_tags(args):
-    """List all tags"""
+    """List all tags, or conversations with a specific tag"""
     from rich.console import Console
     from rich.table import Table
 
     console = Console()
 
     with ConversationDB(args.db) as db:
+        # If a tag name is provided, show conversations with that tag
+        if args.tag:
+            conversations = db.list_conversations_by_tag(args.tag)
+
+            if args.json:
+                data = [{'id': c.id, 'title': c.title, 'model': c.model} for c in conversations]
+                print(json.dumps(data, indent=2))
+                return 0
+
+            if not conversations:
+                console.print(f"[dim]No conversations found with tag '{args.tag}'[/dim]")
+                return 0
+
+            table = Table(title=f"Conversations tagged: {args.tag}")
+            table.add_column("ID", style="dim", width=10)
+            table.add_column("Title", style="cyan", max_width=50)
+            table.add_column("Model", style="green")
+
+            for conv in conversations:
+                title = conv.title or "Untitled"
+                if len(title) > 50:
+                    title = title[:47] + "..."
+                table.add_row(conv.id[:8] + "...", title, conv.model or "")
+
+            console.print(table)
+            console.print(f"\n[dim]{len(conversations)} conversation(s)[/dim]")
+            return 0
+
+        # Otherwise show all tags with counts
         tags = db.get_all_tags()
 
         if args.json:
@@ -265,6 +299,149 @@ def cmd_sources(args):
         return 0
 
 
+def cmd_recent(args):
+    """Show recently updated/created conversations"""
+    from rich.console import Console
+    from rich.table import Table
+    from datetime import datetime, timedelta
+
+    console = Console()
+
+    with ConversationDB(args.db) as db:
+        # Get conversations sorted by updated_at or created_at
+        limit = args.limit or 20
+
+        conversations = db.list_conversations(
+            limit=limit,
+            include_archived=args.include_archived,
+            order_by='updated_at' if args.updated else 'created_at',
+            order_desc=True
+        )
+
+        if args.json:
+            data = []
+            for conv in conversations:
+                data.append({
+                    'id': conv.id,
+                    'title': conv.title,
+                    'slug': getattr(conv, 'slug', None),
+                    'created_at': str(conv.created_at) if conv.created_at else None,
+                    'updated_at': str(getattr(conv, 'updated_at', None)) if hasattr(conv, 'updated_at') else None,
+                    'source': conv.source,
+                    'model': conv.model,
+                })
+            print(json.dumps(data, indent=2))
+            return 0
+
+        # Rich table output
+        time_label = "Updated" if args.updated else "Created"
+        table = Table(title=f"Recent Conversations (by {time_label})")
+        table.add_column("ID", style="dim", width=10)
+        table.add_column("Flags", width=4)
+        table.add_column("Title", style="cyan", max_width=40)
+        table.add_column("Slug", style="yellow", max_width=25)
+        table.add_column(time_label, style="dim")
+
+        for conv in conversations:
+            flags = ""
+            if hasattr(conv, 'starred_at') and conv.starred_at:
+                flags += "⭐"
+            if hasattr(conv, 'pinned_at') and conv.pinned_at:
+                flags += "📌"
+            if hasattr(conv, 'archived_at') and conv.archived_at:
+                flags += "📦"
+
+            title = conv.title or "Untitled"
+            if len(title) > 40:
+                title = title[:37] + "..."
+
+            slug = getattr(conv, 'slug', '') or ""
+            if len(slug) > 25:
+                slug = slug[:22] + "..."
+
+            timestamp = ""
+            if args.updated and hasattr(conv, 'updated_at') and conv.updated_at:
+                timestamp = conv.updated_at.strftime("%Y-%m-%d %H:%M")
+            elif hasattr(conv, 'created_at') and conv.created_at:
+                timestamp = conv.created_at.strftime("%Y-%m-%d %H:%M")
+
+            table.add_row(
+                conv.id[:8] + "...",
+                flags,
+                title,
+                slug,
+                timestamp
+            )
+
+        console.print(table)
+        console.print(f"\n[dim]{len(conversations)} conversation(s)[/dim]")
+        return 0
+
+
+def cmd_count(args):
+    """Show count of conversations with optional filters"""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    console = Console()
+
+    with ConversationDB(args.db) as db:
+        # Build filter kwargs
+        kwargs = {'include_archived': args.include_archived}
+        if args.starred:
+            kwargs['starred'] = True
+        if args.pinned:
+            kwargs['pinned'] = True
+        if args.archived:
+            kwargs['archived'] = True
+        if args.source:
+            kwargs['source'] = args.source
+        if args.model:
+            kwargs['model'] = args.model
+        if args.tags:
+            kwargs['tags'] = [t.strip() for t in args.tags.split(',')]
+
+        # For count, we use list with no limit and count the results
+        # A more efficient approach would be a dedicated count method
+        conversations = db.list_conversations(limit=None, **kwargs)
+        count = len(conversations)
+
+        if args.json:
+            result = {'count': count}
+            if args.starred:
+                result['filter'] = 'starred'
+            elif args.pinned:
+                result['filter'] = 'pinned'
+            elif args.archived:
+                result['filter'] = 'archived'
+            elif args.source:
+                result['filter'] = f'source={args.source}'
+            elif args.model:
+                result['filter'] = f'model={args.model}'
+            elif args.tags:
+                result['filter'] = f'tags={args.tags}'
+            print(json.dumps(result, indent=2))
+            return 0
+
+        # Build label
+        filter_desc = ""
+        if args.starred:
+            filter_desc = " (starred)"
+        elif args.pinned:
+            filter_desc = " (pinned)"
+        elif args.archived:
+            filter_desc = " (archived)"
+        elif args.source:
+            filter_desc = f" (source: {args.source})"
+        elif args.model:
+            filter_desc = f" (model: {args.model})"
+        elif args.tags:
+            filter_desc = f" (tags: {args.tags})"
+
+        console.print(f"[bold]{count:,}[/bold] conversation{'' if count == 1 else 's'}{filter_desc}")
+        return 0
+
+
 def add_lib_commands(subparsers):
     """Add library command group to parser"""
     lib_parser = subparsers.add_parser('lib', help='Library operations')
@@ -281,6 +458,7 @@ def add_lib_commands(subparsers):
     list_parser.add_argument('--include-archived', action='store_true', help='Include archived')
     list_parser.add_argument('--source', help='Filter by source')
     list_parser.add_argument('--model', help='Filter by model')
+    list_parser.add_argument('--tags', help='Filter by tags (comma-separated)')
 
     # search
     search_parser = lib_subparsers.add_parser('search', help='Search conversations')
@@ -299,7 +477,8 @@ def add_lib_commands(subparsers):
     stats_parser.add_argument('--db', '-d', required=True, help='Database path')
 
     # tags
-    tags_parser = lib_subparsers.add_parser('tags', help='List all tags')
+    tags_parser = lib_subparsers.add_parser('tags', help='List all tags, or show conversations with a specific tag')
+    tags_parser.add_argument('tag', nargs='?', help='Show conversations with this tag')
     tags_parser.add_argument('--db', '-d', required=True, help='Database path')
     tags_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
@@ -313,6 +492,26 @@ def add_lib_commands(subparsers):
     sources_parser.add_argument('--db', '-d', required=True, help='Database path')
     sources_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
+    # recent
+    recent_parser = lib_subparsers.add_parser('recent', help='Show recently updated/created conversations')
+    recent_parser.add_argument('--db', '-d', required=True, help='Database path')
+    recent_parser.add_argument('--limit', '-n', type=int, default=20, help='Maximum results (default: 20)')
+    recent_parser.add_argument('--updated', '-u', action='store_true', help='Sort by updated time (default: created)')
+    recent_parser.add_argument('--include-archived', action='store_true', help='Include archived conversations')
+    recent_parser.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # count
+    count_parser = lib_subparsers.add_parser('count', help='Show count of conversations')
+    count_parser.add_argument('--db', '-d', required=True, help='Database path')
+    count_parser.add_argument('--starred', action='store_true', help='Count only starred')
+    count_parser.add_argument('--pinned', action='store_true', help='Count only pinned')
+    count_parser.add_argument('--archived', action='store_true', help='Count only archived')
+    count_parser.add_argument('--include-archived', action='store_true', help='Include archived in total count')
+    count_parser.add_argument('--source', help='Count by source')
+    count_parser.add_argument('--model', help='Count by model')
+    count_parser.add_argument('--tags', help='Count by tags (comma-separated)')
+    count_parser.add_argument('--json', action='store_true', help='Output as JSON')
+
     return lib_parser
 
 
@@ -325,6 +524,8 @@ def dispatch_lib_command(args):
         'tags': cmd_tags,
         'models': cmd_models,
         'sources': cmd_sources,
+        'recent': cmd_recent,
+        'count': cmd_count,
     }
 
     if hasattr(args, 'lib_command') and args.lib_command:

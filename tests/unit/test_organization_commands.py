@@ -566,8 +566,15 @@ class TestOrganizationCommands:
         """Test factory function works without TUI"""
         commands = create_organization_commands(mock_db, mock_navigator, None)
 
-        assert len(commands) == 7
+        # 12 commands: star, unstar, pin, unpin, archive, unarchive, title,
+        #              delete, duplicate, tag, untag, export
+        assert len(commands) == 12
         assert 'star' in commands
+        assert 'delete' in commands
+        assert 'duplicate' in commands
+        assert 'tag' in commands
+        assert 'untag' in commands
+        assert 'export' in commands
 
     # Integration-style Tests
 

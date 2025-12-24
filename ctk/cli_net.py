@@ -265,6 +265,31 @@ def add_net_commands(subparsers):
         help='Number of outliers to show (default: 10)'
     )
 
+    # EXPORT command
+    export_parser = net_subparsers.add_parser(
+        'export',
+        help='Export network graph to file (GraphML, DOT, GEXF)'
+    )
+    export_parser.add_argument(
+        'output',
+        help='Output file path'
+    )
+    export_parser.add_argument(
+        '--db', '-d',
+        required=True,
+        help='Database path'
+    )
+    export_parser.add_argument(
+        '--format', '-f',
+        choices=['graphml', 'dot', 'gexf', 'gml', 'json'],
+        help='Output format (default: inferred from extension)'
+    )
+    export_parser.add_argument(
+        '--include-metadata',
+        action='store_true',
+        help='Include conversation metadata as node attributes'
+    )
+
 
 def cmd_embeddings(args):
     """Generate embeddings for conversations"""
@@ -1032,3 +1057,82 @@ def cmd_outliers(args):
             console.print(f"\n[yellow]Found {len(isolated)} completely isolated nodes[/yellow]")
 
     return 0
+
+
+def cmd_export(args):
+    """Export network graph to file"""
+    from rich.console import Console
+    from pathlib import Path
+    import json
+    import networkx as nx
+
+    console = Console()
+
+    with ConversationDB(args.db) as db:
+        G, graph_metadata = _load_graph(db, console)
+        if G is None:
+            return 1
+
+        output_path = Path(args.output)
+
+        # Determine format
+        fmt = args.format
+        if not fmt:
+            ext = output_path.suffix.lower()
+            fmt = {
+                '.graphml': 'graphml',
+                '.gexf': 'gexf',
+                '.dot': 'dot',
+                '.gv': 'dot',
+                '.gml': 'gml',
+                '.json': 'json',
+            }.get(ext, 'graphml')
+
+        # Add metadata to nodes if requested
+        if args.include_metadata:
+            console.print("Adding conversation metadata to nodes...")
+            for node_id in G.nodes():
+                conv = db.load_conversation(node_id)
+                if conv:
+                    G.nodes[node_id]['title'] = conv.title or ""
+                    G.nodes[node_id]['source'] = conv.metadata.source or ""
+                    G.nodes[node_id]['model'] = conv.metadata.model or ""
+                    G.nodes[node_id]['slug'] = conv.metadata.slug or ""
+                    if conv.metadata.tags:
+                        G.nodes[node_id]['tags'] = ','.join(conv.metadata.tags)
+                    if conv.metadata.created_at:
+                        G.nodes[node_id]['created_at'] = str(conv.metadata.created_at)
+
+        console.print(f"Exporting graph to {output_path} ({fmt})...")
+
+        try:
+            if fmt == 'graphml':
+                nx.write_graphml(G, output_path)
+            elif fmt == 'gexf':
+                nx.write_gexf(G, output_path)
+            elif fmt == 'dot':
+                try:
+                    from networkx.drawing.nx_pydot import write_dot
+                    write_dot(G, output_path)
+                except ImportError:
+                    console.print("[red]Error: pydot not installed. Install with: pip install pydot[/red]")
+                    return 1
+            elif fmt == 'gml':
+                nx.write_gml(G, output_path)
+            elif fmt == 'json':
+                data = nx.node_link_data(G)
+                with open(output_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+            else:
+                console.print(f"[red]Unsupported format: {fmt}[/red]")
+                return 1
+
+            console.print(f"\n[green]✓ Exported graph to {output_path}[/green]")
+            console.print(f"  Nodes: {G.number_of_nodes()}")
+            console.print(f"  Edges: {G.number_of_edges()}")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error exporting graph: {e}[/red]")
+            logger.exception("Graph export failed")
+            return 1

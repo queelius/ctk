@@ -276,6 +276,246 @@ class OrganizationCommands:
         except Exception as e:
             return CommandResult(success=False, output="", error=f"title: {str(e)}")
 
+    def cmd_delete(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Delete a conversation
+
+        Usage:
+            delete                  - Delete current conversation
+            delete <conv_id>        - Delete specific conversation
+            delete -f               - Delete without confirmation
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with success status
+        """
+        # Check for force flag
+        force = '-f' in args or '--force' in args
+        args = [a for a in args if a not in ['-f', '--force']]
+
+        conv_id, error = self._get_conversation_id(args)
+        if error:
+            return CommandResult(success=False, output="", error=f"delete: {error}")
+
+        try:
+            # Get conversation info for confirmation
+            conv = self.db.load_conversation(conv_id)
+            if not conv:
+                return CommandResult(success=False, output="", error=f"delete: Conversation not found")
+
+            if not force:
+                title = conv.title or "Untitled"
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error=f"delete: Use -f to confirm deletion of '{title}' ({conv_id[:8]}...)"
+                )
+
+            self.db.delete_conversation(conv_id)
+            return CommandResult(success=True, output=f"Deleted conversation: {conv_id[:8]}\n")
+        except Exception as e:
+            return CommandResult(success=False, output="", error=f"delete: {str(e)}")
+
+    def cmd_duplicate(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Duplicate a conversation
+
+        Usage:
+            duplicate              - Duplicate current conversation
+            duplicate <conv_id>    - Duplicate specific conversation
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with success status
+        """
+        conv_id, error = self._get_conversation_id(args)
+        if error:
+            return CommandResult(success=False, output="", error=f"duplicate: {error}")
+
+        try:
+            new_id = self.db.duplicate_conversation(conv_id)
+            if new_id:
+                new_conv = self.db.load_conversation(new_id)
+                title = new_conv.title if new_conv else "Unknown"
+                return CommandResult(
+                    success=True,
+                    output=f"Duplicated conversation\n  New ID: {new_id[:8]}...\n  Title: {title}\n"
+                )
+            else:
+                return CommandResult(success=False, output="", error="duplicate: Failed to duplicate")
+        except Exception as e:
+            return CommandResult(success=False, output="", error=f"duplicate: {str(e)}")
+
+    def cmd_tag(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Add tags to a conversation
+
+        Usage:
+            tag <tag1,tag2,...>           - Add tags to current conversation
+            tag <conv_id> <tag1,tag2,...> - Add tags to specific conversation
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with success status
+        """
+        if not args:
+            return CommandResult(success=False, output="", error="tag: no tags provided")
+
+        # Check if first arg is a conversation ID
+        first_arg = args[0]
+        conv_id = None
+        tag_arg = args[0]
+
+        if len(args) > 1 and (first_arg.startswith('/') or len(first_arg) >= 8):
+            test_id, error = self._get_conversation_id([first_arg])
+            if not error:
+                conv_id = test_id
+                tag_arg = args[1]
+
+        if conv_id is None:
+            conv_id, error = self._get_conversation_id([])
+            if error:
+                return CommandResult(success=False, output="", error=f"tag: {error}")
+
+        # Parse tags (comma-separated)
+        tags = [t.strip() for t in tag_arg.split(',') if t.strip()]
+        if not tags:
+            return CommandResult(success=False, output="", error="tag: no valid tags provided")
+
+        try:
+            self.db.add_tags(conv_id, tags)
+            return CommandResult(
+                success=True,
+                output=f"Added tags to {conv_id[:8]}...: {', '.join(tags)}\n"
+            )
+        except Exception as e:
+            return CommandResult(success=False, output="", error=f"tag: {str(e)}")
+
+    def cmd_untag(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Remove a tag from a conversation
+
+        Usage:
+            untag <tag>            - Remove tag from current conversation
+            untag <conv_id> <tag>  - Remove tag from specific conversation
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with success status
+        """
+        if not args:
+            return CommandResult(success=False, output="", error="untag: no tag provided")
+
+        # Check if first arg is a conversation ID
+        first_arg = args[0]
+        conv_id = None
+        tag = args[0]
+
+        if len(args) > 1 and (first_arg.startswith('/') or len(first_arg) >= 8):
+            test_id, error = self._get_conversation_id([first_arg])
+            if not error:
+                conv_id = test_id
+                tag = args[1]
+
+        if conv_id is None:
+            conv_id, error = self._get_conversation_id([])
+            if error:
+                return CommandResult(success=False, output="", error=f"untag: {error}")
+
+        try:
+            self.db.remove_tag(conv_id, tag)
+            return CommandResult(
+                success=True,
+                output=f"Removed tag '{tag}' from {conv_id[:8]}...\n"
+            )
+        except Exception as e:
+            return CommandResult(success=False, output="", error=f"untag: {str(e)}")
+
+    def cmd_export(self, args: List[str], stdin: str = '') -> CommandResult:
+        """
+        Export a conversation
+
+        Usage:
+            export                     - Export current conversation as JSON
+            export <conv_id>           - Export specific conversation
+            export -f json|jsonl|md    - Export in specific format
+
+        Args:
+            args: Command arguments
+            stdin: Standard input (ignored)
+
+        Returns:
+            CommandResult with exported content
+        """
+        import json
+
+        # Parse format flag
+        fmt = 'json'
+        filtered_args = []
+        i = 0
+        while i < len(args):
+            if args[i] in ['-f', '--format'] and i + 1 < len(args):
+                fmt = args[i + 1]
+                i += 2
+            else:
+                filtered_args.append(args[i])
+                i += 1
+
+        conv_id, error = self._get_conversation_id(filtered_args)
+        if error:
+            return CommandResult(success=False, output="", error=f"export: {error}")
+
+        try:
+            conv = self.db.load_conversation(conv_id)
+            if not conv:
+                return CommandResult(success=False, output="", error="export: Conversation not found")
+
+            if fmt == 'json':
+                data = conv.to_dict()
+                output = json.dumps(data, indent=2, default=str)
+
+            elif fmt == 'jsonl':
+                lines = []
+                for msg in conv.get_longest_path():
+                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    content = msg.content.text if msg.content else ""
+                    lines.append(json.dumps({"role": role, "content": content}))
+                output = '\n'.join(lines)
+
+            elif fmt in ['md', 'markdown']:
+                lines = [f"# {conv.title or 'Untitled'}\n"]
+                lines.append(f"**ID:** {conv.id}\n")
+                if conv.metadata.model:
+                    lines.append(f"**Model:** {conv.metadata.model}\n")
+                lines.append("\n---\n")
+
+                for msg in conv.get_longest_path():
+                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    content = msg.content.text if msg.content else ""
+                    lines.append(f"\n## {role.upper()}\n\n{content}\n")
+
+                output = '\n'.join(lines)
+
+            else:
+                return CommandResult(success=False, output="", error=f"export: Unknown format '{fmt}'")
+
+            return CommandResult(success=True, output=output, pipe_data=output)
+
+        except Exception as e:
+            return CommandResult(success=False, output="", error=f"export: {str(e)}")
+
 
 def create_organization_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
     """
@@ -299,4 +539,9 @@ def create_organization_commands(db: ConversationDB, navigator: VFSNavigator, tu
         'archive': org.cmd_archive,
         'unarchive': org.cmd_unarchive,
         'title': org.cmd_title,
+        'delete': org.cmd_delete,
+        'duplicate': org.cmd_duplicate,
+        'tag': org.cmd_tag,
+        'untag': org.cmd_untag,
+        'export': org.cmd_export,
     }

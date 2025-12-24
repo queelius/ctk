@@ -316,6 +316,10 @@ class ConversationMetadata:
     starred_at: Optional[datetime] = None
     pinned_at: Optional[datetime] = None
     archived_at: Optional[datetime] = None
+    # Slug for URL-friendly identification
+    slug: Optional[str] = None
+    # LLM-generated summary
+    summary: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -331,9 +335,11 @@ class ConversationMetadata:
             'custom_data': self.custom_data,
             'starred_at': self.starred_at.isoformat() if self.starred_at else None,
             'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
-            'archived_at': self.archived_at.isoformat() if self.archived_at else None
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None,
+            'slug': self.slug,
+            'summary': self.summary,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ConversationMetadata':
         """Create from dictionary"""
@@ -349,7 +355,9 @@ class ConversationMetadata:
             custom_data=data.get('custom_data', data.get('custom', {})),  # Handle both names
             starred_at=datetime.fromisoformat(data['starred_at']) if data.get('starred_at') else None,
             pinned_at=datetime.fromisoformat(data['pinned_at']) if data.get('pinned_at') else None,
-            archived_at=datetime.fromisoformat(data['archived_at']) if data.get('archived_at') else None
+            archived_at=datetime.fromisoformat(data['archived_at']) if data.get('archived_at') else None,
+            slug=data.get('slug'),
+            summary=data.get('summary'),
         )
 
 
@@ -368,12 +376,15 @@ class ConversationSummary:
     starred_at: Optional[datetime] = None
     pinned_at: Optional[datetime] = None
     archived_at: Optional[datetime] = None
+    slug: Optional[str] = None
+    summary: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
             'id': self.id,
             'title': self.title,
+            'slug': self.slug,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'message_count': self.message_count,
@@ -384,6 +395,7 @@ class ConversationSummary:
             'starred_at': self.starred_at.isoformat() if self.starred_at else None,
             'pinned_at': self.pinned_at.isoformat() if self.pinned_at else None,
             'archived_at': self.archived_at.isoformat() if self.archived_at else None,
+            'summary': self.summary,
         }
 
     @classmethod
@@ -402,6 +414,8 @@ class ConversationSummary:
             starred_at=datetime.fromisoformat(data['starred_at']) if isinstance(data.get('starred_at'), str) else data.get('starred_at'),
             pinned_at=datetime.fromisoformat(data['pinned_at']) if isinstance(data.get('pinned_at'), str) else data.get('pinned_at'),
             archived_at=datetime.fromisoformat(data['archived_at']) if isinstance(data.get('archived_at'), str) else data.get('archived_at'),
+            slug=data.get('slug'),
+            summary=data.get('summary'),
         )
 
 

@@ -2613,6 +2613,14 @@ def main():
     from ctk.cli_lib import add_lib_commands
     add_lib_commands(subparsers)
 
+    # LLM provider command group
+    from ctk.cli_llm import add_llm_commands
+    add_llm_commands(subparsers)
+
+    # Config command group
+    from ctk.cli_config import add_config_commands
+    add_config_commands(subparsers)
+
     args = parser.parse_args()
     
     if args.verbose:
@@ -2642,10 +2650,15 @@ def main():
         from ctk.cli_db import (
             cmd_merge, cmd_diff, cmd_intersect, cmd_filter,
             cmd_split, cmd_dedupe, cmd_stats as cmd_db_stats,
-            cmd_validate, cmd_query
+            cmd_validate, cmd_query, cmd_init, cmd_info,
+            cmd_vacuum, cmd_backup
         )
 
         db_commands = {
+            'init': cmd_init,
+            'info': cmd_info,
+            'vacuum': cmd_vacuum,
+            'backup': cmd_backup,
             'merge': cmd_merge,
             'diff': cmd_diff,
             'intersect': cmd_intersect,
@@ -2667,7 +2680,8 @@ def main():
     if args.command == 'net':
         from ctk.cli_net import (
             cmd_embeddings, cmd_similar, cmd_links, cmd_network,
-            cmd_clusters, cmd_neighbors, cmd_path, cmd_central, cmd_outliers
+            cmd_clusters, cmd_neighbors, cmd_path, cmd_central, cmd_outliers,
+            cmd_export as cmd_net_export
         )
 
         net_commands = {
@@ -2680,13 +2694,14 @@ def main():
             'path': cmd_path,
             'central': cmd_central,
             'outliers': cmd_outliers,
+            'export': cmd_net_export,
         }
 
         if hasattr(args, 'net_command') and args.net_command:
             return net_commands[args.net_command](args)
         else:
             print("Error: No network operation specified")
-            print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers")
+            print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers, export")
             return 1
 
     # Special handling for conv subcommands
@@ -2698,6 +2713,16 @@ def main():
     if args.command == 'lib':
         from ctk.cli_lib import dispatch_lib_command
         return dispatch_lib_command(args)
+
+    # Special handling for llm subcommands
+    if args.command == 'llm':
+        from ctk.cli_llm import dispatch_llm_command
+        return dispatch_llm_command(args)
+
+    # Special handling for config subcommands
+    if args.command == 'config':
+        from ctk.cli_config import dispatch_config_command
+        return dispatch_config_command(args)
 
     return commands[args.command](args)
 
