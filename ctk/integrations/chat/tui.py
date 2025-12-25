@@ -109,6 +109,7 @@ class ChatTUI:
             'net', 'goto-longest', 'goto-latest', 'where', 'alternatives',
             'history', 'models', 'model', 'temp', 'regenerate', 'edit',
             'say', 'find', 'unstar', 'unpin', 'unarchive', 'chat',
+            'set', 'get',
         }
 
         # Prompt toolkit setup
@@ -125,6 +126,9 @@ class ChatTUI:
             'system': '#888888',
             'error': '#aa0000 bold',
         })
+
+        # Shell settings (configurable via 'set' command)
+        self.uuid_prefix_len = 8  # Default UUID prefix length for ls output
 
         # Shell mode support
         self.mode = 'shell'  # 'shell' or 'chat'
@@ -169,6 +173,11 @@ class ChatTUI:
         from ctk.core.commands.chat import create_chat_commands
         chat_commands = create_chat_commands(tui_instance=self)
         self.command_dispatcher.register_commands(chat_commands)
+
+        # Register settings commands (always available)
+        from ctk.core.commands.settings import create_settings_commands
+        settings_commands = create_settings_commands(tui_instance=self)
+        self.command_dispatcher.register_commands(settings_commands)
 
         # Update environment variables
         self._update_environment()

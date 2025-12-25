@@ -511,7 +511,7 @@ class OrganizationCommands:
             else:
                 return CommandResult(success=False, output="", error=f"export: Unknown format '{fmt}'")
 
-            return CommandResult(success=True, output=output, pipe_data=output)
+            return CommandResult(success=True, output=output)
 
         except Exception as e:
             return CommandResult(success=False, output="", error=f"export: {str(e)}")

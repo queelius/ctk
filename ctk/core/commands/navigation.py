@@ -135,7 +135,7 @@ class NavigationCommands:
         Usage:
             ls              - List current directory
             ls <path>       - List specified directory
-            ls -l           - Long format (not yet implemented)
+            ls -l           - Long format with metadata
 
         Args:
             args: Command arguments
@@ -177,26 +177,65 @@ class NavigationCommands:
             if not entries:
                 return CommandResult(success=True, output="")
 
+            # Get UUID prefix length setting (default 8)
+            uuid_prefix_len = 8
+            if self.tui:
+                val = getattr(self.tui, 'uuid_prefix_len', None)
+                if isinstance(val, int):
+                    uuid_prefix_len = val
+
             # Format output
             output_lines = []
             for entry in entries:
-                if long_format:
-                    # Format with metadata
-                    name = entry.name + ('/' if entry.is_directory else '')
-                    # Future: add date, size, etc.
-                    output_lines.append(name)
-                else:
-                    # Simple format: add trailing / for directories
-                    name = entry.name
-                    if entry.is_directory:
-                        name += '/'
-                    output_lines.append(name)
+                name = self._format_entry_name(entry, long_format, uuid_prefix_len)
+                output_lines.append(name)
 
             output = '\n'.join(output_lines) + '\n'
             return CommandResult(success=True, output=output)
 
         except ValueError as e:
             return CommandResult(success=False, output="", error=f"ls: {str(e)}")
+
+    def _format_entry_name(self, entry, long_format: bool, uuid_prefix_len: int) -> str:
+        """Format an entry name for ls output"""
+        # For conversation entries, show slug with UUID prefix in parens
+        if entry.conversation_id:
+            uuid_prefix = entry.conversation_id[:uuid_prefix_len]
+            if entry.slug:
+                # Slug is primary, UUID in parens
+                name = f"{entry.slug} ({uuid_prefix})"
+            else:
+                # No slug, use title or just UUID
+                if entry.title:
+                    # Create a display name from title
+                    display = entry.title[:40]
+                    if len(entry.title) > 40:
+                        display += "..."
+                    name = f"{display} ({uuid_prefix})"
+                else:
+                    name = uuid_prefix
+            if entry.is_directory:
+                name += '/'
+        elif entry.is_directory:
+            name = entry.name + '/'
+        else:
+            name = entry.name
+
+        # Add long format details
+        if long_format and entry.conversation_id:
+            flags = ""
+            if entry.starred:
+                flags += "⭐"
+            if entry.pinned:
+                flags += "📌"
+            if entry.archived:
+                flags += "📦"
+            if flags:
+                name = f"{flags} {name}"
+            if entry.model:
+                name += f"  [{entry.model}]"
+
+        return name
 
     def cmd_pwd(self, args: List[str], stdin: str = '') -> CommandResult:
         """
