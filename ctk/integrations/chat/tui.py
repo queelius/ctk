@@ -13,6 +13,7 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
+from prompt_toolkit.completion import DynamicCompleter
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -30,6 +31,7 @@ from ctk.core.tree import TreeMessage, ConversationTreeNavigator
 from ctk.core.shell_parser import ShellParser
 from ctk.core.command_dispatcher import CommandDispatcher, CommandResult
 from ctk.core.commands.unix import create_unix_commands
+from ctk.core.shell_completer import create_shell_completer
 
 
 # Add to_llm_message method to TreeMessage for TUI use
@@ -112,10 +114,14 @@ class ChatTUI:
             'set', 'get',
         }
 
-        # Prompt toolkit setup
+        # Shell completer (created lazily to allow tui reference)
+        self._shell_completer = None
+
+        # Prompt toolkit setup with dynamic completer
         self.session = PromptSession(
             history=InMemoryHistory(),
             auto_suggest=AutoSuggestFromHistory(),
+            completer=DynamicCompleter(self._get_completer),
         )
 
         # Style for prompt
@@ -200,6 +206,12 @@ class ChatTUI:
             env['MSG_COUNT'] = str(len(path))
 
         self.shell_parser.set_environment(env)
+
+    def _get_completer(self):
+        """Get or create the shell completer (for DynamicCompleter)."""
+        if self._shell_completer is None:
+            self._shell_completer = create_shell_completer(tui_instance=self)
+        return self._shell_completer
 
     def get_current_path(self) -> List[TreeMessage]:
         """Get path from root to current message"""
