@@ -198,6 +198,17 @@ class NavigationCommands:
 
     def _format_entry_name(self, entry, long_format: bool, uuid_prefix_len: int) -> str:
         """Format an entry name for ls output"""
+        # Message nodes inside a conversation - use simple name (m1, m2, etc.)
+        if entry.message_id:
+            if entry.is_directory:
+                name = entry.name + '/'
+            else:
+                name = entry.name
+            # Add role indicator for long format
+            if long_format and entry.role:
+                name = f"[{entry.role}] {name}"
+            return name
+
         # For conversation entries, show slug with UUID prefix in parens
         if entry.conversation_id:
             uuid_prefix = entry.conversation_id[:uuid_prefix_len]
@@ -216,24 +227,27 @@ class NavigationCommands:
                     name = uuid_prefix
             if entry.is_directory:
                 name += '/'
-        elif entry.is_directory:
+
+            # Add long format details for conversations
+            if long_format:
+                flags = ""
+                if entry.starred:
+                    flags += "⭐"
+                if entry.pinned:
+                    flags += "📌"
+                if entry.archived:
+                    flags += "📦"
+                if flags:
+                    name = f"{flags} {name}"
+                if entry.model:
+                    name += f"  [{entry.model}]"
+            return name
+
+        # Regular directory/file entries
+        if entry.is_directory:
             name = entry.name + '/'
         else:
             name = entry.name
-
-        # Add long format details
-        if long_format and entry.conversation_id:
-            flags = ""
-            if entry.starred:
-                flags += "⭐"
-            if entry.pinned:
-                flags += "📌"
-            if entry.archived:
-                flags += "📦"
-            if flags:
-                name = f"{flags} {name}"
-            if entry.model:
-                name += f"  [{entry.model}]"
 
         return name
 
