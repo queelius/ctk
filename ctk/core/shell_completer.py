@@ -6,7 +6,8 @@ Provides tab completion for:
 - VFS paths (slugs, UUIDs, virtual directories)
 """
 
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, List, Tuple, Dict
+from time import time
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
@@ -19,6 +20,8 @@ class ShellCompleter(Completer):
     - Command completion at start of line
     - Path completion after commands like cd, ls, cat
     - Slug and UUID prefix matching for conversations
+
+    Uses caching to avoid repeated database queries during typing.
     """
 
     # Commands that take path arguments
@@ -50,6 +53,9 @@ class ShellCompleter(Completer):
         'help', 'exit', 'quit', 'clear',
     }
 
+    # Cache TTL in seconds
+    CACHE_TTL = 10.0
+
     def __init__(self, tui_instance=None):
         """
         Initialize completer.
@@ -58,6 +64,8 @@ class ShellCompleter(Completer):
             tui_instance: TUI instance for accessing VFS navigator and database
         """
         self.tui = tui_instance
+        # Cache: parent_path -> (timestamp, entries)
+        self._cache: Dict[str, Tuple[float, List]] = {}
 
     def get_completions(self, document: Document, complete_event) -> Iterable[Completion]:
         """Generate completions for the current input."""
@@ -99,6 +107,29 @@ class ShellCompleter(Completer):
                     display_meta='command'
                 )
 
+    def _get_cached_entries(self, parent_path: str) -> List:
+        """Get directory entries with caching."""
+        now = time()
+
+        # Check local cache first
+        if parent_path in self._cache:
+            cached_time, cached_entries = self._cache[parent_path]
+            if now - cached_time < self.CACHE_TTL:
+                return cached_entries
+
+        # Cache miss - fetch from navigator (which has its own cache)
+        from ctk.core.vfs import VFSPathParser
+        parsed = VFSPathParser.parse(parent_path)
+        entries = self.tui.vfs_navigator.list_directory(parsed)
+
+        # Store in local cache
+        self._cache[parent_path] = (now, entries)
+        return entries
+
+    def clear_cache(self):
+        """Clear the completer's cache."""
+        self._cache.clear()
+
     def _complete_paths(self, partial: str) -> Iterable[Completion]:
         """Complete VFS paths including slugs."""
         if not self.tui or not self.tui.vfs_navigator:
@@ -122,10 +153,8 @@ class ShellCompleter(Completer):
                 parent_path = self.tui.vfs_cwd
                 prefix = partial
 
-            # Get entries in the parent directory
-            from ctk.core.vfs import VFSPathParser
-            parsed = VFSPathParser.parse(parent_path)
-            entries = self.tui.vfs_navigator.list_directory(parsed)
+            # Get entries with caching
+            entries = self._get_cached_entries(parent_path)
 
             # Generate completions
             for entry in entries:

@@ -99,8 +99,8 @@ class TestVFSNavigatorInitialization:
 
     @pytest.mark.unit
     def test_cache_ttl_constant(self):
-        """Test cache TTL is set correctly"""
-        assert VFSNavigator.CACHE_TTL == 2.0
+        """Test cache TTL is set correctly (10 seconds for better performance)"""
+        assert VFSNavigator.CACHE_TTL == 10.0
 
     @pytest.mark.unit
     def test_clear_cache(self, mock_db):

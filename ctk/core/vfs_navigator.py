@@ -40,8 +40,8 @@ class VFSEntry:
 class VFSNavigator:
     """Navigator for virtual filesystem with caching for performance"""
 
-    # Cache TTL in seconds
-    CACHE_TTL = 2.0
+    # Cache TTL in seconds (increased for better performance in interactive use)
+    CACHE_TTL = 10.0
 
     def __init__(self, db: ConversationDB, views_dir: Optional[str] = None):
         """

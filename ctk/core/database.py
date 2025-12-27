@@ -121,10 +121,50 @@ class ConversationDB:
                                 logger.debug(f"Could not add summary column: {e}")
 
                     conn.commit()
+
+                    # Generate slugs for conversations that don't have them
+                    self._generate_missing_slugs()
             except Exception as e:
                 # Not SQLite or other issue - skip migration
                 logger.debug(f"Schema migration skipped: {e}")
-    
+
+    def _generate_missing_slugs(self):
+        """Generate slugs for conversations that don't have them"""
+        from ctk.core.slug import generate_slug, make_unique_slug
+
+        try:
+            with self.session_scope() as session:
+                # Get conversations without slugs
+                convs_without_slugs = session.query(ConversationModel).filter(
+                    ConversationModel.slug.is_(None)
+                ).all()
+
+                if not convs_without_slugs:
+                    return
+
+                # Get all existing slugs
+                existing_slugs = set(
+                    row[0] for row in session.query(ConversationModel.slug).filter(
+                        ConversationModel.slug.isnot(None)
+                    ).all()
+                )
+
+                # Generate slugs
+                count = 0
+                for conv in convs_without_slugs:
+                    if conv.title:
+                        base_slug = generate_slug(conv.title)
+                        if base_slug:
+                            slug = make_unique_slug(base_slug, existing_slugs)
+                            conv.slug = slug
+                            existing_slugs.add(slug)
+                            count += 1
+
+                if count > 0:
+                    logger.info(f"Generated slugs for {count} conversations")
+        except Exception as e:
+            logger.debug(f"Slug generation skipped: {e}")
+
     @contextmanager
     def session_scope(self):
         """Provide a transactional scope for database operations"""
