@@ -4,7 +4,7 @@ SQLAlchemy database backend for conversation storage
 
 import json
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Tuple
 from datetime import datetime
 from contextlib import contextmanager
 import logging
@@ -82,6 +82,7 @@ class ConversationDB:
         """Initialize database schema"""
         Base.metadata.create_all(self.engine)
         self._migrate_schema()
+        self._setup_fts5()
         logger.info(f"Database schema initialized at {self.db_path}")
 
     def _migrate_schema(self):
@@ -164,6 +165,232 @@ class ConversationDB:
                     logger.info(f"Generated slugs for {count} conversations")
         except Exception as e:
             logger.debug(f"Slug generation skipped: {e}")
+
+    def _setup_fts5(self):
+        """Setup FTS5 full-text search tables and triggers for SQLite databases."""
+        if self.db_dir is None:
+            # Not SQLite - skip FTS5 setup
+            return False
+
+        try:
+            with self.engine.connect() as conn:
+                # Check if FTS5 tables already exist
+                result = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                ))
+                if result.fetchone():
+                    logger.debug("FTS5 tables already exist")
+                    return True
+
+                # Create FTS5 virtual table for conversations (title + summary)
+                conn.execute(text("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+                        conversation_id UNINDEXED,
+                        title,
+                        summary,
+                        tokenize = 'porter unicode61'
+                    )
+                """))
+
+                # Create FTS5 virtual table for messages (content)
+                conn.execute(text("""
+                    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+                        message_id UNINDEXED,
+                        conversation_id UNINDEXED,
+                        role UNINDEXED,
+                        content,
+                        tokenize = 'porter unicode61'
+                    )
+                """))
+
+                # Populate FTS tables with existing data
+                conn.execute(text("""
+                    INSERT INTO conversations_fts (conversation_id, title, summary)
+                    SELECT id, COALESCE(title, ''), COALESCE(summary, '')
+                    FROM conversations
+                """))
+
+                conn.execute(text("""
+                    INSERT INTO messages_fts (message_id, conversation_id, role, content)
+                    SELECT id, conversation_id, COALESCE(role, ''),
+                           COALESCE(json_extract(content_json, '$.text'), '')
+                    FROM messages
+                """))
+
+                # Create triggers to keep FTS in sync
+                # Conversations insert trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS conversations_fts_insert
+                    AFTER INSERT ON conversations
+                    BEGIN
+                        INSERT INTO conversations_fts (conversation_id, title, summary)
+                        VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.summary, ''));
+                    END
+                """))
+
+                # Conversations update trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS conversations_fts_update
+                    AFTER UPDATE ON conversations
+                    BEGIN
+                        UPDATE conversations_fts
+                        SET title = COALESCE(NEW.title, ''),
+                            summary = COALESCE(NEW.summary, '')
+                        WHERE conversation_id = NEW.id;
+                    END
+                """))
+
+                # Conversations delete trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS conversations_fts_delete
+                    AFTER DELETE ON conversations
+                    BEGIN
+                        DELETE FROM conversations_fts WHERE conversation_id = OLD.id;
+                    END
+                """))
+
+                # Messages insert trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS messages_fts_insert
+                    AFTER INSERT ON messages
+                    BEGIN
+                        INSERT INTO messages_fts (message_id, conversation_id, role, content)
+                        VALUES (NEW.id, NEW.conversation_id, COALESCE(NEW.role, ''),
+                                COALESCE(json_extract(NEW.content_json, '$.text'), ''));
+                    END
+                """))
+
+                # Messages update trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS messages_fts_update
+                    AFTER UPDATE ON messages
+                    BEGIN
+                        UPDATE messages_fts
+                        SET role = COALESCE(NEW.role, ''),
+                            content = COALESCE(json_extract(NEW.content_json, '$.text'), '')
+                        WHERE message_id = NEW.id;
+                    END
+                """))
+
+                # Messages delete trigger
+                conn.execute(text("""
+                    CREATE TRIGGER IF NOT EXISTS messages_fts_delete
+                    AFTER DELETE ON messages
+                    BEGIN
+                        DELETE FROM messages_fts WHERE message_id = OLD.id;
+                    END
+                """))
+
+                conn.commit()
+                logger.info("FTS5 full-text search tables and triggers created")
+                return True
+
+        except Exception as e:
+            logger.warning(f"FTS5 setup failed (search will use LIKE fallback): {e}")
+            return False
+
+    def _has_fts5(self) -> bool:
+        """Check if FTS5 tables are available."""
+        if self.db_dir is None:
+            return False
+        try:
+            with self.engine.connect() as conn:
+                result = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                ))
+                return result.fetchone() is not None
+        except Exception:
+            return False
+
+    def _prepare_fts_query(self, query_text: str) -> str:
+        """
+        Prepare a user query string for FTS5 MATCH syntax.
+
+        Handles:
+        - Simple words: python -> python
+        - Phrases in quotes: "exact match" -> "exact match"
+        - Multiple words: python debugging -> python OR debugging
+        - AND/OR operators preserved
+        """
+        if not query_text:
+            return ""
+
+        # If already contains FTS operators, use as-is
+        if any(op in query_text.upper() for op in [' AND ', ' OR ', ' NOT ', ' NEAR']):
+            return query_text
+
+        # If contains quotes, preserve phrase matching
+        if '"' in query_text:
+            return query_text
+
+        # Convert simple word list to OR query for broader matching
+        words = query_text.split()
+        if len(words) > 1:
+            # Use OR for multiple words (more inclusive)
+            return ' OR '.join(words)
+
+        return query_text
+
+    def _search_fts5(self, query_text: str, title_only: bool = False,
+                     content_only: bool = False, limit: int = 1000) -> List[str]:
+        """
+        Search using FTS5 and return matching conversation IDs with relevance ranking.
+
+        Returns conversation IDs ordered by relevance (title matches ranked higher).
+        """
+        fts_query = self._prepare_fts_query(query_text)
+        if not fts_query:
+            return []
+
+        try:
+            with self.engine.connect() as conn:
+                matching_ids = set()
+                ranked_ids = []
+
+                if not content_only:
+                    # Search conversation titles (higher weight)
+                    try:
+                        result = conn.execute(text("""
+                            SELECT conversation_id, bm25(conversations_fts) as rank
+                            FROM conversations_fts
+                            WHERE conversations_fts MATCH :query
+                            ORDER BY rank
+                            LIMIT :limit
+                        """), {"query": fts_query, "limit": limit})
+
+                        for row in result:
+                            conv_id = row[0]
+                            if conv_id not in matching_ids:
+                                matching_ids.add(conv_id)
+                                ranked_ids.append((conv_id, row[1] - 10))  # Boost title matches
+                    except Exception as e:
+                        logger.debug(f"FTS5 title search failed: {e}")
+
+                if not title_only:
+                    # Search message content - use subquery since bm25 can't be used with GROUP BY
+                    try:
+                        result = conn.execute(text("""
+                            SELECT DISTINCT conversation_id
+                            FROM messages_fts
+                            WHERE messages_fts MATCH :query
+                            LIMIT :limit
+                        """), {"query": fts_query, "limit": limit})
+
+                        for row in result:
+                            conv_id = row[0]
+                            if conv_id not in matching_ids:
+                                matching_ids.add(conv_id)
+                                ranked_ids.append((conv_id, 0))  # No rank for content matches
+                    except Exception as e:
+                        logger.debug(f"FTS5 content search failed: {e}")
+
+                # Sort by rank (lower is better in bm25)
+                ranked_ids.sort(key=lambda x: x[1])
+                return [conv_id for conv_id, _ in ranked_ids[:limit]]
+
+        except Exception as e:
+            logger.warning(f"FTS5 search failed: {e}")
+            return []
 
     @contextmanager
     def session_scope(self):
@@ -292,9 +519,59 @@ class ConversationDB:
             
             session.commit()
             logger.info(f"Saved conversation {conversation.id} with {len(conversation.message_map)} messages")
-            
+
         return conversation.id
-    
+
+    def resolve_identifier(self, identifier: str) -> Optional[Tuple[str, Optional[str]]]:
+        """
+        Resolve a slug, ID, or prefix to (conversation_id, slug) using database indexes.
+
+        This is a database-level resolution that uses indexes for O(log n) lookups.
+        For faster O(1) lookups, use ConversationIndex instead.
+
+        Resolution order:
+        1. Exact slug match
+        2. Exact ID match
+        3. Unique slug prefix match
+        4. Unique ID prefix match
+
+        Args:
+            identifier: Slug, full ID, or prefix to resolve
+
+        Returns:
+            Tuple of (conversation_id, slug) if unique match found, None otherwise
+        """
+        with self.session_scope() as session:
+            # 1. Exact slug match (uses index)
+            conv = session.query(ConversationModel.id, ConversationModel.slug).filter(
+                ConversationModel.slug == identifier
+            ).first()
+            if conv:
+                return (conv[0], conv[1])
+
+            # 2. Exact ID match (uses primary key)
+            conv = session.query(ConversationModel.id, ConversationModel.slug).filter(
+                ConversationModel.id == identifier
+            ).first()
+            if conv:
+                return (conv[0], conv[1])
+
+            # 3. Slug prefix match - LIMIT 2 to detect ambiguity
+            matches = session.query(ConversationModel.id, ConversationModel.slug).filter(
+                ConversationModel.slug.startswith(identifier)
+            ).limit(2).all()
+            if len(matches) == 1:
+                return (matches[0][0], matches[0][1])
+
+            # 4. ID prefix match - LIMIT 2 to detect ambiguity
+            matches = session.query(ConversationModel.id, ConversationModel.slug).filter(
+                ConversationModel.id.startswith(identifier)
+            ).limit(2).all()
+            if len(matches) == 1:
+                return (matches[0][0], matches[0][1])
+
+            return None
+
     def load_conversation(self, conversation_id: str) -> Optional[ConversationTree]:
         """
         Load a conversation from the database
@@ -570,6 +847,20 @@ class ConversationDB:
         Returns:
             List of ConversationSummary objects
         """
+        # Try FTS5 search first if text query provided and FTS5 available
+        fts_ids = None
+        if query_text and self._has_fts5():
+            try:
+                fts_ids = self._search_fts5(query_text, title_only=title_only,
+                                           content_only=content_only, limit=limit + offset + 100)
+                if not fts_ids:
+                    # No FTS5 matches - return empty rather than falling back to LIKE
+                    # This is intentional: FTS5 should be authoritative when available
+                    return []
+            except Exception as e:
+                logger.debug(f"FTS5 search failed, falling back to LIKE: {e}")
+                fts_ids = None
+
         with self.session_scope() as session:
             # Base query with message count
             query = session.query(
@@ -577,9 +868,12 @@ class ConversationDB:
                 func.count(MessageModel.id).label('message_count')
             ).outerjoin(MessageModel)
 
-            # Text search
+            # Text search - use FTS5 results or fall back to LIKE
             if query_text:
-                if title_only:
+                if fts_ids is not None:
+                    # Use pre-computed FTS5 results
+                    query = query.filter(ConversationModel.id.in_(fts_ids))
+                elif title_only:
                     query = query.filter(
                         ConversationModel.title.ilike(f"%{query_text}%")
                     )
@@ -593,7 +887,7 @@ class ConversationDB:
                             MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
                         )
                 else:
-                    # Search both title and content
+                    # Search both title and content (LIKE fallback)
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             or_(

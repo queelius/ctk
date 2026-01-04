@@ -152,7 +152,7 @@ class TestVFSNavigatorPrefixResolution:
 
     @pytest.mark.unit
     def test_resolve_prefix_unique_match(self, navigator, mock_db):
-        """Test resolving a unique prefix match"""
+        """Test resolving a unique prefix match (slow path)"""
         # Mock list_directory to return test conversations
         mock_entries = [
             VFSEntry(name="conv_abc123", is_directory=True, conversation_id="conv_abc123"),
@@ -160,7 +160,8 @@ class TestVFSNavigatorPrefixResolution:
         ]
 
         vfs_path = Mock(spec=VFSPath)
-        vfs_path.normalized_path = "/chats"
+        vfs_path.normalized_path = "/starred"
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
             result = navigator.resolve_prefix("conv_abc", vfs_path)
@@ -174,6 +175,7 @@ class TestVFSNavigatorPrefixResolution:
         ]
 
         vfs_path = Mock(spec=VFSPath)
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
             with pytest.raises(ValueError, match="No conversation found matching"):
@@ -189,6 +191,7 @@ class TestVFSNavigatorPrefixResolution:
         ]
 
         vfs_path = Mock(spec=VFSPath)
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
             with pytest.raises(ValueError, match="matches 3 conversations"):
@@ -203,6 +206,7 @@ class TestVFSNavigatorPrefixResolution:
         ]
 
         vfs_path = Mock(spec=VFSPath)
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
             with pytest.raises(ValueError) as exc_info:
@@ -214,8 +218,9 @@ class TestVFSNavigatorPrefixResolution:
 
     @pytest.mark.unit
     def test_resolve_prefix_handles_list_error(self, navigator):
-        """Test prefix resolution returns None on list error"""
+        """Test prefix resolution returns None on list error (slow path)"""
         vfs_path = Mock(spec=VFSPath)
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', side_effect=Exception("DB error")):
             result = navigator.resolve_prefix("conv", vfs_path)
@@ -230,6 +235,7 @@ class TestVFSNavigatorPrefixResolution:
         ]
 
         vfs_path = Mock(spec=VFSPath)
+        vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
         with patch.object(navigator, 'list_directory', return_value=mock_entries):
             result = navigator.resolve_prefix("conv_abc", vfs_path)

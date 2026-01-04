@@ -387,26 +387,7 @@ def add_db_commands(subparsers):
     )
     validate_parser.set_defaults(func=cmd_validate)
 
-    # QUERY command (advanced SQL-like queries)
-    query_parser = db_subparsers.add_parser(
-        'query',
-        help='Execute SQL-like queries on database'
-    )
-    query_parser.add_argument(
-        'input',
-        help='Database file to query'
-    )
-    query_parser.add_argument(
-        'query',
-        help='SQL query to execute'
-    )
-    query_parser.add_argument(
-        '--format',
-        choices=['text', 'json', 'csv'],
-        default='text',
-        help='Output format (default: text)'
-    )
-    query_parser.set_defaults(func=cmd_query)
+    # NOTE: ctk db query removed - use 'ctk sql' instead for raw SQL queries
 
 
 def expand_globs(patterns: List[str]) -> List[str]:
@@ -674,6 +655,9 @@ def cmd_dedupe(args):
 
 def cmd_stats(args):
     """Execute stats command"""
+    import sys
+    print("[DEPRECATED] 'ctk db stats' is deprecated. Use 'ctk lib stats' instead.", file=sys.stderr)
+
     # Expand glob patterns
     input_files = expand_globs(args.inputs)
 
@@ -744,47 +728,6 @@ def cmd_validate(args):
             print("Attempting repair...")
             # Would attempt to recover what we can
 
-        return 1
-
-
-def cmd_query(args):
-    """Execute query command"""
-    print(f"Executing query on {args.input}...")
-
-    try:
-        with ConversationDB(args.input) as db:
-            with db.session_scope() as session:
-                # Execute raw SQL query
-                result = session.execute(text(args.query))
-
-                rows = result.fetchall()
-
-                if args.format == 'json':
-                    # Convert to JSON-serializable format
-                    data = []
-                    for row in rows:
-                        if hasattr(row, '_asdict'):
-                            data.append(row._asdict())
-                        else:
-                            data.append(list(row))
-                    print(json.dumps(data, indent=2, default=str))
-
-                elif args.format == 'csv':
-                    # Simple CSV output
-                    for row in rows:
-                        print(','.join(str(v) for v in row))
-
-                else:  # text
-                    for row in rows:
-                        print(row)
-
-                print(f"\n{len(rows)} row(s) returned")
-
-        return 0
-
-    except Exception as e:
-        print(f"Query failed: {e}")
-        logger.exception("Query execution failed")
         return 1
 
 

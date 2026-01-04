@@ -153,7 +153,12 @@ class ShellCompleter(Completer):
                 parent_path = self.tui.vfs_cwd
                 prefix = partial
 
-            # Get entries with caching
+            # Fast path: Use index for /chats completions
+            if parent_path == '/chats' or parent_path == '/chats/':
+                yield from self._complete_from_index(prefix, partial.startswith('/'))
+                return
+
+            # Standard path: Get entries with caching
             entries = self._get_cached_entries(parent_path)
 
             # Generate completions
@@ -212,6 +217,50 @@ class ShellCompleter(Completer):
                         )
                         break  # Only yield one completion per entry
 
+        except Exception:
+            # Silently fail on completion errors
+            pass
+
+    def _complete_from_index(self, prefix: str, is_absolute: bool) -> Iterable[Completion]:
+        """
+        Complete conversation identifiers using ConversationIndex.
+
+        O(1) for exact matches, O(k) for prefix matches where k = number of matches.
+        Much faster than loading all conversations via list_directory().
+
+        Args:
+            prefix: Prefix to match (slug or ID)
+            is_absolute: Whether this is an absolute path (starts with /)
+        """
+        try:
+            # Get completions from the index
+            index = self.tui.vfs_navigator.index
+            completions = index.get_completions(prefix, limit=20)
+
+            # Get UUID prefix length setting
+            uuid_len = getattr(self.tui, 'uuid_prefix_len', 8)
+
+            for display_text, conv_id, slug in completions:
+                # Build completion text
+                if is_absolute:
+                    completion = '/chats/' + (slug or conv_id[:uuid_len]) + '/'
+                else:
+                    completion = (slug or conv_id[:uuid_len]) + '/'
+
+                # Determine display and meta
+                if slug:
+                    display = slug + '/'
+                    meta = 'slug'
+                else:
+                    display = conv_id[:uuid_len] + '/'
+                    meta = 'uuid'
+
+                yield Completion(
+                    completion,
+                    start_position=-len(prefix) if not is_absolute else -(len('/chats/') + len(prefix)),
+                    display=display,
+                    display_meta=meta
+                )
         except Exception:
             # Silently fail on completion errors
             pass

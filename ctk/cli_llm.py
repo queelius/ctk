@@ -71,19 +71,17 @@ def cmd_models(args):
                 'base_url': provider_config.get('base_url', 'http://localhost:11434'),
                 'model': provider_config.get('default_model', 'llama2'),
             })
-            models = provider.list_models()
+            models = provider.get_models()
 
         elif provider_name == 'openai':
-            from ctk.integrations.llm.openai import OpenAIProvider
-            api_key = config.get_api_key('openai')
-            if not api_key:
-                print("Error: OPENAI_API_KEY not set")
-                return 1
-            provider = OpenAIProvider({
-                'api_key': api_key,
-                'model': provider_config.get('default_model', 'gpt-3.5-turbo'),
-            })
-            models = provider.list_models()
+            # OpenAI provider not yet implemented - list known models
+            models = [
+                {'id': 'gpt-4o', 'name': 'GPT-4o'},
+                {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini'},
+                {'id': 'gpt-4-turbo', 'name': 'GPT-4 Turbo'},
+                {'id': 'gpt-4', 'name': 'GPT-4'},
+                {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
+            ]
 
         elif provider_name == 'anthropic':
             # Anthropic doesn't have a models endpoint, list known models
@@ -110,6 +108,10 @@ def cmd_models(args):
             if isinstance(model, dict):
                 model_id = model.get('id', model.get('name', str(model)))
                 model_name = model.get('name', model.get('id', ''))
+            elif hasattr(model, 'id'):
+                # ModelInfo object
+                model_id = model.id
+                model_name = model.name if hasattr(model, 'name') else ''
             else:
                 model_id = str(model)
                 model_name = ''
@@ -153,7 +155,7 @@ def cmd_test(args):
                 console.print(f"[green]OK[/green] - Connected to Ollama at {provider_config.get('base_url')}")
 
                 # Try to list models as additional test
-                models = provider.list_models()
+                models = provider.get_models()
                 console.print(f"[dim]{len(models)} models available[/dim]")
 
                 # If a specific model is requested, test it

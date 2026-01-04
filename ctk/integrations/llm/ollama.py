@@ -81,12 +81,13 @@ class OllamaProvider(LLMProvider):
         if max_tokens:
             payload['options']['num_predict'] = max_tokens
 
-        # Add any additional options
-        payload['options'].update(kwargs)
+        # Extract tools before adding other kwargs to options
+        tools = kwargs.pop('tools', None)
+        if tools:
+            payload['tools'] = tools
 
-        # Add tools if provided
-        if 'tools' in kwargs:
-            payload['tools'] = kwargs.pop('tools')
+        # Add remaining options
+        payload['options'].update(kwargs)
 
         try:
             response = requests.post(
@@ -174,6 +175,12 @@ class OllamaProvider(LLMProvider):
         if max_tokens:
             payload['options']['num_predict'] = max_tokens
 
+        # Extract tools before adding other kwargs to options
+        tools = kwargs.pop('tools', None)
+        if tools:
+            payload['tools'] = tools
+
+        # Add remaining options
         payload['options'].update(kwargs)
 
         try:
@@ -383,3 +390,49 @@ class OllamaProvider(LLMProvider):
             role=MessageRole.TOOL,
             content=content
         )
+
+    def extract_tool_calls(self, response: ChatResponse) -> Optional[List[Dict[str, Any]]]:
+        """
+        Extract tool calls from response, with detection for hallucinated tool calls.
+
+        Some smaller models (llama3.2, qwen, etc.) output text that looks like tool calls
+        instead of making proper API tool calls. This method detects those patterns.
+
+        Args:
+            response: ChatResponse object
+
+        Returns:
+            List of tool calls or None
+        """
+        import re
+
+        # First, check for proper tool calls
+        if response.tool_calls:
+            return response.tool_calls
+
+        # No proper tool calls - check if model hallucinated tool call patterns
+        content = response.content or ""
+
+        # Patterns that indicate hallucinated tool calls
+        hallucination_patterns = [
+            r'<\|python_tag\|>',  # Llama internal token leak
+            r'<tool_call>',  # Generic tool call tag
+            r'<\|start_tool\|>',  # Some models use this
+            r'"function":\s*{\s*"name"',  # JSON tool call format
+            r'```(?:json|plaintext)?\s*\n?\s*(?:search_|list_|get_)\w+\s*\(',  # Code block with function call
+            r'(?:search_|list_|get_|execute_)\w+\s*\(\s*(?:query|id|limit)',  # Function call syntax
+            r'"id":\s*"conv_\d',  # Fake conversation IDs
+        ]
+
+        for pattern in hallucination_patterns:
+            if re.search(pattern, content, re.IGNORECASE):
+                # Log warning - model is trying to call tools but not using API
+                import sys
+                print(f"\n⚠️  WARNING: Model is hallucinating tool calls!", file=sys.stderr)
+                print(f"   The model output fake tool calls/results instead of using the API.", file=sys.stderr)
+                print(f"   This model ({self.model}) may not support function calling properly.", file=sys.stderr)
+                print(f"   Try: ctk chat --no-tools  (to disable tools)", file=sys.stderr)
+                print(f"   Or use a larger model with better tool support.\n", file=sys.stderr)
+                break
+
+        return None

@@ -54,9 +54,18 @@ class VFSNavigator:
         self.db = db
         self._views_dir = views_dir
         self._view_store: Optional[ViewStore] = None
+        self._conversation_index = None
 
         # Cache: path_key -> (timestamp, entries)
         self._cache: Dict[str, Tuple[float, List[VFSEntry]]] = {}
+
+    @property
+    def index(self):
+        """Lazy-load ConversationIndex for fast slug/prefix resolution"""
+        if self._conversation_index is None:
+            from .conversation_index import ConversationIndex
+            self._conversation_index = ConversationIndex(self.db)
+        return self._conversation_index
 
     @property
     def view_store(self) -> Optional[ViewStore]:
@@ -88,12 +97,14 @@ class VFSNavigator:
         """
         Resolve a partial conversation ID or slug to full ID.
 
+        Uses ConversationIndex for O(1) lookups when resolving in /chats.
+        Falls back to list-based resolution for other directory types.
+
         Matching order:
-        1. Exact ID match
-        2. Exact slug match
-        3. ID prefix match
-        4. Slug prefix match
-        5. Slug word-based partial match (e.g., "python-hints" matches "discussion-python-type-hints")
+        1. Exact slug match
+        2. Exact ID match
+        3. Slug prefix match
+        4. ID prefix match
 
         Args:
             prefix: Partial conversation ID or slug (e.g., "466a" or "python-hints")
@@ -105,9 +116,50 @@ class VFSNavigator:
         Raises:
             ValueError: If multiple matches or no matches
         """
-        from .slug import slug_matches
+        # Fast path: Use ConversationIndex for /chats resolution
+        if vfs_path.path_type == PathType.CHATS:
+            return self._resolve_prefix_fast(prefix)
 
-        # Get list of conversations in current context
+        # Slow path: Use list-based resolution for other directories
+        return self._resolve_prefix_slow(prefix, vfs_path)
+
+    def _resolve_prefix_fast(self, prefix: str) -> Optional[str]:
+        """
+        Fast prefix resolution using ConversationIndex.
+
+        O(1) for exact matches, O(k) for prefix matches where k = matches.
+        """
+        # Use index for fast resolution
+        result = self.index.resolve_with_info(prefix)
+        conv_id, slug, all_matches = result
+
+        if conv_id:
+            return conv_id
+
+        if len(all_matches) == 0:
+            raise ValueError(f"No conversation found matching '{prefix}'")
+        else:
+            # Multiple matches - show options
+            match_list = []
+            for cid, s, title in all_matches[:5]:
+                if s:
+                    match_list.append(f"{cid[:8]}... ({s}) {title or ''}")
+                else:
+                    match_list.append(f"{cid[:8]}... {title or ''}")
+            match_str = "\n  ".join(match_list)
+            if len(all_matches) > 5:
+                match_str += f"\n  ... and {len(all_matches) - 5} more"
+            raise ValueError(
+                f"'{prefix}' matches {len(all_matches)} conversations:\n  {match_str}\n"
+                f"Please be more specific (use ID prefix or full slug)."
+            )
+
+    def _resolve_prefix_slow(self, prefix: str, vfs_path: VFSPath) -> Optional[str]:
+        """
+        Slow prefix resolution using directory listing.
+
+        Used for non-/chats directories where the index doesn't apply.
+        """
         try:
             entries = self.list_directory(vfs_path)
         except:
@@ -141,29 +193,19 @@ class VFSNavigator:
         if len(slug_matches_list) == 1:
             return slug_matches_list[0][0]
 
-        # Try word-based slug matching (more flexible)
-        word_matches = []
-        for entry in entries:
-            if entry.slug and slug_matches(entry.slug, prefix):
-                word_matches.append((entry.conversation_id, entry.slug, entry.title))
-
-        if len(word_matches) == 1:
-            return word_matches[0][0]
-
-        # Combine all matches for error message, preserving order and uniqueness
+        # Combine all matches for error message
         seen = set()
         all_matches = []
-        for match in id_matches + slug_matches_list + word_matches:
+        for match in id_matches + slug_matches_list:
             if match[0] not in seen:
                 seen.add(match[0])
                 all_matches.append(match)
 
         if len(all_matches) == 0:
-            raise ValueError(f"No conversation found matching '{prefix}' (ID or slug)")
+            raise ValueError(f"No conversation found matching '{prefix}'")
         elif len(all_matches) == 1:
             return all_matches[0][0]
         else:
-            # Multiple matches - show options with slugs
             match_list = []
             for conv_id, slug, title in all_matches[:5]:
                 if slug:

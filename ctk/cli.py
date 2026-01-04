@@ -354,6 +354,124 @@ def cmd_list(args):
     )
 
 
+def cmd_query(args):
+    """Human-friendly query command with composable flags.
+
+    Replaces ctk db query for searching. Use ctk sql for raw SQL.
+    """
+    from rich.console import Console
+    from rich.table import Table
+    from datetime import datetime, timedelta
+    import re
+
+    console = Console()
+
+    if not args.db:
+        print("Error: Database path required (-d)")
+        return 1
+
+    db = ConversationDB(args.db)
+
+    # Handle --view flag (evaluate saved view)
+    if args.view:
+        from ctk.core.views import ViewStore
+        store = ViewStore(args.db)
+
+        try:
+            evaluated = store.evaluate(args.view, db)
+            if not evaluated:
+                print(f"Error: View '{args.view}' not found")
+                return 1
+
+            # Display view results
+            items = evaluated.items
+            if not items:
+                print(f"View '{args.view}' has no matching conversations")
+                return 0
+
+            if args.format == 'json':
+                import json
+                data = [{'id': item.conversation_id, 'title': item.title_override or ''} for item in items]
+                print(json.dumps(data, indent=2))
+                return 0
+
+            # Table output
+            table = Table(title=f"View: {args.view}")
+            table.add_column("#", style="dim")
+            table.add_column("ID", style="cyan")
+            table.add_column("Title", style="white")
+
+            for i, item in enumerate(items[:args.limit or 100], 1):
+                conv = db.load_conversation(item.conversation_id)
+                title = item.title_override or (conv.title if conv else "Untitled")
+                table.add_row(str(i), item.conversation_id[:8], title[:60])
+
+            console.print(table)
+            console.print(f"\n[dim]{len(items)} conversation(s) in view[/dim]")
+            return 0
+
+        except Exception as e:
+            print(f"Error evaluating view: {e}")
+            return 1
+
+    # Parse date filters
+    def parse_date(date_str):
+        if not date_str:
+            return None
+        # Handle relative dates like "7d", "1w", "1m"
+        match = re.match(r'^(\d+)([dwmy])$', date_str.lower())
+        if match:
+            num, unit = int(match.group(1)), match.group(2)
+            if unit == 'd':
+                return datetime.now() - timedelta(days=num)
+            elif unit == 'w':
+                return datetime.now() - timedelta(weeks=num)
+            elif unit == 'm':
+                return datetime.now() - timedelta(days=num*30)
+            elif unit == 'y':
+                return datetime.now() - timedelta(days=num*365)
+        # Try ISO format
+        try:
+            return datetime.fromisoformat(date_str)
+        except ValueError:
+            print(f"Warning: Could not parse date '{date_str}'")
+            return None
+
+    date_from = parse_date(args.since)
+    date_to = parse_date(args.until)
+
+    # Collect tags from multiple --tag flags
+    tags = ','.join(args.tag) if args.tag else None
+
+    # Use the search helper
+    from .core.helpers import search_conversations_helper
+
+    return search_conversations_helper(
+        db=db,
+        query=args.text,
+        limit=args.limit or 50,
+        offset=0,
+        title_only=False,
+        content_only=False,
+        date_from=date_from,
+        date_to=date_to,
+        source=args.source,
+        project=args.project,
+        model=args.model,
+        tags=tags,
+        min_messages=None,
+        max_messages=None,
+        has_branches=False,
+        archived=args.archived,
+        starred=args.starred,
+        pinned=args.pinned,
+        include_archived=args.include_archived if hasattr(args, 'include_archived') else False,
+        order_by=args.order_by or 'updated_at',
+        ascending=args.asc if hasattr(args, 'asc') else False,
+        output_format=args.format
+    )
+
+
 def cmd_search(args):
     """Advanced search for conversations"""
     if not args.db:
@@ -632,6 +750,9 @@ def cmd_view(args):
         return 0
 
     elif action == "eval":
+        import sys
+        print("[DEPRECATED] 'ctk view eval' is deprecated. Use 'ctk query --view <name>' instead.", file=sys.stderr)
+
         if not args.name:
             print("Error: View name required")
             return 1
@@ -1017,20 +1138,16 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                 return ""  # Already printed
             else:
                 # Plain text format for JSON mode
-                result_str = f"RESULTS: {len(results)} conversation(s) found\n\n"
+                result_str = f"Found {len(results)} conversation(s):\n\n"
                 for i, conv in enumerate(results[:10], 1):
                     conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
-                    result_str += f"{i}. ID: {conv_dict['id'][:8]}...\n"
-                    result_str += f"   Title: {conv_dict.get('title', 'Untitled')}\n"
-                    result_str += f"   Updated: {conv_dict.get('updated_at', 'N/A')}\n"
-                    if conv_dict.get('tags'):
-                        result_str += f"   Tags: {', '.join(conv_dict['tags'])}\n"
-                    result_str += "\n"
+                    title = conv_dict.get('title', 'Untitled')[:50]
+                    result_str += f"[{i}] {conv_dict['id'][:8]} - {title}\n"
 
                 if len(results) > 10:
-                    result_str += f"... and {len(results) - 10} more results (showing first 10)\n"
+                    result_str += f"\n... and {len(results) - 10} more (showing first 10)\n"
 
-                result_str += f"END OF RESULTS (Total: {len(results)})"
+                result_str += f"\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
                 return result_str
 
         elif tool_name == 'get_conversation':
@@ -1066,16 +1183,24 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                     result_str += f"Tags: {', '.join(tree.metadata.tags)}\n"
 
             # Count messages
-            all_messages = list(tree.traverse())
-            result_str += f"Messages: {len(all_messages)}\n"
+            msg_count = len(tree.message_map)
+            result_str += f"Messages: {msg_count}\n"
 
             # Show messages if requested
             if tool_args.get('show_messages', False):
                 result_str += "\nMessages:\n"
-                for i, msg in enumerate(all_messages[:5], 1):
-                    result_str += f"\n{i}. {msg.role}: {msg.content[:100]}...\n"
-                if len(all_messages) > 5:
-                    result_str += f"\n... and {len(all_messages) - 5} more messages\n"
+                path = tree.get_longest_path()
+                for i, msg in enumerate(path[:5], 1):
+                    # Handle both MessageContent objects and plain strings
+                    if hasattr(msg.content, 'get_text'):
+                        text = msg.content.get_text()
+                    else:
+                        text = str(msg.content) if msg.content else ""
+                    content = text[:100] if text else "(no content)"
+                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    result_str += f"\n{i}. {role}: {content}...\n"
+                if len(path) > 5:
+                    result_str += f"\n... and {len(path) - 5} more messages\n"
 
             return result_str
 
@@ -2585,6 +2710,30 @@ def main():
     say_parser.add_argument('--base-url', help='Base URL for provider')
     say_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling')
 
+    # Query command - human-friendly search with composable flags
+    query_parser = subparsers.add_parser('query', help='Search conversations with flags')
+    query_parser.add_argument('text', nargs='?', help='Optional search text')
+    query_parser.add_argument('--db', '-d', required=True, help='Database path')
+    # Filters (multiple --tag = AND)
+    query_parser.add_argument('--tag', action='append', help='Filter by tag (repeatable, AND logic)')
+    query_parser.add_argument('--starred', action='store_true', help='Only starred')
+    query_parser.add_argument('--pinned', action='store_true', help='Only pinned')
+    query_parser.add_argument('--archived', action='store_true', help='Only archived')
+    query_parser.add_argument('--include-archived', action='store_true', help='Include archived in results')
+    query_parser.add_argument('--source', help='Filter by source')
+    query_parser.add_argument('--model', help='Filter by model')
+    query_parser.add_argument('--project', help='Filter by project')
+    # Date filters
+    query_parser.add_argument('--since', help='After date (YYYY-MM-DD or 7d, 1w, 1m)')
+    query_parser.add_argument('--until', help='Before date')
+    # View integration
+    query_parser.add_argument('--view', help='Evaluate a saved view')
+    # Output
+    query_parser.add_argument('--format', '-f', choices=['table', 'json', 'csv'], default='table')
+    query_parser.add_argument('--limit', '-n', type=int, help='Max results')
+    query_parser.add_argument('--order-by', choices=['created_at', 'updated_at', 'title'], default='updated_at')
+    query_parser.add_argument('--asc', action='store_true', help='Sort ascending')
+
     # SQL command - direct SQL queries with Rich output
     sql_parser = subparsers.add_parser('sql', help='Execute SQL queries on database')
     sql_parser.add_argument('query', nargs='?', help='SQL query to execute')
@@ -2643,6 +2792,7 @@ def main():
         'say': cmd_say,
         'chat': cmd_chat,
         'sql': cmd_sql,
+        'query': cmd_query,
     }
 
     # Special handling for db subcommands
@@ -2650,7 +2800,7 @@ def main():
         from ctk.cli_db import (
             cmd_merge, cmd_diff, cmd_intersect, cmd_filter,
             cmd_split, cmd_dedupe, cmd_stats as cmd_db_stats,
-            cmd_validate, cmd_query, cmd_init, cmd_info,
+            cmd_validate, cmd_init, cmd_info,
             cmd_vacuum, cmd_backup
         )
 
@@ -2667,7 +2817,7 @@ def main():
             'dedupe': cmd_dedupe,
             'stats': cmd_db_stats,
             'validate': cmd_validate,
-            'query': cmd_query,
+            # NOTE: 'query' removed - use 'ctk sql' for raw SQL, 'ctk query' for search
         }
 
         if hasattr(args, 'db_command') and args.db_command:

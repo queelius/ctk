@@ -366,16 +366,20 @@ Important notes:
     return prompt
 
 
-def get_ask_tools() -> List[Dict[str, Any]]:
+def get_ask_tools(include_pass_through: bool = True) -> List[Dict[str, Any]]:
     """
     Define tool schemas for LLM to use with /ask command.
+
+    Args:
+        include_pass_through: If True, include pass_through flag in tool defs
 
     Returns:
         List of tool definitions
     """
-    return [
+    tools = [
         {
             "name": "search_conversations",
+            "pass_through": True,  # Output goes directly to user, not back to LLM
             "description": """Search and filter conversations in the database.
 
 DO NOT USE THIS TOOL FOR: greetings (hi, hello), chitchat, general questions.
@@ -435,6 +439,7 @@ RULE: Only include starred/pinned/archived if user explicitly mentions them.""",
         },
         {
             "name": "get_conversation",
+            "pass_through": True,  # Output goes directly to user
             "description": """Get details of a specific conversation by its ID.
 
 DO NOT USE THIS TOOL FOR: greetings, chitchat, or questions that don't mention a specific conversation ID.
@@ -457,6 +462,7 @@ USE THIS TOOL WHEN: user provides a conversation ID and wants details about it."
         },
         {
             "name": "get_statistics",
+            "pass_through": True,  # Output goes directly to user
             "description": """Get database statistics (counts, sources, models).
 
 DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
@@ -470,6 +476,7 @@ USE THIS TOOL WHEN: user asks "how many conversations", "what are the stats", "s
         },
         {
             "name": "execute_shell_command",
+            "pass_through": True,  # Output goes directly to user
             "description": """Execute a CTK shell command (cd, ls, find, cat, tree, star, etc.).
 
 DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
@@ -876,6 +883,27 @@ Uses LLM to analyze conversation content and suggest relevant tags.""",
         }
     ]
 
+    # Return tools, optionally stripping pass_through for API compatibility
+    if not include_pass_through:
+        # Remove pass_through key from tools for LLM API calls
+        return [{k: v for k, v in tool.items() if k != 'pass_through'} for tool in tools]
+    return tools
+
+
+# Set of pass-through tool names (output goes directly to user)
+PASS_THROUGH_TOOLS = {
+    'search_conversations',
+    'list_conversations',
+    'get_conversation',
+    'get_statistics',
+    'execute_shell_command',
+}
+
+
+def is_pass_through_tool(tool_name: str) -> bool:
+    """Check if a tool is a pass-through tool (output goes directly to user)."""
+    return tool_name in PASS_THROUGH_TOOLS
+
 
 def get_ctk_system_prompt(db: 'ConversationDB', current_path: str = "/") -> str:
     """
@@ -911,60 +939,19 @@ def get_ctk_system_prompt(db: 'ConversationDB', current_path: str = "/") -> str:
         archived_count = 0
         source_summary = "unknown"
 
-    prompt = f"""You are an assistant within CTK (Conversation Toolkit), a tool for managing and exploring conversation data from various LLM providers.
+    prompt = f"""You help users explore their conversation history.
 
-## Current Context
-- VFS Path: {current_path}
-- Database: {total_convs} conversations, {total_msgs} messages
-- Starred: {starred_count} | Pinned: {pinned_count} | Archived: {archived_count}
-- Sources: {source_summary}
+Database: {total_convs} conversations, {total_msgs} messages ({starred_count} starred, {pinned_count} pinned)
+Location: {current_path}
 
-## CRITICAL RULES
+Tools:
+- search_conversations: Search by query or filter
+- get_conversation: View a conversation by ID
+- get_statistics: Database stats
 
-### Rule 1: NEVER mention tool names to users
-When suggesting actions, tell users to type SHELL COMMANDS, not tool function names.
-- WRONG: "You can use execute_shell_command('ls /starred')"
-- CORRECT: "You can type `ls /starred` to see starred conversations"
-- WRONG: "Use the search_conversations tool"
-- CORRECT: "Try searching with `find -content 'python' -l`"
+Search results are numbered [1], [2], etc. When user says "show 1" or "open 2", use the ID from that numbered result with get_conversation.
 
-### Rule 2: NO TOOLS for greetings or chitchat
-For "hi", "hello", "hey", "thanks", etc. → Just respond conversationally. NO TOOL CALLS.
-
-### Rule 3: Use tools ONLY for explicit data requests
-USE TOOLS when user explicitly asks to:
-- Search/find/list conversations → search_conversations
-- View a specific conversation → show_conversation_content or get_conversation
-- Star/pin/archive something → star_conversation, pin_conversation, etc.
-- Get statistics → get_statistics
-
-## Shell Commands Users Can Type
-Tell users about these commands (they type them directly, you don't):
-- `ls /starred` or `ls /pinned` - List filtered conversations
-- `find -name "pattern"` - Find by title
-- `find -content "text" -l` - Find by content (shows table)
-- `show <id>` - View conversation content
-- `cd <id>` - Navigate to conversation
-- `tree` - Show conversation structure
-- `star`, `pin`, `archive` - Organize conversations
-- `help` - Full command reference
-
-## Example Responses
-
-User: "hi"
-Response: "Hello! I'm here to help you explore your {total_convs} conversations. What would you like to find?"
-(NO TOOL CALLS)
-
-User: "find conversations about python"
-Action: Call search_conversations with query="python"
-Response: [show results] "To view any of these, type `show <id>` or `cd <id>` to explore it."
-
-User: "show me starred"
-Action: Call search_conversations with starred=true
-Response: [show results] "Type `show <id>` to view any conversation."
-
-User: "what commands are there?"
-Response: "Type `help` at the prompt for a full command reference. Key commands include `find`, `show`, `ls`, `cd`, `star`, `pin`, and `archive`." """
+USE TOOLS for data queries. Never fabricate data."""
 
     return prompt
 
@@ -1001,45 +988,19 @@ def get_ctk_system_prompt_no_tools(db: 'ConversationDB', current_path: str = "/"
         pinned_count = 0
         source_summary = "unknown"
 
-    prompt = f"""You are an assistant within CTK (Conversation Toolkit), a CLI tool for managing and exploring conversation data from various LLM providers.
+    prompt = f"""You help users explore their conversation history in CTK.
 
-## Current Database
-- {total_convs} conversations, {total_msgs} messages
-- Starred: {starred_count} | Pinned: {pinned_count}
-- Sources: {source_summary}
+Database: {total_convs} conversations, {total_msgs} messages
+Location: {current_path}
 
-## Shell Commands Reference
-Navigation:
-- `cd /chats` - Go to conversations list
-- `cd /starred` or `cd /pinned` or `cd /archived` - Go to filtered views
-- `cd <id>` - Navigate to conversation (supports prefix matching like `cd abc12`)
-- `ls` - List current directory
-- `pwd` - Show current path
+You cannot search or view conversations directly. Guide users to type shell commands:
+- `find -content "topic"` to search
+- `show <id>` to view a conversation
+- `ls /starred` to list starred items
+- `cd <id>` to navigate into a conversation
+- `help` for all commands
 
-Search:
-- `find -name "pattern"` - Find conversations by title (* and ? wildcards)
-- `find -content "text"` - Find by message content
-- `find -l` - Show results as table with metadata
-- `find /starred -content "python" -l` - Combined search
-
-View:
-- `cat text` - View message content (when in a message node)
-- `tree` - Show conversation tree structure
-- `paths` - List all conversation paths
-
-Organize:
-- `star` / `unstar` - Star/unstar current conversation
-- `pin` / `unpin` - Pin/unpin current conversation
-- `archive` / `unarchive` - Archive/unarchive
-- `title "New Title"` - Rename conversation
-
-Chat:
-- `say <message>` - Send message to LLM
-- `chat` - Enter interactive chat mode
-- `help` - Full command reference
-
-## How to Help
-Guide users to use shell commands directly. Be accurate with command syntax - don't invent flags that don't exist."""
+Never make up conversation IDs or content - you don't have access to the data."""
 
     return prompt
 

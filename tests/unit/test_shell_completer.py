@@ -105,19 +105,18 @@ class TestSlugCompletion:
         self.tui.vfs_cwd = '/chats'
         self.tui.uuid_prefix_len = 8
         self.tui.vfs_navigator = Mock()
+        # Set up mock index for /chats completions (fast path)
+        self.mock_index = Mock()
+        self.tui.vfs_navigator.index = self.mock_index
         self.completer = ShellCompleter(tui_instance=self.tui)
 
     def test_slug_completion(self):
-        """Test completion shows slugs for conversations"""
-        entries = [
-            VFSEntry(
-                name='abc12345-...',
-                is_directory=True,
-                conversation_id='abc12345-1234-5678-9abc-def012345678',
-                slug='my-python-chat'
-            ),
+        """Test completion shows slugs for conversations (via index)"""
+        # Mock the index get_completions to return our test data
+        # Returns list of (display_text, conv_id, slug) tuples
+        self.mock_index.get_completions.return_value = [
+            ('my-python-chat', 'abc12345-1234-5678-9abc-def012345678', 'my-python-chat'),
         ]
-        self.tui.vfs_navigator.list_directory.return_value = entries
 
         doc = Document('cd my')
         completions = list(self.completer.get_completions(doc, None))
@@ -126,16 +125,11 @@ class TestSlugCompletion:
         assert 'my-python-chat/' in texts
 
     def test_uuid_prefix_completion(self):
-        """Test completion shows UUID prefix as alternative"""
-        entries = [
-            VFSEntry(
-                name='abc12345-...',
-                is_directory=True,
-                conversation_id='abc12345-1234-5678-9abc-def012345678',
-                slug='my-python-chat'
-            ),
+        """Test completion shows UUID prefix when no slug"""
+        # Return a conversation without a slug - will show UUID prefix
+        self.mock_index.get_completions.return_value = [
+            ('abc12345', 'abc12345-1234-5678-9abc-def012345678', None),
         ]
-        self.tui.vfs_navigator.list_directory.return_value = entries
 
         doc = Document('cd abc')
         completions = list(self.completer.get_completions(doc, None))
@@ -143,32 +137,16 @@ class TestSlugCompletion:
         # Should match UUID prefix
         texts = [c.text for c in completions]
         assert len(texts) > 0
-        # The slug starts with 'm' not 'a', so should match uuid instead
         assert any('abc12345' in t for t in texts)
 
     def test_partial_slug_completion(self):
-        """Test partial slug matching"""
-        entries = [
-            VFSEntry(
-                name='...',
-                is_directory=True,
-                conversation_id='id1',
-                slug='python-tips'
-            ),
-            VFSEntry(
-                name='...',
-                is_directory=True,
-                conversation_id='id2',
-                slug='python-hints'
-            ),
-            VFSEntry(
-                name='...',
-                is_directory=True,
-                conversation_id='id3',
-                slug='java-basics'
-            ),
+        """Test partial slug matching via index"""
+        # Mock the index get_completions with matching entries
+        self.mock_index.get_completions.return_value = [
+            ('python-tips', 'id1', 'python-tips'),
+            ('python-hints', 'id2', 'python-hints'),
+            # Note: 'python' prefix won't match 'java-basics' so it won't be returned
         ]
-        self.tui.vfs_navigator.list_directory.return_value = entries
 
         doc = Document('cd python')
         completions = list(self.completer.get_completions(doc, None))
@@ -176,10 +154,10 @@ class TestSlugCompletion:
         texts = [c.text for c in completions]
         assert 'python-tips/' in texts
         assert 'python-hints/' in texts
-        assert 'java-basics/' not in texts
+        # java-basics not included because it doesn't match 'python' prefix
 
     def test_absolute_path_completion(self):
-        """Test completion with absolute paths"""
+        """Test completion with absolute paths (uses standard path, not index)"""
         entries = [
             VFSEntry(name='chats', is_directory=True),
         ]

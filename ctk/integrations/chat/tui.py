@@ -5,6 +5,7 @@ Terminal UI for CTK chat.
 import sys
 import uuid
 import json
+import threading
 from typing import List, Optional
 from datetime import datetime
 
@@ -188,6 +189,9 @@ class ChatTUI:
         # Update environment variables
         self._update_environment()
 
+        # Start background preloading of conversation index
+        self._preload_conversation_index()
+
     def _update_environment(self):
         """Update shell environment variables"""
         env = {
@@ -212,6 +216,29 @@ class ChatTUI:
         if self._shell_completer is None:
             self._shell_completer = create_shell_completer(tui_instance=self)
         return self._shell_completer
+
+    def _preload_conversation_index(self):
+        """
+        Start background preloading of the ConversationIndex.
+
+        This runs in a background thread so the TUI can start immediately
+        while the index loads. The index takes ~0.5-2 seconds to load for
+        100k conversations, but is then available for O(1) lookups.
+        """
+        if not self.vfs_navigator:
+            return
+
+        def _preload():
+            try:
+                # Access the index property to trigger lazy loading
+                index = self.vfs_navigator.index
+                index.ensure_loaded()
+            except Exception:
+                # Silently fail - index will load on first use if preload fails
+                pass
+
+        thread = threading.Thread(target=_preload, daemon=True)
+        thread.start()
 
     def get_current_path(self) -> List[TreeMessage]:
         """Get path from root to current message"""
@@ -1339,6 +1366,28 @@ You don't need to create directories before tagging - this is mainly for documen
 
         except Exception as e:
             print(f"Error saving conversation: {e}")
+
+    def _auto_save_conversation(self):
+        """
+        Auto-save conversation after chat exchanges.
+
+        Silently saves if we have a database and conversation ID.
+        For new conversations, saves with an auto-generated title.
+        """
+        if not self.db or not self.root:
+            return
+
+        try:
+            # Convert to DB format
+            tree = self.tree_to_conversation_tree()
+
+            # Save to database (silently)
+            self.db.save_conversation(tree)
+            self.current_conversation_id = tree.id
+
+        except Exception:
+            # Silently fail auto-save - user can manually save if needed
+            pass
 
     def _generate_title(self) -> str:
         """Generate a title from the first user message"""
@@ -3486,8 +3535,10 @@ Available operations:
         Args:
             user_message: User's message
         """
-        # Check if we're in "standalone" mode (no conversation loaded)
-        standalone_mode = self.current_conversation_id is None
+        # Check if we're in "standalone" mode (no conversation loaded from VFS)
+        # Note: We track this separately from current_conversation_id since auto-save
+        # sets that, but we still want tools to work for new conversations
+        standalone_mode = not hasattr(self, '_loaded_from_vfs') or not self._loaded_from_vfs
 
         # Inject CTK system prompt if standalone and no system prompt yet
         if standalone_mode and self.db:
@@ -3669,8 +3720,14 @@ Available operations:
                     # Execute tool calls
                     print(f"\n🔧 Executing {len(tool_calls)} tool call(s)...")
 
+                    # Import pass-through check
+                    from ctk.core.helpers import is_pass_through_tool
+
                     # CTK tool names for routing
                     ctk_tool_names = {'search_conversations', 'get_conversation', 'get_statistics', 'execute_shell_command'}
+
+                    # Track if any pass-through tool was executed
+                    pass_through_executed = False
 
                     for tool_call in tool_calls:
                         tool_name = tool_call.get('function', {}).get('name') or tool_call.get('name')
@@ -3682,6 +3739,9 @@ Available operations:
                             tool_args = json.loads(tool_args)
 
                         print(f"  → {tool_name}({json.dumps(tool_args)})")
+
+                        # Check if this is a pass-through tool
+                        is_pass_through = is_pass_through_tool(tool_name)
 
                         # Route to CTK tools or MCP tools
                         if tool_name in ctk_tool_names and ctk_tools_enabled:
@@ -3703,64 +3763,85 @@ Available operations:
                                     shell_executor=shell_executor
                                 )
 
-                                # Show result
-                                if result and len(result) > 200:
-                                    print(f"    Result: {result[:200]}...")
-                                elif result:
-                                    print(f"    Result: {result}")
+                                if is_pass_through:
+                                    # Pass-through: show full output directly to user
+                                    print(f"\n{result}" if result else "    (no output)")
+                                    pass_through_executed = True
+                                    # Don't add to message tree - output is final
+                                else:
+                                    # Normal tool: show truncated result
+                                    if result and len(result) > 200:
+                                        print(f"    Result: {result[:200]}...")
+                                    elif result:
+                                        print(f"    Result: {result}")
 
-                                # Add tool result to tree
-                                tool_msg = self.provider.format_tool_result_message(
-                                    tool_name,
-                                    result or "(no output)",
-                                    tool_id
-                                )
-                                self.add_message(tool_msg.role, tool_msg.content)
+                                    # Add tool result to tree for LLM processing
+                                    tool_msg = self.provider.format_tool_result_message(
+                                        tool_name,
+                                        result or "(no output)",
+                                        tool_id
+                                    )
+                                    self.add_message(tool_msg.role, tool_msg.content)
 
                             except Exception as e:
                                 print(f"    Error: {e}")
-                                error_msg = self.provider.format_tool_result_message(
-                                    tool_name,
-                                    f"Error: {str(e)}",
-                                    tool_id
-                                )
-                                self.add_message(error_msg.role, error_msg.content)
+                                if not is_pass_through:
+                                    error_msg = self.provider.format_tool_result_message(
+                                        tool_name,
+                                        f"Error: {str(e)}",
+                                        tool_id
+                                    )
+                                    self.add_message(error_msg.role, error_msg.content)
 
                         elif self.mcp_auto_tools:
                             # Call the tool via MCP
                             try:
                                 result = self.mcp_client.call_tool(tool_name, tool_args)
-
-                                # Show result
                                 result_display = result.for_display()
-                                if len(result_display) > 200:
-                                    print(f"    Result: {result_display[:200]}...")
-                                else:
-                                    print(f"    Result: {result_display}")
 
-                                # Add tool result to tree
-                                tool_result_content = result.for_llm()
-                                tool_msg = self.provider.format_tool_result_message(
-                                    tool_name,
-                                    tool_result_content,
-                                    tool_id
-                                )
-                                self.add_message(tool_msg.role, tool_msg.content)
+                                if is_pass_through:
+                                    # Pass-through: show full output directly
+                                    print(f"\n{result_display}")
+                                    pass_through_executed = True
+                                else:
+                                    # Normal tool: show truncated result
+                                    if len(result_display) > 200:
+                                        print(f"    Result: {result_display[:200]}...")
+                                    else:
+                                        print(f"    Result: {result_display}")
+
+                                    # Add tool result to tree
+                                    tool_result_content = result.for_llm()
+                                    tool_msg = self.provider.format_tool_result_message(
+                                        tool_name,
+                                        tool_result_content,
+                                        tool_id
+                                    )
+                                    self.add_message(tool_msg.role, tool_msg.content)
 
                             except Exception as e:
                                 print(f"    Error: {e}")
-                                # Add error as tool result
-                                error_msg = self.provider.format_tool_result_message(
-                                    tool_name,
-                                    {"success": False, "error": str(e)},
-                                    tool_id
-                                )
-                                self.add_message(error_msg.role, error_msg.content)
+                                if not is_pass_through:
+                                    # Add error as tool result
+                                    error_msg = self.provider.format_tool_result_message(
+                                        tool_name,
+                                        {"success": False, "error": str(e)},
+                                        tool_id
+                                    )
+                                    self.add_message(error_msg.role, error_msg.content)
 
                     print()  # Blank line before next iteration
 
+                    # If a pass-through tool was executed, stop the loop
+                    # (output already shown to user, no need for LLM to summarize)
+                    if pass_through_executed:
+                        break
+
             if iteration >= max_iterations:
                 print("⚠️  Maximum tool calling iterations reached")
+
+            # Auto-save after successful chat exchange
+            self._auto_save_conversation()
 
         except Exception as e:
             print(f"\033[31mError: {e}\033[0m")

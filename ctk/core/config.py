@@ -30,17 +30,8 @@ class Config:
                 "base_url": "https://api.anthropic.com",
                 "default_model": "claude-3-haiku-20240307",
                 "timeout": 30
-            },
-            "openrouter": {
-                "base_url": "https://openrouter.ai/api",
-                "default_model": "meta-llama/llama-3-8b-instruct",
-                "timeout": 30
-            },
-            "local": {
-                "base_url": "http://localhost:8080",
-                "default_model": "local-model",
-                "timeout": 30
             }
+            # Note: openrouter and local providers removed - use ollama for local models
         },
         "database": {
             "default_path": "~/.ctk/conversations.db"
