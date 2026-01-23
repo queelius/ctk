@@ -5,15 +5,17 @@ These tests focus on the public contracts and behaviors that users depend on,
 rather than implementation details. They should survive refactoring.
 """
 
-import pytest
-import tempfile
 import json
+import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from ctk.api import CTK, ConversationBuilder, ConversationLoader
-from ctk.core.models import ConversationTree, Message, MessageRole, MessageContent
 from ctk.core.database import ConversationDB
+from ctk.core.models import (ConversationTree, Message, MessageContent,
+                             MessageRole)
 
 
 class TestCTKFluentAPI:
@@ -65,7 +67,7 @@ class TestCTKFluentAPI:
         # Then: Should return a ConversationLoader
         assert isinstance(loader, ConversationLoader)
 
-    @patch('ctk.api.ConversationDB')
+    @patch("ctk.api.ConversationDB")
     def test_get_conversation_by_id(self, mock_db_class):
         """Test retrieving a specific conversation by ID"""
         # Given: A CTK instance with mocked database
@@ -73,7 +75,9 @@ class TestCTKFluentAPI:
         mock_db_class.return_value = mock_db_instance
 
         expected_conversation = ConversationTree(id="test-123", title="Test")
-        mock_db_instance.__enter__.return_value.load_conversation.return_value = expected_conversation
+        mock_db_instance.__enter__.return_value.load_conversation.return_value = (
+            expected_conversation
+        )
 
         ctk = CTK("test.db")
 
@@ -82,9 +86,11 @@ class TestCTKFluentAPI:
 
         # Then: Should return the conversation
         assert result == expected_conversation
-        mock_db_instance.__enter__.return_value.load_conversation.assert_called_once_with("test-123")
+        mock_db_instance.__enter__.return_value.load_conversation.assert_called_once_with(
+            "test-123"
+        )
 
-    @patch('ctk.api.ConversationDB')
+    @patch("ctk.api.ConversationDB")
     def test_delete_conversation(self, mock_db_class):
         """Test deleting a conversation by ID"""
         # Given: A CTK instance with mocked database
@@ -98,9 +104,11 @@ class TestCTKFluentAPI:
 
         # Then: Should call delete and return self for chaining
         assert result is ctk
-        mock_db_instance.__enter__.return_value.delete_conversation.assert_called_once_with("test-123")
+        mock_db_instance.__enter__.return_value.delete_conversation.assert_called_once_with(
+            "test-123"
+        )
 
-    @patch('ctk.api.ConversationDB')
+    @patch("ctk.api.ConversationDB")
     def test_stats_returns_database_statistics(self, mock_db_class):
         """Test that stats method returns database statistics"""
         # Given: A CTK instance with mocked database
@@ -108,7 +116,9 @@ class TestCTKFluentAPI:
         mock_db_class.return_value = mock_db_instance
 
         expected_stats = {"conversation_count": 42, "total_messages": 1337}
-        mock_db_instance.__enter__.return_value.get_statistics.return_value = expected_stats
+        mock_db_instance.__enter__.return_value.get_statistics.return_value = (
+            expected_stats
+        )
 
         ctk = CTK("test.db")
 
@@ -186,10 +196,11 @@ class TestConversationBuilder:
         builder = ConversationBuilder("Chained Chat")
 
         # When: Chaining multiple messages
-        result = (builder
-                 .user("What's the weather?")
-                 .assistant("I don't have access to weather data.")
-                 .user("That's okay, thanks!"))
+        result = (
+            builder.user("What's the weather?")
+            .assistant("I don't have access to weather data.")
+            .user("That's okay, thanks!")
+        )
 
         # Then: Should support chaining and accumulate messages
         assert result is builder
@@ -210,9 +221,9 @@ class TestConversationBuilder:
     def test_conversation_builder_build(self):
         """Test building a complete conversation"""
         # Given: A conversation builder with messages
-        builder = (ConversationBuilder("Complete Chat")
-                  .user("Hello")
-                  .assistant("Hi there!"))
+        builder = (
+            ConversationBuilder("Complete Chat").user("Hello").assistant("Hi there!")
+        )
 
         # When: Building the conversation
         conversation = builder.build()
@@ -247,12 +258,14 @@ class TestConversationBuilder:
 class TestConversationLoader:
     """Test conversation loading behavior"""
 
-    @patch('ctk.api.registry')
+    @patch("ctk.api.registry")
     def test_conversation_loader_initialization(self, mock_registry):
         """Test conversation loader can be initialized with different source types"""
         # Mock the registry to avoid file system operations
         mock_registry.import_file.return_value = []
-        mock_registry.get_importer.return_value = Mock(import_data=Mock(return_value=[]))
+        mock_registry.get_importer.return_value = Mock(
+            import_data=Mock(return_value=[])
+        )
 
         # Test with string path (mock prevents actual file access)
         loader_path = ConversationLoader("/path/to/file.json")
@@ -268,7 +281,7 @@ class TestConversationLoader:
         loader_dict = ConversationLoader(data_dict)
         assert loader_dict.source == data_dict
 
-    @patch('ctk.api.registry')
+    @patch("ctk.api.registry")
     def test_conversation_loader_format_detection(self, mock_registry):
         """Test that loader can detect format from file extension"""
         # Mock the registry to avoid file system operations
@@ -279,9 +292,9 @@ class TestConversationLoader:
 
         # When: Detecting format (simulated)
         # This would typically happen in the load method
-        assert str(loader.source).endswith('.json')
+        assert str(loader.source).endswith(".json")
 
-    @patch('ctk.api.registry')
+    @patch("ctk.api.registry")
     def test_conversation_loader_configuration_chaining(self, mock_registry):
         """Test that loader supports configuration chaining"""
         # Mock the registry to avoid file system operations
@@ -307,12 +320,14 @@ class TestFluentAPIIntegration:
         # Given: A new conversation need
 
         # When: Using the fluent API to create a conversation
-        conversation = (CTK.conversation("API Test Chat")
-                       .user("Can you explain async/await?")
-                       .assistant("Async/await is a way to handle asynchronous operations...")
-                       .user("Can you show an example?")
-                       .assistant("Here's a simple example: async def fetch_data(): ...")
-                       .build())
+        conversation = (
+            CTK.conversation("API Test Chat")
+            .user("Can you explain async/await?")
+            .assistant("Async/await is a way to handle asynchronous operations...")
+            .user("Can you show an example?")
+            .assistant("Here's a simple example: async def fetch_data(): ...")
+            .build()
+        )
 
         # Then: Should have a complete conversation
         assert conversation.title == "API Test Chat"
@@ -321,9 +336,14 @@ class TestFluentAPIIntegration:
 
         # Verify conversation structure makes sense
         roles = [msg.role for msg in messages]
-        assert roles == [MessageRole.USER, MessageRole.ASSISTANT, MessageRole.USER, MessageRole.ASSISTANT]
+        assert roles == [
+            MessageRole.USER,
+            MessageRole.ASSISTANT,
+            MessageRole.USER,
+            MessageRole.ASSISTANT,
+        ]
 
-    @patch('ctk.api.ConversationDB')
+    @patch("ctk.api.ConversationDB")
     def test_database_query_workflow(self, mock_db_class):
         """Test database querying workflow"""
         # Given: A CTK instance with database
@@ -338,6 +358,10 @@ class TestFluentAPIIntegration:
         stats = ctk.stats()
 
         # Then: Should call appropriate database methods
-        mock_db_instance.__enter__.return_value.load_conversation.assert_called_with("conv-123")
-        mock_db_instance.__enter__.return_value.delete_conversation.assert_called_with("conv-456")
+        mock_db_instance.__enter__.return_value.load_conversation.assert_called_with(
+            "conv-123"
+        )
+        mock_db_instance.__enter__.return_value.delete_conversation.assert_called_with(
+            "conv-456"
+        )
         mock_db_instance.__enter__.return_value.get_statistics.assert_called_once()

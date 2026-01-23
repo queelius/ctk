@@ -3,13 +3,13 @@ Comprehensive database tests for ConversationDB
 Tests all CRUD operations, queries, organization, tags, and advanced features
 """
 
-import pytest
 from datetime import datetime, timedelta
+
+import pytest
+
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationTree, Message, MessageContent,
-    MessageRole, ConversationMetadata
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 
 
 class TestDatabaseCRUD:
@@ -21,7 +21,7 @@ class TestDatabaseCRUD:
         conv = ConversationTree(
             id="conv_empty",
             title="Empty Conversation",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
 
         conv_id = temp_db.save_conversation(conv)
@@ -63,8 +63,7 @@ class TestDatabaseCRUD:
 
         # Update title
         result = temp_db.update_conversation_metadata(
-            sample_conversation.id,
-            title="New Title"
+            sample_conversation.id, title="New Title"
         )
         assert result is True
 
@@ -73,8 +72,7 @@ class TestDatabaseCRUD:
 
         # Update project
         result = temp_db.update_conversation_metadata(
-            sample_conversation.id,
-            project="my-project"
+            sample_conversation.id, project="my-project"
         )
         assert result is True
 
@@ -83,9 +81,7 @@ class TestDatabaseCRUD:
 
         # Update source and model
         result = temp_db.update_conversation_metadata(
-            sample_conversation.id,
-            source="openai",
-            model="gpt-4"
+            sample_conversation.id, source="openai", model="gpt-4"
         )
         assert result is True
 
@@ -97,8 +93,7 @@ class TestDatabaseCRUD:
     def test_update_metadata_nonexistent_conversation(self, temp_db):
         """Test updating metadata for nonexistent conversation"""
         result = temp_db.update_conversation_metadata(
-            "nonexistent_id",
-            title="New Title"
+            "nonexistent_id", title="New Title"
         )
         assert result is False
 
@@ -200,7 +195,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i:03d}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -225,7 +220,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source=source)
+                metadata=ConversationMetadata(source=source),
             )
             temp_db.save_conversation(conv)
 
@@ -242,7 +237,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(project=project)
+                metadata=ConversationMetadata(project=project),
             )
             temp_db.save_conversation(conv)
 
@@ -259,7 +254,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(model=model)
+                metadata=ConversationMetadata(model=model),
             )
             temp_db.save_conversation(conv)
 
@@ -275,17 +270,17 @@ class TestListConversations:
         conv1 = ConversationTree(
             id="conv_1",
             title="Conversation 1",
-            metadata=ConversationMetadata(tags=["python", "ai"])
+            metadata=ConversationMetadata(tags=["python", "ai"]),
         )
         conv2 = ConversationTree(
             id="conv_2",
             title="Conversation 2",
-            metadata=ConversationMetadata(tags=["javascript", "web"])
+            metadata=ConversationMetadata(tags=["javascript", "web"]),
         )
         conv3 = ConversationTree(
             id="conv_3",
             title="Conversation 3",
-            metadata=ConversationMetadata(tags=["python", "web"])
+            metadata=ConversationMetadata(tags=["python", "web"]),
         )
 
         temp_db.save_conversation(conv1)
@@ -307,17 +302,17 @@ class TestListConversations:
         conv1 = ConversationTree(
             id="conv_1",
             title="Conversation 1",
-            metadata=ConversationMetadata(tags=["python"])
+            metadata=ConversationMetadata(tags=["python"]),
         )
         conv2 = ConversationTree(
             id="conv_2",
             title="Conversation 2",
-            metadata=ConversationMetadata(tags=["javascript"])
+            metadata=ConversationMetadata(tags=["javascript"]),
         )
         conv3 = ConversationTree(
             id="conv_3",
             title="Conversation 3",
-            metadata=ConversationMetadata(tags=["rust"])
+            metadata=ConversationMetadata(tags=["rust"]),
         )
 
         temp_db.save_conversation(conv1)
@@ -339,7 +334,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -362,7 +357,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -385,7 +380,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -413,7 +408,7 @@ class TestListConversations:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -442,12 +437,12 @@ class TestSearchConversations:
         conv1 = ConversationTree(
             id="conv_1",
             title="Python Programming Tutorial",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         conv2 = ConversationTree(
             id="conv_2",
             title="JavaScript Basics",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
 
         temp_db.save_conversation(conv1)
@@ -463,26 +458,26 @@ class TestSearchConversations:
         conv1 = ConversationTree(
             id="conv_1",
             title="Conversation 1",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         msg1 = Message(
             id="msg_1",
             role=MessageRole.USER,
             content=MessageContent(text="Tell me about Python decorators"),
-            parent_id=None
+            parent_id=None,
         )
         conv1.add_message(msg1)
 
         conv2 = ConversationTree(
             id="conv_2",
             title="Python Tutorial",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         msg2 = Message(
             id="msg_2",
             role=MessageRole.USER,
             content=MessageContent(text="JavaScript promises"),
-            parent_id=None
+            parent_id=None,
         )
         conv2.add_message(msg2)
 
@@ -504,33 +499,27 @@ class TestSearchConversations:
             id="conv_1",
             title="Old Conversation",
             metadata=ConversationMetadata(
-                source="test",
-                created_at=now - timedelta(days=10)
-            )
+                source="test", created_at=now - timedelta(days=10)
+            ),
         )
         conv2 = ConversationTree(
             id="conv_2",
             title="Recent Conversation",
             metadata=ConversationMetadata(
-                source="test",
-                created_at=now - timedelta(days=2)
-            )
+                source="test", created_at=now - timedelta(days=2)
+            ),
         )
 
         temp_db.save_conversation(conv1)
         temp_db.save_conversation(conv2)
 
         # Search for conversations from last 5 days
-        results = temp_db.search_conversations(
-            date_from=now - timedelta(days=5)
-        )
+        results = temp_db.search_conversations(date_from=now - timedelta(days=5))
         assert len(results) == 1
         assert results[0].id == "conv_2"
 
         # Search for conversations older than 5 days
-        results = temp_db.search_conversations(
-            date_to=now - timedelta(days=5)
-        )
+        results = temp_db.search_conversations(date_to=now - timedelta(days=5))
         assert len(results) == 1
         assert results[0].id == "conv_1"
 
@@ -541,14 +530,14 @@ class TestSearchConversations:
         conv1 = ConversationTree(
             id="conv_1",
             title="Short Conversation",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         for i in range(2):
             msg = Message(
                 id=f"msg_1_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=f"msg_1_{i-1}" if i > 0 else None
+                parent_id=f"msg_1_{i-1}" if i > 0 else None,
             )
             conv1.add_message(msg)
 
@@ -556,14 +545,14 @@ class TestSearchConversations:
         conv2 = ConversationTree(
             id="conv_2",
             title="Long Conversation",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         for i in range(5):
             msg = Message(
                 id=f"msg_2_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=f"msg_2_{i-1}" if i > 0 else None
+                parent_id=f"msg_2_{i-1}" if i > 0 else None,
             )
             conv2.add_message(msg)
 
@@ -590,20 +579,20 @@ class TestSearchConversations:
         linear_conv = ConversationTree(
             id="conv_linear",
             title="Linear Conversation",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         msg1 = Message(
             id="msg_1",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         linear_conv.add_message(msg1)
         msg2 = Message(
             id="msg_2",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Hi"),
-            parent_id="msg_1"
+            parent_id="msg_1",
         )
         linear_conv.add_message(msg2)
 
@@ -629,35 +618,28 @@ class TestSearchConversations:
                 id=f"conv_{i}",
                 title=f"Test Conversation {i}",
                 metadata=ConversationMetadata(
-                    source="test",
-                    created_at=now - timedelta(days=i)
-                )
+                    source="test", created_at=now - timedelta(days=i)
+                ),
             )
             temp_db.save_conversation(conv)
 
         # Order by created_at descending (newest first)
         results = temp_db.search_conversations(
-            query_text="Test",
-            order_by="created_at",
-            ascending=False
+            query_text="Test", order_by="created_at", ascending=False
         )
         assert results[0].id == "conv_0"
         assert results[2].id == "conv_2"
 
         # Order by created_at ascending (oldest first)
         results = temp_db.search_conversations(
-            query_text="Test",
-            order_by="created_at",
-            ascending=True
+            query_text="Test", order_by="created_at", ascending=True
         )
         assert results[0].id == "conv_2"
         assert results[2].id == "conv_0"
 
         # Order by title
         results = temp_db.search_conversations(
-            query_text="Test",
-            order_by="title",
-            ascending=True
+            query_text="Test", order_by="title", ascending=True
         )
         # Should be in alphabetical order
         for i, result in enumerate(results):
@@ -731,17 +713,17 @@ class TestTagManagement:
         conv1 = ConversationTree(
             id="conv_1",
             title="Conversation 1",
-            metadata=ConversationMetadata(tags=["python", "ai"])
+            metadata=ConversationMetadata(tags=["python", "ai"]),
         )
         conv2 = ConversationTree(
             id="conv_2",
             title="Conversation 2",
-            metadata=ConversationMetadata(tags=["python", "web"])
+            metadata=ConversationMetadata(tags=["python", "web"]),
         )
         conv3 = ConversationTree(
             id="conv_3",
             title="Conversation 3",
-            metadata=ConversationMetadata(tags=["javascript"])
+            metadata=ConversationMetadata(tags=["javascript"]),
         )
 
         temp_db.save_conversation(conv1)
@@ -755,12 +737,12 @@ class TestTagManagement:
         assert len(tags) >= 4
 
         # Find python tag and verify count
-        python_tag = next(t for t in tags if t['name'] == 'python')
-        assert python_tag['usage_count'] == 2
+        python_tag = next(t for t in tags if t["name"] == "python")
+        assert python_tag["usage_count"] == 2
 
         # Find ai tag
-        ai_tag = next(t for t in tags if t['name'] == 'ai')
-        assert ai_tag['usage_count'] == 1
+        ai_tag = next(t for t in tags if t["name"] == "ai")
+        assert ai_tag["usage_count"] == 1
 
     @pytest.mark.unit
     def test_get_all_tags_without_counts(self, temp_db):
@@ -768,7 +750,7 @@ class TestTagManagement:
         conv = ConversationTree(
             id="conv_1",
             title="Conversation 1",
-            metadata=ConversationMetadata(tags=["tag1", "tag2"])
+            metadata=ConversationMetadata(tags=["tag1", "tag2"]),
         )
         temp_db.save_conversation(conv)
 
@@ -780,7 +762,9 @@ class TestDuplicateConversation:
     """Test conversation duplication"""
 
     @pytest.mark.unit
-    @pytest.mark.skip(reason="duplicate_conversation has a bug - uses starred/pinned/archived instead of starred_at/pinned_at/archived_at")
+    @pytest.mark.skip(
+        reason="duplicate_conversation has a bug - uses starred/pinned/archived instead of starred_at/pinned_at/archived_at"
+    )
     def test_duplicate_conversation(self, temp_db, sample_conversation):
         """Test duplicating a conversation"""
         temp_db.save_conversation(sample_conversation)
@@ -822,7 +806,7 @@ class TestStatistics:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(model=model)
+                metadata=ConversationMetadata(model=model),
             )
             temp_db.save_conversation(conv)
 
@@ -830,12 +814,12 @@ class TestStatistics:
         assert len(models) == 2
 
         # Find gpt-4
-        gpt4 = next(m for m in models if m['model'] == 'gpt-4')
-        assert gpt4['count'] == 3
+        gpt4 = next(m for m in models if m["model"] == "gpt-4")
+        assert gpt4["count"] == 3
 
         # Find claude-3
-        claude = next(m for m in models if m['model'] == 'claude-3')
-        assert claude['count'] == 2
+        claude = next(m for m in models if m["model"] == "claude-3")
+        assert claude["count"] == 2
 
     @pytest.mark.unit
     def test_get_sources(self, temp_db):
@@ -844,15 +828,15 @@ class TestStatistics:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source=source)
+                metadata=ConversationMetadata(source=source),
             )
             temp_db.save_conversation(conv)
 
         sources = temp_db.get_sources()
         assert len(sources) == 2
 
-        openai = next(s for s in sources if s['source'] == 'openai')
-        assert openai['count'] == 2
+        openai = next(s for s in sources if s["source"] == "openai")
+        assert openai["count"] == 2
 
     @pytest.mark.unit
     def test_get_conversation_timeline(self, temp_db):
@@ -864,21 +848,20 @@ class TestStatistics:
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
                 metadata=ConversationMetadata(
-                    source="test",
-                    created_at=now - timedelta(days=i)
-                )
+                    source="test", created_at=now - timedelta(days=i)
+                ),
             )
             temp_db.save_conversation(conv)
 
         # Get daily timeline
-        timeline = temp_db.get_conversation_timeline(granularity='day', limit=10)
+        timeline = temp_db.get_conversation_timeline(granularity="day", limit=10)
         assert len(timeline) >= 1
 
         # Each entry should have period and count
         for entry in timeline:
-            assert 'period' in entry
-            assert 'count' in entry
-            assert entry['count'] > 0
+            assert "period" in entry
+            assert "count" in entry
+            assert entry["count"] > 0
 
 
 class TestContextManager:
@@ -893,7 +876,7 @@ class TestContextManager:
             conv = ConversationTree(
                 id="conv_test",
                 title="Test Conversation",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             db.save_conversation(conv)
 

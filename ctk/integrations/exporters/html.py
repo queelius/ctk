@@ -5,7 +5,8 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from ctk.core.models import ConversationTree
 from ctk.core.plugin import ExporterPlugin
 
@@ -21,8 +22,9 @@ class HTMLExporter(ExporterPlugin):
         """HTML is an export-only format"""
         return False
 
-    def export_to_file(self, conversations: List[ConversationTree],
-                      file_path: str, **kwargs) -> None:
+    def export_to_file(
+        self, conversations: List[ConversationTree], file_path: str, **kwargs
+    ) -> None:
         """
         Export to file(s)
 
@@ -31,9 +33,11 @@ class HTMLExporter(ExporterPlugin):
         - embed=False: Separate index.html + conversations.jsonl + media/ (requires web server)
         - media_dir: Put media in specified directory, embed conversation data in HTML
         """
-        embed = kwargs.pop('embed', True)  # Default to embedded for better UX
-        db_dir = kwargs.pop('db_dir', None)  # Database directory for media files
-        media_dir = kwargs.pop('media_dir', None)  # Optional: output media to separate directory
+        embed = kwargs.pop("embed", True)  # Default to embedded for better UX
+        db_dir = kwargs.pop("db_dir", None)  # Database directory for media files
+        media_dir = kwargs.pop(
+            "media_dir", None
+        )  # Optional: output media to separate directory
 
         if media_dir:
             # Hybrid mode: embed conversation data but put media in separate directory
@@ -41,12 +45,12 @@ class HTMLExporter(ExporterPlugin):
             from pathlib import Path
 
             # Determine output directory and paths
-            if file_path.endswith('.html'):
-                output_dir = os.path.dirname(file_path) or '.'
+            if file_path.endswith(".html"):
+                output_dir = os.path.dirname(file_path) or "."
                 html_path = file_path
             else:
                 output_dir = file_path
-                html_path = os.path.join(output_dir, 'index.html')
+                html_path = os.path.join(output_dir, "index.html")
 
             # Resolve media_dir relative to output directory
             if not os.path.isabs(media_dir):
@@ -60,7 +64,7 @@ class HTMLExporter(ExporterPlugin):
 
             # Copy media files if db_dir is provided
             if db_dir:
-                source_media = Path(db_dir) / 'media'
+                source_media = Path(db_dir) / "media"
                 if source_media.exists():
                     for media_file in source_media.iterdir():
                         if media_file.is_file():
@@ -68,41 +72,42 @@ class HTMLExporter(ExporterPlugin):
 
             # Generate HTML with embedded data but media URLs pointing to media_dir
             html_content = self.export_conversations(
-                conversations, embed=True, db_dir=db_dir,
-                media_dir=media_dir, **kwargs
+                conversations, embed=True, db_dir=db_dir, media_dir=media_dir, **kwargs
             )
-            with open(html_path, 'w', encoding='utf-8') as f:
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
         elif embed:
             # Single file export with embedded data (images encoded as base64)
-            html_content = self.export_conversations(conversations, embed=True, db_dir=db_dir, **kwargs)
-            with open(file_path, 'w', encoding='utf-8') as f:
+            html_content = self.export_conversations(
+                conversations, embed=True, db_dir=db_dir, **kwargs
+            )
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
         else:
             # Multi-file export: index.html + conversations.jsonl + media/
             import shutil
             from pathlib import Path
 
-            if file_path.endswith('.html'):
+            if file_path.endswith(".html"):
                 # Specific HTML filename provided - use its directory
-                output_dir = os.path.dirname(file_path) or '.'
+                output_dir = os.path.dirname(file_path) or "."
                 html_path = file_path
             else:
                 # Directory name provided - create it and put files inside
                 output_dir = file_path
-                html_path = os.path.join(output_dir, 'index.html')
+                html_path = os.path.join(output_dir, "index.html")
 
             # Create output directory and media directory
             os.makedirs(output_dir, exist_ok=True)
-            media_output_dir = os.path.join(output_dir, 'media')
+            media_output_dir = os.path.join(output_dir, "media")
             os.makedirs(media_output_dir, exist_ok=True)
 
-            jsonl_path = os.path.join(output_dir, 'conversations.jsonl')
+            jsonl_path = os.path.join(output_dir, "conversations.jsonl")
 
             # Copy media files if db_dir is provided
             if db_dir:
-                source_media = Path(db_dir) / 'media'
+                source_media = Path(db_dir) / "media"
                 if source_media.exists():
                     # Copy all media files
                     for media_file in source_media.iterdir():
@@ -110,23 +115,31 @@ class HTMLExporter(ExporterPlugin):
                             shutil.copy2(media_file, media_output_dir)
 
             # Generate HTML without embedded data
-            html_content = self.export_conversations(conversations, embed=False, **kwargs)
-            with open(html_path, 'w', encoding='utf-8') as f:
+            html_content = self.export_conversations(
+                conversations, embed=False, **kwargs
+            )
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
             # Generate JSONL data
             conv_data, stats = self._prepare_data(conversations)
-            with open(jsonl_path, 'w', encoding='utf-8') as f:
+            with open(jsonl_path, "w", encoding="utf-8") as f:
                 for conv in conv_data:
-                    f.write(json.dumps(conv, ensure_ascii=False) + '\n')
+                    f.write(json.dumps(conv, ensure_ascii=False) + "\n")
                 # Write stats as last line with special marker
-                f.write(json.dumps({'__stats__': stats}, ensure_ascii=False) + '\n')
+                f.write(json.dumps({"__stats__": stats}, ensure_ascii=False) + "\n")
 
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export conversations to HTML5"""
         return self.export_conversations(conversations, **kwargs)
 
-    def _prepare_data(self, conversations: List[ConversationTree], db_dir: str = None, embed: bool = True, media_dir: str = None):
+    def _prepare_data(
+        self,
+        conversations: List[ConversationTree],
+        db_dir: str = None,
+        embed: bool = True,
+        media_dir: str = None,
+    ):
         """Prepare conversation data and stats
 
         Args:
@@ -140,46 +153,52 @@ class HTMLExporter(ExporterPlugin):
 
         conv_data = []
         stats = {
-            'total_conversations': len(conversations),
-            'total_messages': 0,
-            'sources': {},
-            'models': {},
-            'tags': {},
-            'date_range': {'earliest': None, 'latest': None}
+            "total_conversations": len(conversations),
+            "total_messages": 0,
+            "sources": {},
+            "models": {},
+            "tags": {},
+            "date_range": {"earliest": None, "latest": None},
         }
 
         for conv in conversations:
             messages = []
             all_messages = list(conv.message_map.values())
-            stats['total_messages'] += len(all_messages)
+            stats["total_messages"] += len(all_messages)
 
             for msg in sorted(all_messages, key=lambda m: m.timestamp or datetime.min):
                 if msg.timestamp:
-                    if not stats['date_range']['earliest'] or msg.timestamp < stats['date_range']['earliest']:
-                        stats['date_range']['earliest'] = msg.timestamp
-                    if not stats['date_range']['latest'] or msg.timestamp > stats['date_range']['latest']:
-                        stats['date_range']['latest'] = msg.timestamp
+                    if (
+                        not stats["date_range"]["earliest"]
+                        or msg.timestamp < stats["date_range"]["earliest"]
+                    ):
+                        stats["date_range"]["earliest"] = msg.timestamp
+                    if (
+                        not stats["date_range"]["latest"]
+                        or msg.timestamp > stats["date_range"]["latest"]
+                    ):
+                        stats["date_range"]["latest"] = msg.timestamp
 
                 # Extract images if present
                 images = []
-                if hasattr(msg.content, 'images') and msg.content.images:
+                if hasattr(msg.content, "images") and msg.content.images:
                     for img in msg.content.images:
                         img_data = {
-                            'url': img.url,
-                            'caption': img.caption,
-                            'mime_type': img.mime_type or 'image/png'
+                            "url": img.url,
+                            "caption": img.caption,
+                            "mime_type": img.mime_type or "image/png",
                         }
 
                         # Determine the filename for this image
                         img_ref = img.url or img.path
                         if img_ref:
                             # Get just the filename
-                            if img_ref.startswith('media/'):
+                            if img_ref.startswith("media/"):
                                 filename = img_ref[6:]  # Remove 'media/' prefix
-                            elif '/' in img_ref:
-                                filename = img_ref.split('/')[-1]
-                            elif '\\' in img_ref:
-                                filename = img_ref.split('\\')[-1]
+                            elif "/" in img_ref:
+                                filename = img_ref.split("/")[-1]
+                            elif "\\" in img_ref:
+                                filename = img_ref.split("\\")[-1]
                             else:
                                 filename = img_ref
                         else:
@@ -188,23 +207,23 @@ class HTMLExporter(ExporterPlugin):
                         # If media_dir is set, use file URLs instead of embedding
                         if media_dir and filename:
                             # Set URL to point to media_dir
-                            img_data['url'] = f"{media_dir}/{filename}"
+                            img_data["url"] = f"{media_dir}/{filename}"
                             # Don't embed data - we're using file references
                         elif img.data:
                             # Already have base64 data
-                            img_data['data'] = img.data
+                            img_data["data"] = img.data
                         elif embed and db_dir:
                             # Try to read image from disk and encode as base64
                             image_path = None
                             if img_ref:
                                 # Try various path resolutions
                                 candidates = []
-                                if img_ref.startswith('media/'):
+                                if img_ref.startswith("media/"):
                                     # Relative URL like 'media/xxx.png'
                                     candidates.append(Path(db_dir) / img_ref)
-                                elif '/' not in img_ref and '\\' not in img_ref:
+                                elif "/" not in img_ref and "\\" not in img_ref:
                                     # Just a filename - look in media/ directory
-                                    candidates.append(Path(db_dir) / 'media' / img_ref)
+                                    candidates.append(Path(db_dir) / "media" / img_ref)
                                     # Also try directly in db_dir
                                     candidates.append(Path(db_dir) / img_ref)
                                 else:
@@ -222,65 +241,125 @@ class HTMLExporter(ExporterPlugin):
 
                             if image_path:
                                 try:
-                                    with open(image_path, 'rb') as f:
-                                        img_data['data'] = base64.b64encode(f.read()).decode('utf-8')
+                                    with open(image_path, "rb") as f:
+                                        img_data["data"] = base64.b64encode(
+                                            f.read()
+                                        ).decode("utf-8")
                                     # Detect mime type from extension if not set
-                                    if not img_data['mime_type'] or img_data['mime_type'] == 'image/png':
+                                    if (
+                                        not img_data["mime_type"]
+                                        or img_data["mime_type"] == "image/png"
+                                    ):
                                         ext = image_path.suffix.lower()
-                                        mime_map = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-                                                   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
-                                                   '.jfif': 'image/jpeg', '.JPG': 'image/jpeg'}
-                                        img_data['mime_type'] = mime_map.get(ext, 'image/png')
+                                        mime_map = {
+                                            ".png": "image/png",
+                                            ".jpg": "image/jpeg",
+                                            ".jpeg": "image/jpeg",
+                                            ".gif": "image/gif",
+                                            ".webp": "image/webp",
+                                            ".svg": "image/svg+xml",
+                                            ".jfif": "image/jpeg",
+                                            ".JPG": "image/jpeg",
+                                        }
+                                        img_data["mime_type"] = mime_map.get(
+                                            ext, "image/png"
+                                        )
                                 except Exception as e:
                                     import sys
-                                    print(f"Warning: Could not read image {image_path}: {e}", file=sys.stderr)
+
+                                    print(
+                                        f"Warning: Could not read image {image_path}: {e}",
+                                        file=sys.stderr,
+                                    )
                             elif img_ref:
                                 import sys
-                                print(f"Warning: Image not found: {img_ref} (looked in {db_dir}/media/)", file=sys.stderr)
+
+                                print(
+                                    f"Warning: Image not found: {img_ref} (looked in {db_dir}/media/)",
+                                    file=sys.stderr,
+                                )
 
                         images.append(img_data)
 
+                # Extract tool calls if present
+                tool_calls = []
+                if hasattr(msg.content, "tool_calls") and msg.content.tool_calls:
+                    for tool in msg.content.tool_calls:
+                        tool_data = {
+                            "id": tool.id,
+                            "name": tool.name,
+                            "arguments": tool.arguments,
+                            "status": tool.status,
+                        }
+                        if tool.result is not None:
+                            tool_data["result"] = tool.result
+                        if tool.error:
+                            tool_data["error"] = tool.error
+                        tool_calls.append(tool_data)
+
                 msg_dict = {
-                    'id': msg.id,
-                    'role': msg.role.value if hasattr(msg.role, 'value') else str(msg.role),
-                    'content': msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content),
-                    'timestamp': msg.timestamp.isoformat() if msg.timestamp else None,
-                    'parent_id': msg.parent_id,
-                    'has_code': '```' in (msg.content.get_text() if hasattr(msg.content, 'get_text') else ''),
-                    'has_images': bool(images),
-                    'images': images,
-                    'has_tools': bool(msg.content.tool_calls) if hasattr(msg.content, 'tool_calls') else False
+                    "id": msg.id,
+                    "role": (
+                        msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                    ),
+                    "content": (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    ),
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                    "parent_id": msg.parent_id,
+                    "has_code": "```"
+                    in (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else ""
+                    ),
+                    "has_images": bool(images),
+                    "images": images,
+                    "has_tools": bool(tool_calls),
+                    "tool_calls": tool_calls,
                 }
                 messages.append(msg_dict)
 
-            source = conv.metadata.source or 'Unknown'
-            model = conv.metadata.model or 'Unknown'
+            source = conv.metadata.source or "Unknown"
+            model = conv.metadata.model or "Unknown"
             tags = conv.metadata.tags or []
 
-            stats['sources'][source] = stats['sources'].get(source, 0) + 1
-            stats['models'][model] = stats['models'].get(model, 0) + 1
+            stats["sources"][source] = stats["sources"].get(source, 0) + 1
+            stats["models"][model] = stats["models"].get(model, 0) + 1
             for tag in tags:
-                stats['tags'][tag] = stats['tags'].get(tag, 0) + 1
+                stats["tags"][tag] = stats["tags"].get(tag, 0) + 1
 
             conv_dict = {
-                'id': conv.id,
-                'title': conv.title or 'Untitled Conversation',
-                'messages': messages,
-                'root_message_ids': conv.root_message_ids,
-                'created_at': conv.metadata.created_at.isoformat() if conv.metadata.created_at else None,
-                'updated_at': conv.metadata.updated_at.isoformat() if conv.metadata.updated_at else None,
-                'source': source,
-                'model': model,
-                'tags': tags,
-                'message_count': len(messages)
+                "id": conv.id,
+                "title": conv.title or "Untitled Conversation",
+                "messages": messages,
+                "root_message_ids": conv.root_message_ids,
+                "created_at": (
+                    conv.metadata.created_at.isoformat()
+                    if conv.metadata.created_at
+                    else None
+                ),
+                "updated_at": (
+                    conv.metadata.updated_at.isoformat()
+                    if conv.metadata.updated_at
+                    else None
+                ),
+                "source": source,
+                "model": model,
+                "tags": tags,
+                "message_count": len(messages),
             }
             conv_data.append(conv_dict)
 
         # Convert dates for JSON
-        if stats['date_range']['earliest']:
-            stats['date_range']['earliest'] = stats['date_range']['earliest'].isoformat()
-        if stats['date_range']['latest']:
-            stats['date_range']['latest'] = stats['date_range']['latest'].isoformat()
+        if stats["date_range"]["earliest"]:
+            stats["date_range"]["earliest"] = stats["date_range"][
+                "earliest"
+            ].isoformat()
+        if stats["date_range"]["latest"]:
+            stats["date_range"]["latest"] = stats["date_range"]["latest"].isoformat()
 
         return conv_data, stats
 
@@ -288,11 +367,11 @@ class HTMLExporter(ExporterPlugin):
         self,
         conversations: List[ConversationTree],
         include_metadata: bool = True,
-        theme: str = 'auto',
+        theme: str = "auto",
         embed: bool = True,
         db_dir: str = None,
         media_dir: str = None,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         Export conversations to advanced HTML5 application
@@ -305,10 +384,14 @@ class HTMLExporter(ExporterPlugin):
             db_dir: Database directory for resolving media file paths
             media_dir: If set, use file URLs to this directory instead of embedding base64
         """
-        conv_data, stats = self._prepare_data(conversations, db_dir=db_dir, embed=embed, media_dir=media_dir)
+        conv_data, stats = self._prepare_data(
+            conversations, db_dir=db_dir, embed=embed, media_dir=media_dir
+        )
         return self._generate_html(conv_data, stats, theme, embed)
 
-    def _generate_html(self, conversations: List[Dict], stats: Dict, theme: str, embed: bool = True) -> str:
+    def _generate_html(
+        self, conversations: List[Dict], stats: Dict, theme: str, embed: bool = True
+    ) -> str:
         """Generate complete HTML5 document"""
 
         if embed:
@@ -316,8 +399,12 @@ class HTMLExporter(ExporterPlugin):
             conv_json = json.dumps(conversations, ensure_ascii=False, indent=2)
             stats_json = json.dumps(stats, ensure_ascii=False, indent=2)
             # Escape for safe embedding
-            conv_json = conv_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
-            stats_json = stats_json.replace('</script>', '<\\/script>').replace('<!--', '<\\!--')
+            conv_json = conv_json.replace("</script>", "<\\/script>").replace(
+                "<!--", "<\\!--"
+            )
+            stats_json = stats_json.replace("</script>", "<\\/script>").replace(
+                "<!--", "<\\!--"
+            )
             data_script = f"""
         const CONVERSATIONS = {conv_json};
         const STATS = {stats_json};
@@ -3499,7 +3586,6 @@ function copyConversation(convId) {
 }
 """
 
-
     def _get_jsonl_loader(self) -> str:
         """Get JavaScript code to load conversations from JSONL file"""
         return """
@@ -3577,4 +3663,3 @@ fetch('conversations.jsonl')
 
 # Register the exporter
 exporter = HTMLExporter()
-

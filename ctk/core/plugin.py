@@ -1,31 +1,292 @@
 """
 Plugin system for importers and exporters
+
+Security model:
+- Plugins are only loaded from explicitly allowed directories
+- AST analysis validates plugins before execution
+- Dangerous operations are detected and logged
+- Plugin instances are validated after creation
 """
 
+import ast
+import hashlib
 import importlib
 import importlib.util
 import inspect
-import os
-import hashlib
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Type, Callable, Set
-from abc import ABC, abstractmethod
 import json
 import logging
+import os
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 from .models import ConversationTree
 
 logger = logging.getLogger(__name__)
 
 
+class PluginSecurityError(Exception):
+    """Raised when a plugin fails security validation"""
+
+    pass
+
+
+class PluginASTValidator(ast.NodeVisitor):
+    """
+    AST-based validator for plugin security.
+
+    Analyzes plugin source code before execution to detect:
+    - Dangerous imports (subprocess, socket, etc.)
+    - Dynamic code execution (exec, eval, compile)
+    - File system access patterns
+    - Network operations
+    """
+
+    # Imports that are always forbidden
+    FORBIDDEN_IMPORTS = {
+        "subprocess",
+        "os.system",
+        "commands",
+        "socket",
+        "asyncio.subprocess",
+        "multiprocessing",
+        "pty",
+        "fcntl",
+        "ctypes",
+        "cffi",
+        "mmap",
+        "pickle",
+        "shelve",
+        "marshal",
+        "__builtins__",
+        "builtins",
+    }
+
+    # Dangerous function calls (always forbidden in strict mode)
+    DANGEROUS_CALLS_STRICT = {
+        "exec",
+        "eval",
+        "compile",
+        "__import__",
+        "globals",
+        "locals",
+        "vars",
+        "getattr",
+        "setattr",
+        "delattr",
+        "open",
+        "input",
+        "raw_input",
+    }
+
+    # Dangerous function calls (forbidden in all modes)
+    DANGEROUS_CALLS = {
+        "exec",
+        "eval",
+        "compile",
+        "__import__",
+    }
+
+    # Safe imports whitelist (imports outside this list trigger warnings)
+    SAFE_IMPORTS = {
+        # Standard library safe modules
+        "typing",
+        "dataclasses",
+        "enum",
+        "abc",
+        "collections",
+        "datetime",
+        "json",
+        "re",
+        "functools",
+        "itertools",
+        "math",
+        "decimal",
+        "fractions",
+        "statistics",
+        "copy",
+        "uuid",
+        "hashlib",
+        "base64",
+        "io",
+        "pathlib",
+        "logging",
+        # CTK modules
+        "ctk",
+        "ctk.core",
+        "ctk.core.plugin",
+        "ctk.core.models",
+    }
+
+    def __init__(self, file_path: Path, strict: bool = False):
+        """
+        Initialize validator.
+
+        Args:
+            file_path: Path to the plugin file being validated
+            strict: If True, reject any non-whitelisted imports
+        """
+        self.file_path = file_path
+        self.strict = strict
+        self.violations: List[str] = []
+        self.warnings: List[str] = []
+        self.imports: Set[str] = set()
+        self.function_calls: Set[str] = set()
+
+    def validate(self, source: str) -> Tuple[bool, List[str], List[str]]:
+        """
+        Validate plugin source code.
+
+        Args:
+            source: Plugin source code
+
+        Returns:
+            Tuple of (is_valid, violations, warnings)
+        """
+        try:
+            tree = ast.parse(source, filename=str(self.file_path))
+        except SyntaxError as e:
+            return False, [f"Syntax error: {e}"], []
+
+        self.visit(tree)
+
+        is_valid = len(self.violations) == 0
+        return is_valid, self.violations, self.warnings
+
+    def visit_Import(self, node: ast.Import) -> None:
+        """Check import statements"""
+        for alias in node.names:
+            module_name = alias.name
+            self.imports.add(module_name)
+
+            # Check for forbidden imports
+            for forbidden in self.FORBIDDEN_IMPORTS:
+                if module_name == forbidden or module_name.startswith(forbidden + "."):
+                    self.violations.append(
+                        f"Forbidden import '{module_name}' at line {node.lineno}"
+                    )
+
+            # Check for non-whitelisted imports
+            base_module = module_name.split(".")[0]
+            if (
+                base_module not in self.SAFE_IMPORTS
+                and module_name not in self.SAFE_IMPORTS
+            ):
+                if self.strict:
+                    self.violations.append(
+                        f"Non-whitelisted import '{module_name}' at line {node.lineno}"
+                    )
+                else:
+                    self.warnings.append(
+                        f"Non-whitelisted import '{module_name}' at line {node.lineno}"
+                    )
+
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Check from ... import statements"""
+        module_name = node.module or ""
+        self.imports.add(module_name)
+
+        # Check for forbidden imports
+        for forbidden in self.FORBIDDEN_IMPORTS:
+            if module_name == forbidden or module_name.startswith(forbidden + "."):
+                self.violations.append(
+                    f"Forbidden import from '{module_name}' at line {node.lineno}"
+                )
+
+        # Check imported names for dangerous patterns
+        for alias in node.names:
+            full_name = f"{module_name}.{alias.name}" if module_name else alias.name
+            if alias.name in self.DANGEROUS_CALLS:
+                self.violations.append(
+                    f"Import of dangerous function '{alias.name}' at line {node.lineno}"
+                )
+
+        # Check for non-whitelisted imports
+        base_module = module_name.split(".")[0] if module_name else ""
+        if (
+            base_module
+            and base_module not in self.SAFE_IMPORTS
+            and module_name not in self.SAFE_IMPORTS
+        ):
+            if self.strict:
+                self.violations.append(
+                    f"Non-whitelisted import from '{module_name}' at line {node.lineno}"
+                )
+            else:
+                self.warnings.append(
+                    f"Non-whitelisted import from '{module_name}' at line {node.lineno}"
+                )
+
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Check function calls"""
+        func_name = self._get_call_name(node.func)
+        if func_name:
+            self.function_calls.add(func_name)
+
+            # Always check for the most dangerous calls (exec, eval, etc.)
+            base_name = func_name.split(".")[0]
+            if base_name in self.DANGEROUS_CALLS:
+                self.violations.append(
+                    f"Dangerous function call '{func_name}' at line {node.lineno}"
+                )
+
+            # In strict mode, also check for potentially dangerous calls (open, etc.)
+            if self.strict and base_name in self.DANGEROUS_CALLS_STRICT:
+                if base_name not in self.DANGEROUS_CALLS:  # Don't double-report
+                    self.violations.append(
+                        f"Dangerous function call '{func_name}' at line {node.lineno}"
+                    )
+
+            # Check for os.system, subprocess.call, etc.
+            if func_name in ("os.system", "os.popen", "os.spawn", "os.exec"):
+                self.violations.append(
+                    f"System command execution '{func_name}' at line {node.lineno}"
+                )
+
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Check attribute access for dangerous patterns"""
+        # Check for __class__, __bases__, __subclasses__ exploitation
+        if node.attr in (
+            "__class__",
+            "__bases__",
+            "__subclasses__",
+            "__mro__",
+            "__globals__",
+            "__code__",
+            "__closure__",
+        ):
+            self.warnings.append(
+                f"Suspicious attribute access '{node.attr}' at line {node.lineno}"
+            )
+
+        self.generic_visit(node)
+
+    def _get_call_name(self, node: ast.expr) -> Optional[str]:
+        """Extract function name from a Call node"""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            value = self._get_call_name(node.value)
+            if value:
+                return f"{value}.{node.attr}"
+            return node.attr
+        return None
+
+
 class BasePlugin(ABC):
     """Base class for all plugins"""
-    
+
     name: str = ""
     description: str = ""
     version: str = "1.0.0"
     supported_formats: List[str] = []
-    
+
     @abstractmethod
     def validate(self, data: Any) -> bool:
         """Validate if this plugin can handle the data"""
@@ -34,12 +295,12 @@ class BasePlugin(ABC):
 
 class ImporterPlugin(BasePlugin):
     """Base class for importer plugins"""
-    
+
     @abstractmethod
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         """Import data and return ConversationTree objects"""
         pass
-    
+
     def detect_format(self, data: Any) -> bool:
         """Auto-detect if this importer can handle the data"""
         return self.validate(data)
@@ -47,33 +308,34 @@ class ImporterPlugin(BasePlugin):
 
 class ExporterPlugin(BasePlugin):
     """Base class for exporter plugins"""
-    
+
     @abstractmethod
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export ConversationTree objects to target format"""
         pass
-    
-    def export_to_file(self, conversations: List[ConversationTree], 
-                      file_path: str, **kwargs) -> None:
+
+    def export_to_file(
+        self, conversations: List[ConversationTree], file_path: str, **kwargs
+    ) -> None:
         """Export to file"""
         data = self.export_data(conversations, **kwargs)
-        
+
         if isinstance(data, str):
-            mode = 'w'
+            mode = "w"
         elif isinstance(data, bytes):
-            mode = 'wb'
+            mode = "wb"
         else:
             # Assume JSON serializable
             data = json.dumps(data, indent=2)
-            mode = 'w'
-        
+            mode = "w"
+
         with open(file_path, mode) as f:
             f.write(data)
 
 
 class PluginRegistry:
     """Registry for managing plugins"""
-    
+
     def __init__(self, allowed_plugin_dirs: Optional[List[str]] = None):
         self.importers: Dict[str, ImporterPlugin] = {}
         self.exporters: Dict[str, ExporterPlugin] = {}
@@ -83,135 +345,142 @@ class PluginRegistry:
         # Add default integrations directory
         base_dir = Path(__file__).parent.parent
         self.allowed_plugin_dirs.add(str(base_dir / "integrations"))
-    
+
     def register_importer(self, name: str, plugin: ImporterPlugin):
         """Register an importer plugin"""
         self.importers[name] = plugin
-    
+
     def register_exporter(self, name: str, plugin: ExporterPlugin):
         """Register an exporter plugin"""
         self.exporters[name] = plugin
-    
+
     def discover_plugins(self, plugin_dir: Optional[str] = None):
         """Discover and load plugins from directory"""
         if self._discovered:
             return
-        
+
         if plugin_dir is None:
             # Default to integrations directory
             base_dir = Path(__file__).parent.parent
             plugin_dir = base_dir / "integrations"
         else:
             plugin_dir = Path(plugin_dir)
-        
+
         # Security: Validate plugin directory is allowed
         if not self._is_plugin_dir_allowed(plugin_dir):
             logger.warning(f"Plugin directory not allowed: {plugin_dir}")
             return
-        
+
         # Discover importers
         importers_dir = plugin_dir / "importers"
         if importers_dir.exists():
             self._load_plugins_from_dir(importers_dir, ImporterPlugin, self.importers)
-        
+
         # Discover exporters
         exporters_dir = plugin_dir / "exporters"
         if exporters_dir.exists():
             self._load_plugins_from_dir(exporters_dir, ExporterPlugin, self.exporters)
-        
+
         self._discovered = True
-    
-    def _load_plugins_from_dir(self, directory: Path, base_class: Type, 
-                               registry: Dict[str, BasePlugin]):
+
+    def _load_plugins_from_dir(
+        self, directory: Path, base_class: Type, registry: Dict[str, BasePlugin]
+    ):
         """Load plugins from a directory with security validation"""
         for file_path in directory.glob("*.py"):
             if file_path.name.startswith("_"):
                 continue
-            
+
             # Security: Validate plugin file
             if not self._validate_plugin_file(file_path):
                 logger.warning(f"Plugin validation failed: {file_path}")
                 continue
-            
+
             try:
                 module_name = file_path.stem
                 spec = importlib.util.spec_from_file_location(
                     f"ctk_plugin_{module_name}", file_path
                 )
-                
+
                 if spec and spec.loader:
                     module = importlib.util.module_from_spec(spec)
-                    
+
                     # Security: Execute module in controlled environment
                     try:
                         spec.loader.exec_module(module)
                     except Exception as e:
                         logger.error(f"Error loading plugin {file_path}: {e}")
                         continue
-                    
+
                     # Find plugin classes in module
                     for name, obj in inspect.getmembers(module):
-                        if (inspect.isclass(obj) and 
-                            issubclass(obj, base_class) and 
-                            obj != base_class and
-                            not inspect.isabstract(obj)):
-                            
+                        if (
+                            inspect.isclass(obj)
+                            and issubclass(obj, base_class)
+                            and obj != base_class
+                            and not inspect.isabstract(obj)
+                        ):
+
                             try:
                                 plugin_instance = obj()
                                 plugin_name = plugin_instance.name or module_name
-                                
+
                                 # Security: Validate plugin instance
                                 if self._validate_plugin_instance(plugin_instance):
                                     registry[plugin_name] = plugin_instance
                                     logger.info(f"Loaded plugin: {plugin_name}")
                                 else:
-                                    logger.warning(f"Plugin validation failed: {plugin_name}")
+                                    logger.warning(
+                                        f"Plugin validation failed: {plugin_name}"
+                                    )
                             except Exception as e:
                                 logger.error(f"Error instantiating plugin {name}: {e}")
             except Exception as e:
                 logger.error(f"Error processing plugin file {file_path}: {e}")
-    
+
     def get_importer(self, name: str) -> Optional[ImporterPlugin]:
         """Get an importer plugin by name"""
         self.discover_plugins()
         return self.importers.get(name)
-    
+
     def get_exporter(self, name: str) -> Optional[ExporterPlugin]:
         """Get an exporter plugin by name"""
         self.discover_plugins()
         return self.exporters.get(name)
-    
+
     def auto_detect_importer(self, data: Any) -> Optional[ImporterPlugin]:
         """Auto-detect appropriate importer for data"""
         self.discover_plugins()
-        
+
         for name, importer in self.importers.items():
             if importer.detect_format(data):
                 return importer
-        
+
         return None
-    
+
     def list_importers(self) -> List[str]:
         """List available importers"""
         self.discover_plugins()
         return list(self.importers.keys())
-    
+
     def list_exporters(self) -> List[str]:
         """List available exporters"""
         self.discover_plugins()
         return list(self.exporters.keys())
-    
-    def import_file(self, file_path: str, format: Optional[str] = None) -> List[ConversationTree]:
+
+    def import_file(
+        self, file_path: str, format: Optional[str] = None
+    ) -> List[ConversationTree]:
         """Import from file with auto-detection"""
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             data = f.read()
-        
+
         # Try to parse as JSON
         try:
             data = json.loads(data)
         except json.JSONDecodeError:
             pass
-        
+
         if format:
             importer = self.get_importer(format)
             if not importer:
@@ -220,18 +489,22 @@ class PluginRegistry:
             importer = self.auto_detect_importer(data)
             if not importer:
                 raise ValueError("Could not auto-detect format")
-        
+
         return importer.import_data(data)
-    
-    def export_file(self, conversations: List[ConversationTree], 
-                   file_path: str, format: str, **kwargs):
+
+    def export_file(
+        self,
+        conversations: List[ConversationTree],
+        file_path: str,
+        format: str,
+        **kwargs,
+    ):
         """Export to file"""
         exporter = self.get_exporter(format)
         if not exporter:
             raise ValueError(f"Unknown export format: {format}")
-        
-        exporter.export_to_file(conversations, file_path, **kwargs)
 
+        exporter.export_to_file(conversations, file_path, **kwargs)
 
     def _is_plugin_dir_allowed(self, plugin_dir: Path) -> bool:
         """Check if plugin directory is in the allowed list"""
@@ -240,64 +513,94 @@ class PluginRegistry:
             if plugin_dir_str.startswith(allowed_dir):
                 return True
         return False
-    
-    def _validate_plugin_file(self, file_path: Path) -> bool:
-        """Validate plugin file before loading"""
+
+    def _validate_plugin_file(self, file_path: Path, strict: bool = False) -> bool:
+        """
+        Validate plugin file before loading using AST analysis.
+
+        Args:
+            file_path: Path to the plugin file
+            strict: If True, reject any non-whitelisted imports
+
+        Returns:
+            True if plugin passes validation, False otherwise
+        """
         try:
             # Security: Check file size (prevent large malicious files)
-            if file_path.stat().st_size > 1024 * 1024:  # 1MB limit
-                logger.warning(f"Plugin file too large: {file_path}")
+            file_size = file_path.stat().st_size
+            if file_size > 1024 * 1024:  # 1MB limit
+                logger.warning(
+                    f"Plugin file too large ({file_size} bytes): {file_path}"
+                )
                 return False
-            
-            # Security: Basic content validation
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                
-                # Check for suspicious imports or operations
-                suspicious_patterns = [
-                    'import os', 'import subprocess', 'import sys',
-                    'exec(', 'eval(', '__import__',
-                    'open(', 'file(', 'input(',
-                    'urllib', 'requests', 'http',
-                    'socket', 'network'
-                ]
-                
-                for pattern in suspicious_patterns:
-                    if pattern in content.lower():
-                        logger.debug(f"Security check: pattern '{pattern}' found in {file_path}")
-                        # Allow for now but log - can be made stricter
-                        pass
-            
+
+            # Read plugin source
+            with open(file_path, "r", encoding="utf-8") as f:
+                source = f.read()
+
+            # Perform AST-based security validation
+            validator = PluginASTValidator(file_path, strict=strict)
+            is_valid, violations, warnings = validator.validate(source)
+
+            # Log warnings
+            for warning in warnings:
+                logger.warning(
+                    f"Plugin security warning in {file_path.name}: {warning}"
+                )
+
+            # Log violations and reject if any found
+            if violations:
+                for violation in violations:
+                    logger.error(
+                        f"Plugin security violation in {file_path.name}: {violation}"
+                    )
+                return False
+
+            logger.debug(
+                f"Plugin {file_path.name} passed security validation "
+                f"(imports: {len(validator.imports)}, calls: {len(validator.function_calls)})"
+            )
             return True
-        except Exception as e:
-            logger.error(f"Error validating plugin file {file_path}: {e}")
+
+        except SyntaxError as e:
+            logger.error(f"Syntax error in plugin {file_path}: {e}")
             return False
-    
+        except OSError as e:
+            logger.error(f"Error reading plugin file {file_path}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error validating plugin {file_path}: {e}")
+            return False
+
     def _validate_plugin_instance(self, plugin: BasePlugin) -> bool:
         """Validate plugin instance after creation"""
         try:
             # Check required attributes
-            if not hasattr(plugin, 'name') or not plugin.name:
+            if not hasattr(plugin, "name") or not plugin.name:
                 return False
-            
+
             # Ensure plugin has required methods
             if isinstance(plugin, ImporterPlugin):
-                if not hasattr(plugin, 'import_data') or not callable(plugin.import_data):
+                if not hasattr(plugin, "import_data") or not callable(
+                    plugin.import_data
+                ):
                     return False
-                if not hasattr(plugin, 'validate') or not callable(plugin.validate):
+                if not hasattr(plugin, "validate") or not callable(plugin.validate):
                     return False
-            
+
             if isinstance(plugin, ExporterPlugin):
-                if not hasattr(plugin, 'export_data') or not callable(plugin.export_data):
+                if not hasattr(plugin, "export_data") or not callable(
+                    plugin.export_data
+                ):
                     return False
-                if not hasattr(plugin, 'validate') or not callable(plugin.validate):
+                if not hasattr(plugin, "validate") or not callable(plugin.validate):
                     return False
-            
+
             return True
         except Exception as e:
             logger.error(f"Error validating plugin instance: {e}")
             return False
-    
+
     def add_trusted_plugin_dir(self, directory: str) -> None:
         """Add a trusted plugin directory"""
         self.allowed_plugin_dirs.add(str(Path(directory).resolve()))

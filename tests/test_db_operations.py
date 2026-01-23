@@ -4,27 +4,18 @@ Test suite for CTK database operations
 Tests merge, diff, intersect, filter, split, dedupe functionality
 """
 
-import unittest
-import tempfile
-import shutil
-from pathlib import Path
-from datetime import datetime, timedelta
 import json
+import shutil
+import tempfile
+import unittest
+from datetime import datetime, timedelta
+from pathlib import Path
 
 from ctk.core.database import ConversationDB
-from ctk.core.db_operations import (
-    DatabaseOperations,
-    DuplicateStrategy,
-    MergeStrategy,
-    ConversationComparator
-)
-from ctk.core.models import (
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-    ConversationMetadata
-)
+from ctk.core.db_operations import (ConversationComparator, DatabaseOperations,
+                                    DuplicateStrategy, MergeStrategy)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 
 
 class TestDatabaseOperations(unittest.TestCase):
@@ -46,24 +37,17 @@ class TestDatabaseOperations(unittest.TestCase):
         source: str = "test",
         num_messages: int = 3,
         created_at: datetime = None,
-        tags: list = None
+        tags: list = None,
     ) -> ConversationTree:
         """Helper to create test conversations"""
         if created_at is None:
             created_at = datetime.now()
 
         metadata = ConversationMetadata(
-            created_at=created_at,
-            updated_at=created_at,
-            source=source,
-            tags=tags or []
+            created_at=created_at, updated_at=created_at, source=source, tags=tags or []
         )
 
-        conv = ConversationTree(
-            id=conv_id,
-            title=title,
-            metadata=metadata
-        )
+        conv = ConversationTree(id=conv_id, title=title, metadata=metadata)
 
         # Add messages
         parent_id = None
@@ -73,7 +57,7 @@ class TestDatabaseOperations(unittest.TestCase):
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i} in {conv_id}"),
                 parent_id=parent_id,
-                timestamp=created_at + timedelta(minutes=i)
+                timestamp=created_at + timedelta(minutes=i),
             )
             conv.add_message(msg)
             parent_id = msg.id
@@ -115,18 +99,18 @@ class TestDatabaseOperations(unittest.TestCase):
             [str(db1_path), str(db2_path)],
             str(output_path),
             strategy=MergeStrategy.NEWEST,
-            dedupe=DuplicateStrategy.EXACT
+            dedupe=DuplicateStrategy.EXACT,
         )
 
         # Check statistics
-        self.assertEqual(stats['total_input'], 6)  # 3 + 3
-        self.assertEqual(stats['duplicates_found'], 2)  # conv2, conv3
-        self.assertEqual(stats['total_output'], 4)  # conv1, conv2, conv3, conv4
+        self.assertEqual(stats["total_input"], 6)  # 3 + 3
+        self.assertEqual(stats["duplicates_found"], 2)  # conv2, conv3
+        self.assertEqual(stats["total_output"], 4)  # conv1, conv2, conv3, conv4
 
         # Verify merged database
         with ConversationDB(str(output_path)) as db:
             db_stats = db.get_statistics()
-            self.assertEqual(db_stats['total_conversations'], 4)
+            self.assertEqual(db_stats["total_conversations"], 4)
 
     def test_diff_operation(self):
         """Test diff operation to find unique conversations"""
@@ -156,22 +140,22 @@ class TestDatabaseOperations(unittest.TestCase):
             str(db2_path),
             output_db=str(diff_path),
             symmetric=False,
-            comparison=DuplicateStrategy.EXACT
+            comparison=DuplicateStrategy.EXACT,
         )
 
         # Check statistics
-        self.assertEqual(stats['left_total'], 3)
-        self.assertEqual(stats['right_total'], 3)
-        self.assertEqual(stats['common'], 2)  # conv2, conv3
-        self.assertEqual(stats['left_unique'], 1)  # conv1
+        self.assertEqual(stats["left_total"], 3)
+        self.assertEqual(stats["right_total"], 3)
+        self.assertEqual(stats["common"], 2)  # conv2, conv3
+        self.assertEqual(stats["left_unique"], 1)  # conv1
 
         # Verify diff database contains only unique conversation
         with ConversationDB(str(diff_path)) as db:
             db_stats = db.get_statistics()
-            self.assertEqual(db_stats['total_conversations'], 1)
+            self.assertEqual(db_stats["total_conversations"], 1)
             convs = db.list_conversations()
             # list_conversations returns ConversationSummary objects, not dicts
-            self.assertEqual(convs[0].id, 'conv1')
+            self.assertEqual(convs[0].id, "conv1")
 
     def test_intersect_operation(self):
         """Test intersect operation to find common conversations"""
@@ -206,11 +190,11 @@ class TestDatabaseOperations(unittest.TestCase):
         stats = self.db_ops.intersect(
             [str(db1_path), str(db2_path), str(db3_path)],
             str(intersect_path),
-            comparison=DuplicateStrategy.EXACT
+            comparison=DuplicateStrategy.EXACT,
         )
 
         # Check statistics
-        self.assertEqual(stats['common_to_all'], 1)  # Only conv3 is in all three
+        self.assertEqual(stats["common_to_all"], 1)  # Only conv3 is in all three
 
         # Test with min_count=2 (in at least 2 databases)
         intersect2_path = Path(self.test_dir) / "intersect2.db"
@@ -218,11 +202,11 @@ class TestDatabaseOperations(unittest.TestCase):
             [str(db1_path), str(db2_path), str(db3_path)],
             str(intersect2_path),
             min_count=2,
-            comparison=DuplicateStrategy.EXACT
+            comparison=DuplicateStrategy.EXACT,
         )
 
         # Should find conv2, conv3, conv4
-        self.assertEqual(stats2['common_to_min'], 3)
+        self.assertEqual(stats2["common_to_min"], 3)
 
     def test_filter_operation(self):
         """Test filter operation with various criteria"""
@@ -233,64 +217,62 @@ class TestDatabaseOperations(unittest.TestCase):
         now = datetime.now()
         convs = [
             self._create_test_conversation(
-                "conv1", "ChatGPT Conv", "chatgpt",
-                num_messages=5, created_at=now - timedelta(days=10),
-                tags=["python", "coding"]
+                "conv1",
+                "ChatGPT Conv",
+                "chatgpt",
+                num_messages=5,
+                created_at=now - timedelta(days=10),
+                tags=["python", "coding"],
             ),
             self._create_test_conversation(
-                "conv2", "Claude Conv", "claude",
-                num_messages=3, created_at=now - timedelta(days=5),
-                tags=["writing"]
+                "conv2",
+                "Claude Conv",
+                "claude",
+                num_messages=3,
+                created_at=now - timedelta(days=5),
+                tags=["writing"],
             ),
             self._create_test_conversation(
-                "conv3", "ChatGPT Recent", "chatgpt",
-                num_messages=10, created_at=now - timedelta(days=1),
-                tags=["python", "data"]
+                "conv3",
+                "ChatGPT Recent",
+                "chatgpt",
+                num_messages=10,
+                created_at=now - timedelta(days=1),
+                tags=["python", "data"],
             ),
             self._create_test_conversation(
-                "conv4", "Old Conv", "copilot",
-                num_messages=2, created_at=now - timedelta(days=30),
-                tags=["debugging"]
+                "conv4",
+                "Old Conv",
+                "copilot",
+                num_messages=2,
+                created_at=now - timedelta(days=30),
+                tags=["debugging"],
             ),
         ]
         self._create_test_database(str(db_path), convs)
 
         # Filter by source
-        stats = self.db_ops.filter(
-            str(db_path),
-            str(filtered_path),
-            source="chatgpt"
-        )
-        self.assertEqual(stats['total_output'], 2)  # conv1 and conv3
+        stats = self.db_ops.filter(str(db_path), str(filtered_path), source="chatgpt")
+        self.assertEqual(stats["total_output"], 2)  # conv1 and conv3
 
         # Filter by date range - note: updated_at is set to now on save
         # So all conversations will match a date filter based on current time
         filtered2_path = Path(self.test_dir) / "filtered2.db"
         stats = self.db_ops.filter(
-            str(db_path),
-            str(filtered2_path),
-            after=now - timedelta(days=7)
+            str(db_path), str(filtered2_path), after=now - timedelta(days=7)
         )
         # All 4 conversations have updated_at = now, so all match
-        self.assertEqual(stats['total_output'], 4)
+        self.assertEqual(stats["total_output"], 4)
 
         # Filter by message count
         filtered3_path = Path(self.test_dir) / "filtered3.db"
-        stats = self.db_ops.filter(
-            str(db_path),
-            str(filtered3_path),
-            min_messages=4
-        )
-        self.assertEqual(stats['total_output'], 2)  # conv1 (5) and conv3 (10)
+        stats = self.db_ops.filter(str(db_path), str(filtered3_path), min_messages=4)
+        self.assertEqual(stats["total_output"], 2)  # conv1 (5) and conv3 (10)
 
         # Filter by tags
         filtered4_path = Path(self.test_dir) / "filtered4.db"
-        stats = self.db_ops.filter(
-            str(db_path),
-            str(filtered4_path),
-            tags=["python"]
-        )
-        self.assertEqual(stats['total_output'], 2)  # conv1 and conv3
+        stats = self.db_ops.filter(str(db_path), str(filtered4_path), tags=["python"])
+        self.assertEqual(stats["total_output"], 2)  # conv1 and conv3
 
     def test_dedupe_operation(self):
         """Test deduplication with different strategies"""
@@ -301,20 +283,22 @@ class TestDatabaseOperations(unittest.TestCase):
         now = datetime.now()
         convs = [
             self._create_test_conversation(
-                "conv1", "First", "chatgpt",
-                created_at=now - timedelta(days=5)
+                "conv1", "First", "chatgpt", created_at=now - timedelta(days=5)
             ),
             self._create_test_conversation(
-                "conv1", "First Duplicate", "chatgpt",
-                created_at=now - timedelta(days=3)
+                "conv1",
+                "First Duplicate",
+                "chatgpt",
+                created_at=now - timedelta(days=3),
             ),
             self._create_test_conversation(
-                "conv1", "First Duplicate 2", "chatgpt",
-                created_at=now - timedelta(days=1)
+                "conv1",
+                "First Duplicate 2",
+                "chatgpt",
+                created_at=now - timedelta(days=1),
             ),
             self._create_test_conversation(
-                "conv2", "Second", "claude",
-                created_at=now - timedelta(days=2)
+                "conv2", "Second", "claude", created_at=now - timedelta(days=2)
             ),
         ]
 
@@ -332,24 +316,22 @@ class TestDatabaseOperations(unittest.TestCase):
 
         # Test dry run first
         stats = self.db_ops.dedupe(
-            str(db_path),
-            dry_run=True,
-            strategy=DuplicateStrategy.EXACT
+            str(db_path), dry_run=True, strategy=DuplicateStrategy.EXACT
         )
-        self.assertEqual(stats['total_conversations'], 2)
+        self.assertEqual(stats["total_conversations"], 2)
 
         # Actual deduplication (in this case, no duplicates due to overwrite)
         stats = self.db_ops.dedupe(
             str(db_path),
             output_db=str(deduped_path),
             strategy=DuplicateStrategy.EXACT,
-            keep="newest"
+            keep="newest",
         )
 
         # Verify deduped database
         with ConversationDB(str(deduped_path)) as db:
             db_stats = db.get_statistics()
-            self.assertEqual(db_stats['total_conversations'], 2)
+            self.assertEqual(db_stats["total_conversations"], 2)
 
     def test_split_operation(self):
         """Test splitting database by various criteria"""
@@ -367,14 +349,10 @@ class TestDatabaseOperations(unittest.TestCase):
         self._create_test_database(str(db_path), convs)
 
         # Split by source
-        stats = self.db_ops.split(
-            str(db_path),
-            str(split_dir),
-            by="source"
-        )
+        stats = self.db_ops.split(str(db_path), str(split_dir), by="source")
 
-        self.assertEqual(stats['total_conversations'], 5)
-        self.assertEqual(stats['databases_created'], 3)  # chatgpt, claude, copilot
+        self.assertEqual(stats["total_conversations"], 5)
+        self.assertEqual(stats["databases_created"], 3)  # chatgpt, claude, copilot
 
         # Verify split databases
         self.assertTrue((split_dir / "chatgpt.db").exists())
@@ -383,13 +361,9 @@ class TestDatabaseOperations(unittest.TestCase):
 
         # Test split into chunks
         chunks_dir = Path(self.test_dir) / "chunks"
-        stats = self.db_ops.split(
-            str(db_path),
-            str(chunks_dir),
-            chunks=2
-        )
+        stats = self.db_ops.split(str(db_path), str(chunks_dir), chunks=2)
 
-        self.assertEqual(stats['databases_created'], 2)
+        self.assertEqual(stats["databases_created"], 2)
         self.assertTrue((chunks_dir / "chunk_001.db").exists())
         self.assertTrue((chunks_dir / "chunk_002.db").exists())
 
@@ -404,14 +378,20 @@ class TestConversationComparator(unittest.TestCase):
     def test_compute_hash(self):
         """Test content hash computation"""
         # Create two identical conversations with different IDs
-        conv1 = self._create_conversation("conv1", [
-            ("user", "Hello"),
-            ("assistant", "Hi there!"),
-        ])
-        conv2 = self._create_conversation("conv2", [
-            ("user", "Hello"),
-            ("assistant", "Hi there!"),
-        ])
+        conv1 = self._create_conversation(
+            "conv1",
+            [
+                ("user", "Hello"),
+                ("assistant", "Hi there!"),
+            ],
+        )
+        conv2 = self._create_conversation(
+            "conv2",
+            [
+                ("user", "Hello"),
+                ("assistant", "Hi there!"),
+            ],
+        )
 
         # Same content should produce same hash
         hash1 = self.comparator.compute_hash(conv1)
@@ -419,33 +399,45 @@ class TestConversationComparator(unittest.TestCase):
         self.assertEqual(hash1, hash2)
 
         # Different content should produce different hash
-        conv3 = self._create_conversation("conv3", [
-            ("user", "Hello"),
-            ("assistant", "How can I help you?"),
-        ])
+        conv3 = self._create_conversation(
+            "conv3",
+            [
+                ("user", "Hello"),
+                ("assistant", "How can I help you?"),
+            ],
+        )
         hash3 = self.comparator.compute_hash(conv3)
         self.assertNotEqual(hash1, hash3)
 
     def test_compute_similarity(self):
         """Test similarity computation between conversations"""
         # Very similar conversations
-        conv1 = self._create_conversation("conv1", [
-            ("user", "How do I write a Python function?"),
-            ("assistant", "To write a Python function, use the def keyword"),
-        ])
-        conv2 = self._create_conversation("conv2", [
-            ("user", "How do I write a Python function?"),
-            ("assistant", "To write a Python function, you use the def keyword"),
-        ])
+        conv1 = self._create_conversation(
+            "conv1",
+            [
+                ("user", "How do I write a Python function?"),
+                ("assistant", "To write a Python function, use the def keyword"),
+            ],
+        )
+        conv2 = self._create_conversation(
+            "conv2",
+            [
+                ("user", "How do I write a Python function?"),
+                ("assistant", "To write a Python function, you use the def keyword"),
+            ],
+        )
 
         similarity = self.comparator.compute_similarity(conv1, conv2)
         self.assertGreater(similarity, 0.8)  # Should be very similar
 
         # Different conversations
-        conv3 = self._create_conversation("conv3", [
-            ("user", "What's the weather like?"),
-            ("assistant", "I cannot check the weather"),
-        ])
+        conv3 = self._create_conversation(
+            "conv3",
+            [
+                ("user", "What's the weather like?"),
+                ("assistant", "I cannot check the weather"),
+            ],
+        )
 
         similarity2 = self.comparator.compute_similarity(conv1, conv3)
         self.assertLess(similarity2, 0.3)  # Should be very different
@@ -453,9 +445,7 @@ class TestConversationComparator(unittest.TestCase):
     def _create_conversation(self, conv_id: str, messages: list) -> ConversationTree:
         """Helper to create test conversation"""
         conv = ConversationTree(
-            id=conv_id,
-            title="Test",
-            metadata=ConversationMetadata()
+            id=conv_id, title="Test", metadata=ConversationMetadata()
         )
 
         parent_id = None
@@ -464,7 +454,7 @@ class TestConversationComparator(unittest.TestCase):
                 id=f"{conv_id}_msg_{i}",
                 role=MessageRole(role),
                 content=MessageContent(text=text),
-                parent_id=parent_id
+                parent_id=parent_id,
             )
             conv.add_message(msg)
             parent_id = msg.id
@@ -505,12 +495,10 @@ class TestCLIIntegration(unittest.TestCase):
         conv = ConversationTree(
             id="test",
             title="Test Conversation",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
         msg = Message(
-            id="msg1",
-            role=MessageRole.USER,
-            content=MessageContent(text="Hello")
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Hello")
         )
         conv.add_message(msg)
         db.save_conversation(conv)
@@ -519,9 +507,9 @@ class TestCLIIntegration(unittest.TestCase):
         # Test that database can be analyzed
         with ConversationDB(str(db_path)) as db:
             stats = db.get_statistics()
-            self.assertEqual(stats['total_conversations'], 1)
-            self.assertEqual(stats['total_messages'], 1)
+            self.assertEqual(stats["total_conversations"], 1)
+            self.assertEqual(stats["total_messages"], 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

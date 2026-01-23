@@ -5,12 +5,13 @@ Provides intelligent tab completion for VFS paths, conversation IDs,
 and message nodes.
 """
 
-from typing import Iterable, Optional, List
+from typing import Iterable, List, Optional
+
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
 from .vfs import VFSPathParser
-from .vfs_navigator import VFSNavigator, VFSEntry
+from .vfs_navigator import VFSEntry, VFSNavigator
 
 
 class VFSCompleter(Completer):
@@ -47,10 +48,12 @@ class VFSCompleter(Completer):
         try:
             # Navigator has its own caching, so just delegate
             return self.navigator.list_directory(vfs_path)
-        except:
+        except (ValueError, KeyError, OSError, RuntimeError):
             return None
 
-    def get_completions(self, document: Document, complete_event) -> Iterable[Completion]:
+    def get_completions(
+        self, document: Document, complete_event
+    ) -> Iterable[Completion]:
         """
         Generate completions for current input.
 
@@ -70,13 +73,13 @@ class VFSCompleter(Completer):
             return
 
         # The word we're completing
-        current_word = words[-1] if text_before_cursor[-1] != ' ' else ''
+        current_word = words[-1] if text_before_cursor[-1] != " " else ""
 
         # Determine context - are we completing a command or a path?
         # If first word is a VFS command (cd, ls, etc.), complete paths
-        vfs_commands = {'cd', 'ls', 'ln', 'cp', 'mv', 'rm', 'mkdir', 'pwd'}
+        vfs_commands = {"cd", "ls", "ln", "cp", "mv", "rm", "mkdir", "pwd"}
 
-        if len(words) == 1 and text_before_cursor[-1] != ' ':
+        if len(words) == 1 and text_before_cursor[-1] != " ":
             # Completing first word - could be command or chat input
             # Only complete if it looks like a command
             if any(cmd.startswith(current_word.lower()) for cmd in vfs_commands):
@@ -86,7 +89,7 @@ class VFSCompleter(Completer):
                             cmd,
                             start_position=-len(current_word),
                             display=cmd,
-                            display_meta='command'
+                            display_meta="command",
                         )
             return
 
@@ -98,7 +101,7 @@ class VFSCompleter(Completer):
         # Complete VFS path
         try:
             yield from self._complete_path(current_word)
-        except:
+        except (ValueError, KeyError, OSError, RuntimeError):
             pass  # Silently fail on completion errors
 
     def _complete_path(self, partial_path: str) -> Iterable[Completion]:
@@ -115,16 +118,16 @@ class VFSCompleter(Completer):
             cwd = self.get_cwd()
 
             # Determine the directory to list and the prefix to match
-            if '/' in partial_path:
+            if "/" in partial_path:
                 # Path contains slashes - complete from parent directory
-                parts = partial_path.rsplit('/', 1)
+                parts = partial_path.rsplit("/", 1)
                 if len(parts) == 2:
                     parent_path, prefix = parts
                     if not parent_path:
-                        parent_path = '/'
+                        parent_path = "/"
                 else:
-                    parent_path = '/'
-                    prefix = ''
+                    parent_path = "/"
+                    prefix = ""
             else:
                 # No slashes - complete from current directory
                 parent_path = cwd
@@ -133,7 +136,7 @@ class VFSCompleter(Completer):
             # Parse parent directory
             try:
                 parent_vfs_path = VFSPathParser.parse(parent_path, cwd)
-            except:
+            except (ValueError, KeyError):
                 return
 
             # List directory contents (uses navigator's cache)
@@ -164,21 +167,25 @@ class VFSCompleter(Completer):
 
                 # Determine display info
                 if entry.is_directory:
-                    display_name = name + '/'
-                    meta = 'directory'
+                    display_name = name + "/"
+                    meta = "directory"
                 elif entry.conversation_id:
                     display_name = name
-                    meta = entry.title[:40] if entry.title else 'conversation'
+                    meta = entry.title[:40] if entry.title else "conversation"
                 else:
                     display_name = name
-                    meta = 'file'
+                    meta = "file"
 
                 # Add role for message nodes
                 if entry.message_id:
-                    meta = f"{entry.role}: {entry.content_preview[:30]}" if entry.content_preview else entry.role
+                    meta = (
+                        f"{entry.role}: {entry.content_preview[:30]}"
+                        if entry.content_preview
+                        else entry.role
+                    )
 
                 # Calculate replacement
-                if '/' in partial_path:
+                if "/" in partial_path:
                     # Replace just the last component
                     replacement = name
                 else:
@@ -188,7 +195,7 @@ class VFSCompleter(Completer):
                     replacement,
                     start_position=-len(prefix),
                     display=display_name,
-                    display_meta=meta
+                    display_meta=meta,
                 )
                 completion_count += 1
 
@@ -199,7 +206,7 @@ class VFSCompleter(Completer):
                     "",
                     start_position=0,
                     display="...",
-                    display_meta=f"({remaining} more matches - type more chars to narrow down)"
+                    display_meta=f"({remaining} more matches - type more chars to narrow down)",
                 )
 
         except Exception:

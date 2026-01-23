@@ -4,11 +4,12 @@ Visualization command handlers
 Implements: tree, paths, show
 """
 
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
+
 from ctk.core.command_dispatcher import CommandResult
-from ctk.core.vfs_navigator import VFSNavigator
-from ctk.core.vfs import VFSPathParser, PathType
 from ctk.core.database import ConversationDB
+from ctk.core.vfs import PathType, VFSPathParser
+from ctk.core.vfs_navigator import VFSNavigator
 
 
 class VisualizationCommands:
@@ -27,7 +28,7 @@ class VisualizationCommands:
         self.navigator = navigator
         self.tui = tui_instance
 
-    def cmd_tree(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_tree(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Display conversation tree structure
 
@@ -49,7 +50,7 @@ class VisualizationCommands:
 
             # Parse as path
             try:
-                if conv_id_or_path.startswith('/'):
+                if conv_id_or_path.startswith("/"):
                     parsed = VFSPathParser.parse(conv_id_or_path)
                     conv_id = parsed.conversation_id
                 else:
@@ -58,9 +59,11 @@ class VisualizationCommands:
                         current_path = self.tui.vfs_cwd
                         parsed_current = VFSPathParser.parse(current_path)
                         # Try prefix resolution in /chats
-                        chats_path = VFSPathParser.parse('/chats')
+                        chats_path = VFSPathParser.parse("/chats")
                         try:
-                            conv_id = self.navigator.resolve_prefix(conv_id_or_path, chats_path)
+                            conv_id = self.navigator.resolve_prefix(
+                                conv_id_or_path, chats_path
+                            )
                             if not conv_id:
                                 conv_id = conv_id_or_path  # Use as-is
                         except ValueError:
@@ -68,11 +71,17 @@ class VisualizationCommands:
                     else:
                         conv_id = conv_id_or_path
             except Exception as e:
-                return CommandResult(success=False, output="", error=f"tree: Invalid path: {e}")
+                return CommandResult(
+                    success=False, output="", error=f"tree: Invalid path: {e}"
+                )
         else:
             # Use current path
             if not self.tui:
-                return CommandResult(success=False, output="", error="tree: No conversation in current context")
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error="tree: No conversation in current context",
+                )
 
             current_path = self.tui.vfs_cwd
             parsed = VFSPathParser.parse(current_path)
@@ -80,12 +89,20 @@ class VisualizationCommands:
             if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
                 conv_id = parsed.conversation_id
             else:
-                return CommandResult(success=False, output="", error="tree: Not in a conversation directory")
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error="tree: Not in a conversation directory",
+                )
 
         # Load conversation
         conversation = self.db.load_conversation(conv_id)
         if not conversation:
-            return CommandResult(success=False, output="", error=f"tree: Conversation not found: {conv_id}")
+            return CommandResult(
+                success=False,
+                output="",
+                error=f"tree: Conversation not found: {conv_id}",
+            )
 
         # Build tree visualization
         output_lines = []
@@ -106,14 +123,16 @@ class VisualizationCommands:
         output_lines.append(f"Total paths: {len(paths)}")
         output_lines.append(f"Title: {conversation.title or '(untitled)'}")
 
-        output = '\n'.join(output_lines) + '\n'
+        output = "\n".join(output_lines) + "\n"
         return CommandResult(success=True, output=output)
 
     def _format_tree(self, conversation) -> str:
         """Format conversation tree as text"""
         output_lines = []
 
-        def print_tree_node(message_ids: List[str], prefix: str = "", is_last: bool = True, visited=None):
+        def print_tree_node(
+            message_ids: List[str], prefix: str = "", is_last: bool = True, visited=None
+        ):
             """Recursively print tree structure"""
             if visited is None:
                 visited = set()
@@ -128,21 +147,35 @@ class VisualizationCommands:
                     continue
 
                 # Determine connector
-                is_last_item = (i == len(message_ids) - 1)
+                is_last_item = i == len(message_ids) - 1
                 connector = "└─" if is_last_item else "├─"
 
                 # Show message info
                 role_emoji = {"system": "⚙", "user": "U", "assistant": "A", "tool": "T"}
-                emoji = role_emoji.get(message.role.value if message.role else "user", "?")
+                emoji = role_emoji.get(
+                    message.role.value if message.role else "user", "?"
+                )
 
                 # Content preview
-                content_text = message.content.get_text() if hasattr(message.content, 'get_text') else str(message.content.text if hasattr(message.content, 'text') else message.content)
-                content_preview = content_text[:40].replace('\n', ' ').strip() if content_text else ""
+                content_text = (
+                    message.content.get_text()
+                    if hasattr(message.content, "get_text")
+                    else str(
+                        message.content.text
+                        if hasattr(message.content, "text")
+                        else message.content
+                    )
+                )
+                content_preview = (
+                    content_text[:40].replace("\n", " ").strip() if content_text else ""
+                )
                 if len(content_text) > 40:
                     content_preview += "..."
 
                 # Format line
-                output_lines.append(f"{prefix}{connector}{emoji} {msg_id[:8]} {content_preview}")
+                output_lines.append(
+                    f"{prefix}{connector}{emoji} {msg_id[:8]} {content_preview}"
+                )
 
                 # Print children
                 children = conversation.get_children(msg_id)
@@ -156,9 +189,9 @@ class VisualizationCommands:
         # Start with root messages
         print_tree_node(conversation.root_message_ids)
 
-        return '\n'.join(output_lines)
+        return "\n".join(output_lines)
 
-    def cmd_paths(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_paths(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         List all paths in conversation tree
 
@@ -177,14 +210,16 @@ class VisualizationCommands:
         if args:
             conv_id_or_path = args[0]
             try:
-                if conv_id_or_path.startswith('/'):
+                if conv_id_or_path.startswith("/"):
                     parsed = VFSPathParser.parse(conv_id_or_path)
                     conv_id = parsed.conversation_id
                 else:
                     if self.tui:
-                        chats_path = VFSPathParser.parse('/chats')
+                        chats_path = VFSPathParser.parse("/chats")
                         try:
-                            conv_id = self.navigator.resolve_prefix(conv_id_or_path, chats_path)
+                            conv_id = self.navigator.resolve_prefix(
+                                conv_id_or_path, chats_path
+                            )
                             if not conv_id:
                                 conv_id = conv_id_or_path
                         except ValueError:
@@ -192,10 +227,16 @@ class VisualizationCommands:
                     else:
                         conv_id = conv_id_or_path
             except Exception as e:
-                return CommandResult(success=False, output="", error=f"paths: Invalid path: {e}")
+                return CommandResult(
+                    success=False, output="", error=f"paths: Invalid path: {e}"
+                )
         else:
             if not self.tui:
-                return CommandResult(success=False, output="", error="paths: No conversation in current context")
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error="paths: No conversation in current context",
+                )
 
             current_path = self.tui.vfs_cwd
             parsed = VFSPathParser.parse(current_path)
@@ -203,12 +244,20 @@ class VisualizationCommands:
             if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
                 conv_id = parsed.conversation_id
             else:
-                return CommandResult(success=False, output="", error="paths: Not in a conversation directory")
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error="paths: Not in a conversation directory",
+                )
 
         # Load conversation
         conversation = self.db.load_conversation(conv_id)
         if not conversation:
-            return CommandResult(success=False, output="", error=f"paths: Conversation not found: {conv_id}")
+            return CommandResult(
+                success=False,
+                output="",
+                error=f"paths: Conversation not found: {conv_id}",
+            )
 
         # Get all paths
         paths = conversation.get_all_paths()
@@ -221,18 +270,28 @@ class VisualizationCommands:
             output_lines.append(f"\nPath {i} ({len(path)} messages):")
             for msg in path:
                 role_label = msg.role.value.title() if msg.role else "User"
-                content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content.text if hasattr(msg.content, 'text') else msg.content)
-                preview = content_text[:50].replace('\n', ' ').strip() if content_text else ""
+                content_text = (
+                    msg.content.get_text()
+                    if hasattr(msg.content, "get_text")
+                    else str(
+                        msg.content.text
+                        if hasattr(msg.content, "text")
+                        else msg.content
+                    )
+                )
+                preview = (
+                    content_text[:50].replace("\n", " ").strip() if content_text else ""
+                )
                 if len(content_text) > 50:
                     preview += "..."
                 output_lines.append(f"  {role_label}: {preview}")
 
         output_lines.append("=" * 80)
 
-        output = '\n'.join(output_lines) + '\n'
+        output = "\n".join(output_lines) + "\n"
         return CommandResult(success=True, output=output)
 
-    def cmd_show(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_show(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Show conversation content
 
@@ -255,7 +314,9 @@ class VisualizationCommands:
         if not args:
             # Try current conversation
             if not self.tui:
-                return CommandResult(success=False, output="", error="show: Conversation ID required")
+                return CommandResult(
+                    success=False, output="", error="show: Conversation ID required"
+                )
 
             current_path = self.tui.vfs_cwd
             parsed = VFSPathParser.parse(current_path)
@@ -263,52 +324,64 @@ class VisualizationCommands:
             if parsed.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
                 conv_id = parsed.conversation_id
             else:
-                return CommandResult(success=False, output="", error="show: Not in a conversation. Usage: show <conv_id>")
-            path_selection = 'longest'
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error="show: Not in a conversation. Usage: show <conv_id>",
+                )
+            path_selection = "longest"
         else:
             # Parse arguments
             conv_id_arg = None
-            path_selection = 'longest'
+            path_selection = "longest"
 
             i = 0
             while i < len(args):
                 arg = args[i]
-                if arg == '--path' and i + 1 < len(args):
+                if arg == "--path" and i + 1 < len(args):
                     path_selection = args[i + 1]
                     i += 2
-                elif arg == '-l':
-                    path_selection = 'longest'
+                elif arg == "-l":
+                    path_selection = "longest"
                     i += 1
-                elif arg == '-L':
-                    path_selection = 'latest'
+                elif arg == "-L":
+                    path_selection = "latest"
                     i += 1
-                elif arg.startswith('-'):
-                    return CommandResult(success=False, output="", error=f"show: Unknown option: {arg}")
+                elif arg.startswith("-"):
+                    return CommandResult(
+                        success=False, output="", error=f"show: Unknown option: {arg}"
+                    )
                 else:
                     if conv_id_arg is None:
                         conv_id_arg = arg
                     i += 1
 
             if not conv_id_arg:
-                return CommandResult(success=False, output="", error="show: Conversation ID required")
+                return CommandResult(
+                    success=False, output="", error="show: Conversation ID required"
+                )
 
             # Resolve conversation ID (with prefix support via VFS)
             conv_id_or_path = conv_id_arg
 
             try:
-                if conv_id_or_path.startswith('/'):
+                if conv_id_or_path.startswith("/"):
                     parsed = VFSPathParser.parse(conv_id_or_path)
                     conv_id = parsed.conversation_id
                 else:
                     # Try prefix resolution
-                    chats_path = VFSPathParser.parse('/chats')
+                    chats_path = VFSPathParser.parse("/chats")
                     try:
-                        resolved = self.navigator.resolve_prefix(conv_id_or_path, chats_path)
+                        resolved = self.navigator.resolve_prefix(
+                            conv_id_or_path, chats_path
+                        )
                         conv_id = resolved if resolved else conv_id_or_path
                     except ValueError:
                         conv_id = conv_id_or_path
             except Exception as e:
-                return CommandResult(success=False, output="", error=f"show: Invalid path: {e}")
+                return CommandResult(
+                    success=False, output="", error=f"show: Invalid path: {e}"
+                )
 
         # Use shared helper
         result = show_conversation_helper(
@@ -316,20 +389,23 @@ class VisualizationCommands:
             conv_id=conv_id,
             path_selection=path_selection,
             plain_output=True,
-            show_metadata=True
+            show_metadata=True,
         )
 
-        if not result['success']:
-            return CommandResult(success=False, output="", error=f"show: {result['error']}")
+        if not result["success"]:
+            return CommandResult(
+                success=False, output="", error=f"show: {result['error']}"
+            )
 
         # Use Rich formatting if we have a TUI with console
-        conversation = result['conversation']
-        nav = result['navigator']
-        path = result['path']
-        path_count = result['path_count']
+        conversation = result["conversation"]
+        nav = result["navigator"]
+        path = result["path"]
+        path_count = result["path_count"]
 
-        if self.tui and hasattr(self.tui, 'console'):
+        if self.tui and hasattr(self.tui, "console"):
             from io import StringIO
+
             from rich.console import Console
 
             # Create a string buffer to capture Rich output
@@ -337,7 +413,9 @@ class VisualizationCommands:
             console = Console(file=string_io, force_terminal=True)
 
             # Metadata header
-            console.print(f"\n[bold]Conversation:[/bold] {conversation.title or '(untitled)'}")
+            console.print(
+                f"\n[bold]Conversation:[/bold] {conversation.title or '(untitled)'}"
+            )
             console.print(f"[dim]ID:[/dim] {conversation.id}")
             if conversation.metadata:
                 if conversation.metadata.source:
@@ -345,9 +423,13 @@ class VisualizationCommands:
                 if conversation.metadata.model:
                     console.print(f"[dim]Model:[/dim] {conversation.metadata.model}")
                 if conversation.metadata.created_at:
-                    console.print(f"[dim]Created:[/dim] {conversation.metadata.created_at}")
+                    console.print(
+                        f"[dim]Created:[/dim] {conversation.metadata.created_at}"
+                    )
                 if conversation.metadata.tags:
-                    console.print(f"[dim]Tags:[/dim] {', '.join(conversation.metadata.tags)}")
+                    console.print(
+                        f"[dim]Tags:[/dim] {', '.join(conversation.metadata.tags)}"
+                    )
             console.print(f"[dim]Total messages:[/dim] {len(conversation.message_map)}")
             console.print(f"[dim]Paths:[/dim] {path_count}")
             console.print()
@@ -355,28 +437,45 @@ class VisualizationCommands:
             if not path:
                 console.print("[italic](no messages)[/italic]")
             else:
-                console.print(f"[bold]Messages (path: {path_selection}, {len(path)} messages):[/bold]")
+                console.print(
+                    f"[bold]Messages (path: {path_selection}, {len(path)} messages):[/bold]"
+                )
                 console.print("=" * 80)
 
                 for msg in path:
                     role_label = msg.role.value.title() if msg.role else "User"
-                    role_color = {"User": "cyan", "Assistant": "magenta", "System": "yellow", "Tool": "green"}.get(role_label, "white")
-                    content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
-                    console.print(f"\n[bold {role_color}][{role_label}][/bold {role_color}]")
+                    role_color = {
+                        "User": "cyan",
+                        "Assistant": "magenta",
+                        "System": "yellow",
+                        "Tool": "green",
+                    }.get(role_label, "white")
+                    content_text = (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    )
+                    console.print(
+                        f"\n[bold {role_color}][{role_label}][/bold {role_color}]"
+                    )
                     console.print(content_text)
 
                 console.print("=" * 80)
 
             if path_count > 1:
-                console.print(f"\n[italic]Note: This conversation has {path_count} paths[/italic]")
-                console.print("[dim]Use 'show <id> --path N' or '-L' for latest path[/dim]")
+                console.print(
+                    f"\n[italic]Note: This conversation has {path_count} paths[/italic]"
+                )
+                console.print(
+                    "[dim]Use 'show <id> --path N' or '-L' for latest path[/dim]"
+                )
 
             return CommandResult(success=True, output=string_io.getvalue())
         else:
             # Plain text output
-            return CommandResult(success=True, output=result['output'])
+            return CommandResult(success=True, output=result["output"])
 
-    def cmd_help(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_help(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Show help for shell commands
 
@@ -461,7 +560,9 @@ Examples:
         return CommandResult(success=True, output=help_text)
 
 
-def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
+def create_visualization_commands(
+    db: ConversationDB, navigator: VFSNavigator, tui_instance=None
+) -> Dict[str, Callable]:
     """
     Create visualization command handlers
 
@@ -476,8 +577,8 @@ def create_visualization_commands(db: ConversationDB, navigator: VFSNavigator, t
     viz = VisualizationCommands(db, navigator, tui_instance)
 
     return {
-        'tree': viz.cmd_tree,
-        'paths': viz.cmd_paths,
-        'show': viz.cmd_show,
-        'help': viz.cmd_help,
+        "tree": viz.cmd_tree,
+        "paths": viz.cmd_paths,
+        "show": viz.cmd_show,
+        "help": viz.cmd_help,
     }

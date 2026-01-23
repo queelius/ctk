@@ -12,8 +12,8 @@ Design:
 - Reusable across all interfaces (CLI, TUI, REST API, etc.)
 """
 
-from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 from ctk.core.database import ConversationDB
 from ctk.core.models import ConversationTree
@@ -21,6 +21,7 @@ from ctk.core.models import ConversationTree
 
 class CommandError(Exception):
     """Raised when a command fails"""
+
     pass
 
 
@@ -55,10 +56,9 @@ class ConversationResolver:
             if len(matches) == 0:
                 raise CommandError(f"No conversation found matching '{conv_id}'")
             elif len(matches) > 1:
-                match_list = '\n'.join([
-                    f"  - {m.id[:8]}... {m.title}"
-                    for m in matches[:5]
-                ])
+                match_list = "\n".join(
+                    [f"  - {m.id[:8]}... {m.title}" for m in matches[:5]]
+                )
                 raise CommandError(
                     f"Multiple conversations match '{conv_id}':\n{match_list}\n"
                     f"Please provide more characters to uniquely identify the conversation"
@@ -84,7 +84,7 @@ class ListCommand:
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
-        include_archived: bool = False
+        include_archived: bool = False,
     ) -> List[Any]:
         """
         List conversations from database.
@@ -104,21 +104,21 @@ class ListCommand:
             List of conversation summaries
         """
         filter_args = {
-            'limit': limit,
-            'source': source,
-            'model': model,
-            'include_archived': include_archived,
+            "limit": limit,
+            "source": source,
+            "model": model,
+            "include_archived": include_archived,
         }
 
         if tags:
-            filter_args['tags'] = tags
+            filter_args["tags"] = tags
 
         if archived is not None:
-            filter_args['archived'] = archived
+            filter_args["archived"] = archived
         if starred is not None:
-            filter_args['starred'] = starred
+            filter_args["starred"] = starred
         if pinned is not None:
-            filter_args['pinned'] = pinned
+            filter_args["pinned"] = pinned
 
         return db.list_conversations(**filter_args)
 
@@ -146,8 +146,8 @@ class SearchCommand:
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
         include_archived: bool = False,
-        order_by: str = 'updated_at',
-        ascending: bool = False
+        order_by: str = "updated_at",
+        ascending: bool = False,
     ) -> List[Any]:
         """
         Search conversations with advanced filtering.
@@ -161,30 +161,30 @@ class SearchCommand:
             List of matching conversations
         """
         search_args = {
-            'query_text': query_text,
-            'limit': limit,
-            'offset': offset,
-            'title_only': title_only,
-            'content_only': content_only,
-            'date_from': date_from,
-            'date_to': date_to,
-            'source': source,
-            'model': model,
-            'tags': tags,
-            'min_messages': min_messages,
-            'max_messages': max_messages,
-            'has_branches': has_branches,
-            'include_archived': include_archived,
-            'order_by': order_by,
-            'ascending': ascending,
+            "query_text": query_text,
+            "limit": limit,
+            "offset": offset,
+            "title_only": title_only,
+            "content_only": content_only,
+            "date_from": date_from,
+            "date_to": date_to,
+            "source": source,
+            "model": model,
+            "tags": tags,
+            "min_messages": min_messages,
+            "max_messages": max_messages,
+            "has_branches": has_branches,
+            "include_archived": include_archived,
+            "order_by": order_by,
+            "ascending": ascending,
         }
 
         if archived is not None:
-            search_args['archived'] = archived
+            search_args["archived"] = archived
         if starred is not None:
-            search_args['starred'] = starred
+            search_args["starred"] = starred
         if pinned is not None:
-            search_args['pinned'] = pinned
+            search_args["pinned"] = pinned
 
         return db.search_conversations(**search_args)
 
@@ -197,7 +197,7 @@ class DeleteCommand:
         db: ConversationDB,
         conv_id: str,
         confirm_fn: Optional[Callable[[ConversationTree], bool]] = None,
-        skip_confirmation: bool = False
+        skip_confirmation: bool = False,
     ) -> ConversationTree:
         """
         Delete a conversation from database.
@@ -237,9 +237,7 @@ class ArchiveCommand:
 
     @staticmethod
     def execute(
-        db: ConversationDB,
-        conv_id: str,
-        archive: bool = True
+        db: ConversationDB, conv_id: str, archive: bool = True
     ) -> ConversationTree:
         """
         Archive or unarchive a conversation.
@@ -270,9 +268,7 @@ class StarCommand:
 
     @staticmethod
     def execute(
-        db: ConversationDB,
-        conv_id: str,
-        star: bool = True
+        db: ConversationDB, conv_id: str, star: bool = True
     ) -> ConversationTree:
         """
         Star or unstar a conversation.
@@ -302,11 +298,7 @@ class PinCommand:
     """Pin/unpin a conversation"""
 
     @staticmethod
-    def execute(
-        db: ConversationDB,
-        conv_id: str,
-        pin: bool = True
-    ) -> ConversationTree:
+    def execute(db: ConversationDB, conv_id: str, pin: bool = True) -> ConversationTree:
         """
         Pin or unpin a conversation.
 
@@ -335,10 +327,7 @@ class ShowCommand:
     """Show a specific conversation"""
 
     @staticmethod
-    def execute(
-        db: ConversationDB,
-        conv_id: str
-    ) -> ConversationTree:
+    def execute(db: ConversationDB, conv_id: str) -> ConversationTree:
         """
         Load and return a conversation.
 
@@ -360,9 +349,7 @@ class TitleCommand:
 
     @staticmethod
     def execute(
-        db: ConversationDB,
-        conv_id: str,
-        new_title: str
+        db: ConversationDB, conv_id: str, new_title: str
     ) -> tuple[ConversationTree, str]:
         """
         Rename a conversation.
@@ -392,9 +379,7 @@ class DuplicateCommand:
 
     @staticmethod
     def execute(
-        db: ConversationDB,
-        conv_id: str,
-        new_title: Optional[str] = None
+        db: ConversationDB, conv_id: str, new_title: Optional[str] = None
     ) -> tuple[str, ConversationTree]:
         """
         Duplicate a conversation.

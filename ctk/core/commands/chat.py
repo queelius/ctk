@@ -4,7 +4,8 @@ Chat and LLM command handlers
 Implements: chat, say
 """
 
-from typing import List, Dict, Callable, Optional
+from typing import Callable, Dict, List, Optional
+
 from ctk.core.command_dispatcher import CommandResult
 
 
@@ -30,16 +31,22 @@ class ChatCommands:
         Returns:
             Conversation ID if loaded, None otherwise
         """
-        from ctk.core.vfs import VFSPathParser, PathType
+        from ctk.core.vfs import PathType, VFSPathParser
+
         current_vfs_path = self.tui.vfs_cwd
 
         try:
             parsed_path = VFSPathParser.parse(current_vfs_path)
 
             # Check if we're in a conversation or message node
-            if parsed_path.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+            if parsed_path.path_type in [
+                PathType.CONVERSATION_ROOT,
+                PathType.MESSAGE_NODE,
+            ]:
                 conv_id = parsed_path.conversation_id
-                message_path = parsed_path.message_path if parsed_path.message_path else []
+                message_path = (
+                    parsed_path.message_path if parsed_path.message_path else []
+                )
 
                 # Load conversation from database
                 if self.tui.db:
@@ -75,7 +82,7 @@ class ChatCommands:
 
         for i, node_name in enumerate(message_path):
             # Extract index from node name (m1 -> 1, m2 -> 2)
-            if not node_name.lower().startswith('m'):
+            if not node_name.lower().startswith("m"):
                 break
 
             try:
@@ -101,7 +108,7 @@ class ChatCommands:
         if current_msg:
             self.tui.current_message = current_msg
 
-    def cmd_chat(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_chat(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Enter chat mode or send a message
 
@@ -121,7 +128,7 @@ class ChatCommands:
         if stdin:
             message = stdin.strip()
         elif args:
-            message = ' '.join(args)
+            message = " ".join(args)
         else:
             message = None
 
@@ -129,7 +136,7 @@ class ChatCommands:
         self._load_conversation_from_vfs()
 
         # Switch to chat mode
-        self.tui.mode = 'chat'
+        self.tui.mode = "chat"
 
         # If message provided, send it immediately
         if message:
@@ -137,11 +144,10 @@ class ChatCommands:
             self.tui.chat(message)
 
         return CommandResult(
-            success=True,
-            output="Entering chat mode. Type /exit to return to shell.\n"
+            success=True, output="Entering chat mode. Type /exit to return to shell.\n"
         )
 
-    def cmd_say(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_say(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Send a message to the LLM without entering chat mode
 
@@ -165,12 +171,12 @@ class ChatCommands:
         if stdin:
             message = stdin.strip()
         elif args:
-            message = ' '.join(args)
+            message = " ".join(args)
         else:
             return CommandResult(
                 success=False,
                 output="",
-                error="say: no message provided. Usage: say <message>"
+                error="say: no message provided. Usage: say <message>",
             )
 
         # Load conversation from current VFS path if in a conversation
@@ -182,9 +188,7 @@ class ChatCommands:
             return CommandResult(success=True, output="")
         except Exception as e:
             return CommandResult(
-                success=False,
-                output="",
-                error=f"say: error: {str(e)}"
+                success=False, output="", error=f"say: error: {str(e)}"
             )
 
 
@@ -201,6 +205,6 @@ def create_chat_commands(tui_instance=None) -> Dict[str, Callable]:
     chat_cmds = ChatCommands(tui_instance)
 
     return {
-        'chat': chat_cmds.cmd_chat,
-        'say': chat_cmds.cmd_say,
+        "chat": chat_cmds.cmd_chat,
+        "say": chat_cmds.cmd_say,
     }

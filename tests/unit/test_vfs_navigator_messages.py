@@ -5,11 +5,14 @@ Tests that VFSNavigator correctly lists conversation directories
 and message nodes.
 """
 
-import pytest
 from datetime import datetime
-from ctk.core.vfs_navigator import VFSNavigator, VFSEntry
-from ctk.core.vfs import VFSPathParser, PathType
-from ctk.core.models import ConversationTree, Message, MessageRole, MessageContent
+
+import pytest
+
+from ctk.core.models import (ConversationTree, Message, MessageContent,
+                             MessageRole)
+from ctk.core.vfs import PathType, VFSPathParser
+from ctk.core.vfs_navigator import VFSEntry, VFSNavigator
 
 
 class TestVFSNavigatorMessages:
@@ -26,7 +29,7 @@ class TestVFSNavigatorMessages:
             id="msg-1",
             role=MessageRole.USER,
             content=MessageContent(text="First message from user"),
-            timestamp=datetime(2025, 1, 1, 10, 0)
+            timestamp=datetime(2025, 1, 1, 10, 0),
         )
 
         m2 = Message(
@@ -34,7 +37,7 @@ class TestVFSNavigatorMessages:
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Response from assistant"),
             parent_id="msg-1",
-            timestamp=datetime(2025, 1, 1, 10, 5)
+            timestamp=datetime(2025, 1, 1, 10, 5),
         )
 
         m3 = Message(
@@ -42,7 +45,7 @@ class TestVFSNavigatorMessages:
             role=MessageRole.USER,
             content=MessageContent(text="Another user message on main branch"),
             parent_id="msg-2",
-            timestamp=datetime(2025, 1, 1, 10, 10)
+            timestamp=datetime(2025, 1, 1, 10, 10),
         )
 
         m4 = Message(
@@ -50,7 +53,7 @@ class TestVFSNavigatorMessages:
             role=MessageRole.USER,
             content=MessageContent(text="Alternative branch message"),
             parent_id="msg-2",
-            timestamp=datetime(2025, 1, 1, 10, 15)
+            timestamp=datetime(2025, 1, 1, 10, 15),
         )
 
         # Add to tree
@@ -64,6 +67,7 @@ class TestVFSNavigatorMessages:
     @pytest.fixture
     def mock_db(self, sample_conversation):
         """Create a mock database with test conversation"""
+
         class MockDB:
             def __init__(self, conv):
                 self.conv = conv
@@ -168,7 +172,7 @@ class TestVFSNavigatorMessages:
             id="msg-long",
             role=MessageRole.USER,
             content=MessageContent(text="A" * 100),  # 100 chars
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         conv.add_message(long_msg)
 

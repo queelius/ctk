@@ -7,21 +7,19 @@ ConversationTree model.
 """
 
 import uuid
-from typing import List, Optional, Tuple, Any
 from datetime import datetime
+from typing import Any, List, Optional, Tuple
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
 
-from .models import (
-    ConversationTree,
-    Message as DBMessage,
-    MessageRole as DBMessageRole,
-    MessageContent,
-)
+from .models import ConversationTree
+from .models import Message as DBMessage
+from .models import MessageContent
+from .models import MessageRole as DBMessageRole
 
 
 class TreeMessage:
@@ -33,13 +31,20 @@ class TreeMessage:
 
     Note: role can be any enum-like object with a .value attribute.
     """
-    def __init__(self, role: Any, content: str, parent: Optional['TreeMessage'] = None,
-                 model: Optional[str] = None, user: Optional[str] = None):
+
+    def __init__(
+        self,
+        role: Any,
+        content: str,
+        parent: Optional["TreeMessage"] = None,
+        model: Optional[str] = None,
+        user: Optional[str] = None,
+    ):
         self.id = str(uuid.uuid4())
         self.role = role  # Can be DBMessageRole or LLMMessageRole
         self.content = content
         self.parent = parent
-        self.children: List['TreeMessage'] = []
+        self.children: List["TreeMessage"] = []
         self.timestamp = datetime.now()
         self.metadata: dict = {}
 
@@ -51,7 +56,7 @@ class TreeMessage:
         if parent:
             parent.children.append(self)
 
-    def get_path_to_root(self) -> List['TreeMessage']:
+    def get_path_to_root(self) -> List["TreeMessage"]:
         """Get path from root to this message"""
         path = []
         current = self
@@ -93,7 +98,9 @@ class TreeMessage:
         # Current message line
         connector = "└─" if is_last else "├─"
         role = self.role.value[0].upper()  # U, A, S, etc.
-        content = self.content[:max_content_length].replace('\n', ' ') if self.content else ""
+        content = (
+            self.content[:max_content_length].replace("\n", " ") if self.content else ""
+        )
         if len(self.content) > max_content_length:
             content += "..."
 
@@ -104,10 +111,12 @@ class TreeMessage:
             extension = "  " if is_last else "│ "
             new_prefix = prefix + extension
             for i, child in enumerate(self.children):
-                is_last_child = (i == len(self.children) - 1)
-                lines.append(child.format_tree(new_prefix, is_last_child, max_content_length))
+                is_last_child = i == len(self.children) - 1
+                lines.append(
+                    child.format_tree(new_prefix, is_last_child, max_content_length)
+                )
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def format_message(self, index: Optional[int] = None, show_metadata=False) -> str:
         """
@@ -141,10 +150,15 @@ class TreeMessage:
         lines.append("-" * 80)
         lines.append(self.content)
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
-    def print_message(self, console: Console, index: Optional[int] = None,
-                     show_metadata=False, render_markdown=True):
+    def print_message(
+        self,
+        console: Console,
+        index: Optional[int] = None,
+        show_metadata=False,
+        render_markdown=True,
+    ):
         """
         Pretty-print a single message using Rich.
 
@@ -155,13 +169,13 @@ class TreeMessage:
             render_markdown: Whether to render markdown content
         """
         # Determine role color and icon
-        if self.role.value.lower() == 'user':
+        if self.role.value.lower() == "user":
             role_color = "green"
             role_icon = "👤"
-        elif self.role.value.lower() == 'assistant':
+        elif self.role.value.lower() == "assistant":
             role_color = "magenta"
             role_icon = "🤖"
-        elif self.role.value.lower() == 'system':
+        elif self.role.value.lower() == "system":
             role_color = "yellow"
             role_icon = "⚙️"
         else:
@@ -172,7 +186,9 @@ class TreeMessage:
         header_text = Text()
         if index is not None:
             header_text.append(f"[{index}] ", style="dim")
-        header_text.append(f"{role_icon} {self.role.value.upper()}", style=f"bold {role_color}")
+        header_text.append(
+            f"{role_icon} {self.role.value.upper()}", style=f"bold {role_color}"
+        )
 
         # Add metadata
         if show_metadata and (self.model or self.user):
@@ -233,15 +249,15 @@ class ConversationTreeNavigator:
             model = None
             user = None
             if db_msg.metadata:
-                model = db_msg.metadata.get('model')
-                user = db_msg.metadata.get('user')
+                model = db_msg.metadata.get("model")
+                user = db_msg.metadata.get("user")
 
             tree_msg = TreeMessage(
                 role=db_msg.role,
                 content=db_msg.content.text or "",
                 parent=None,  # Will link in second pass
                 model=model,
-                user=user
+                user=user,
             )
             tree_msg.id = db_msg.id  # Preserve original ID
             tree_msg.timestamp = db_msg.timestamp or datetime.now()
@@ -251,7 +267,7 @@ class ConversationTreeNavigator:
 
         # Second pass: link parents and children
         for tree_msg in self.message_map.values():
-            parent_id = getattr(tree_msg, '_parent_id', None)
+            parent_id = getattr(tree_msg, "_parent_id", None)
             if parent_id:
                 parent = self.message_map.get(parent_id)
                 if parent:
@@ -263,8 +279,8 @@ class ConversationTreeNavigator:
                 self.root = tree_msg
 
             # Clean up temporary attribute
-            if hasattr(tree_msg, '_parent_id'):
-                delattr(tree_msg, '_parent_id')
+            if hasattr(tree_msg, "_parent_id"):
+                delattr(tree_msg, "_parent_id")
 
     def get_all_paths(self) -> List[List[TreeMessage]]:
         """Get all paths from root to leaves"""
@@ -348,12 +364,12 @@ class ConversationTreeNavigator:
             # Show last message preview
             if path:
                 last_msg = path[-1]
-                preview = last_msg.content[:50].replace('\n', ' ')
+                preview = last_msg.content[:50].replace("\n", " ")
                 if len(last_msg.content) > 50:
                     preview += "..."
                 lines.append(f"  └─ {last_msg.role.value}: {preview}")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def format_path(self, path: List[TreeMessage], show_metadata=False) -> str:
         """
@@ -375,7 +391,7 @@ class ConversationTreeNavigator:
         lines.append("")
         lines.append("=" * 80)
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def format_tree(self, max_content_length=30) -> str:
         """
@@ -395,7 +411,7 @@ class ConversationTreeNavigator:
         lines.append("=" * 80)
         lines.append("\nLegend: U=user, A=assistant, S=system")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def print_tree(self, console: Optional[Console] = None, max_content_length=30):
         """
@@ -419,17 +435,21 @@ class ConversationTreeNavigator:
             connector = "└─" if is_last else "├─"
 
             # Color based on role
-            if msg.role.value.lower() == 'user':
+            if msg.role.value.lower() == "user":
                 role_style = "bold green"
-            elif msg.role.value.lower() == 'assistant':
+            elif msg.role.value.lower() == "assistant":
                 role_style = "bold magenta"
-            elif msg.role.value.lower() == 'system':
+            elif msg.role.value.lower() == "system":
                 role_style = "bold yellow"
             else:
                 role_style = "bold white"
 
             role = msg.role.value[0].upper()
-            content = msg.content[:max_content_length].replace('\n', ' ') if msg.content else ""
+            content = (
+                msg.content[:max_content_length].replace("\n", " ")
+                if msg.content
+                else ""
+            )
             if len(msg.content) > max_content_length:
                 content += "..."
 
@@ -449,15 +469,20 @@ class ConversationTreeNavigator:
                 extension = "  " if is_last else "│ "
                 new_prefix = prefix + extension
                 for i, child in enumerate(msg.children):
-                    is_last_child = (i == len(msg.children) - 1)
+                    is_last_child = i == len(msg.children) - 1
                     print_tree_node(child, new_prefix, is_last_child)
 
         print_tree_node(self.root)
         console.print("═" * console.width, style="cyan")
         console.print("\n[dim]Legend: U=user, A=assistant, S=system[/dim]")
 
-    def print_path(self, path: List[TreeMessage], console: Optional[Console] = None,
-                  show_metadata=False, render_markdown=True):
+    def print_path(
+        self,
+        path: List[TreeMessage],
+        console: Optional[Console] = None,
+        show_metadata=False,
+        render_markdown=True,
+    ):
         """
         Pretty-print a path (list of messages) using Rich.
 
@@ -473,8 +498,12 @@ class ConversationTreeNavigator:
         console.print("═" * console.width, style="cyan")
 
         for i, msg in enumerate(path):
-            msg.print_message(console, index=i, show_metadata=show_metadata,
-                            render_markdown=render_markdown)
+            msg.print_message(
+                console,
+                index=i,
+                show_metadata=show_metadata,
+                render_markdown=render_markdown,
+            )
 
         console.print("═" * console.width, style="cyan")
 
@@ -506,14 +535,14 @@ class ConversationTreeNavigator:
             # Show last message preview
             if path:
                 last_msg = path[-1]
-                preview = last_msg.content[:50].replace('\n', ' ')
+                preview = last_msg.content[:50].replace("\n", " ")
                 if len(last_msg.content) > 50:
                     preview += "..."
 
                 # Color based on role
-                if last_msg.role.value.lower() == 'user':
+                if last_msg.role.value.lower() == "user":
                     role_style = "green"
-                elif last_msg.role.value.lower() == 'assistant':
+                elif last_msg.role.value.lower() == "assistant":
                     role_style = "magenta"
                 else:
                     role_style = "yellow"
@@ -529,7 +558,7 @@ class ConversationTreeNavigator:
         tree = ConversationTree(
             id=self.conversation.id,
             title=self.conversation.title,
-            metadata=self.conversation.metadata
+            metadata=self.conversation.metadata,
         )
 
         # Convert all TreeMessages to DBMessages recursively
@@ -540,7 +569,11 @@ class ConversationTreeNavigator:
                 content=MessageContent(text=tree_msg.content),
                 timestamp=tree_msg.timestamp,
                 parent_id=parent_id,
-                metadata={'model': tree_msg.model, 'user': tree_msg.user} if (tree_msg.model or tree_msg.user) else None
+                metadata=(
+                    {"model": tree_msg.model, "user": tree_msg.user}
+                    if (tree_msg.model or tree_msg.user)
+                    else None
+                ),
             )
             tree.add_message(db_msg)
 

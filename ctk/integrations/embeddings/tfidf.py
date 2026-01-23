@@ -5,17 +5,15 @@ Fast local embedding using scikit-learn's TfidfVectorizer.
 Good for keyword-based similarity without requiring external services.
 """
 
-from typing import List, Dict, Optional, Any
+import pickle
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-import pickle
 
-from ctk.integrations.embeddings.base import (
-    EmbeddingProvider,
-    EmbeddingInfo,
-    EmbeddingResponse,
-    EmbeddingProviderError,
-)
+from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
+                                              EmbeddingProviderError,
+                                              EmbeddingResponse)
 
 
 class TFIDFEmbedding(EmbeddingProvider):
@@ -52,13 +50,13 @@ class TFIDFEmbedding(EmbeddingProvider):
         super().__init__(config)
 
         # TF-IDF parameters
-        max_features = config.get('max_features', 10000)
-        ngram_range = tuple(config.get('ngram_range', [1, 2]))
-        min_df = config.get('min_df', 1)
-        max_df = config.get('max_df', 0.8)
-        sublinear_tf = config.get('sublinear_tf', True)
-        use_idf = config.get('use_idf', True)
-        norm = config.get('norm', 'l2')
+        max_features = config.get("max_features", 10000)
+        ngram_range = tuple(config.get("ngram_range", [1, 2]))
+        min_df = config.get("min_df", 1)
+        max_df = config.get("max_df", 0.8)
+        sublinear_tf = config.get("sublinear_tf", True)
+        use_idf = config.get("use_idf", True)
+        norm = config.get("norm", "l2")
 
         # Initialize vectorizer
         self.vectorizer = TfidfVectorizer(
@@ -70,8 +68,8 @@ class TFIDFEmbedding(EmbeddingProvider):
             use_idf=use_idf,
             norm=norm,
             lowercase=True,
-            stop_words='english',
-            token_pattern=r'(?u)\b\w+\b',  # Include single-character words
+            stop_words="english",
+            token_pattern=r"(?u)\b\w+\b",  # Include single-character words
         )
 
         # Fitted flag
@@ -126,9 +124,9 @@ class TFIDFEmbedding(EmbeddingProvider):
                 model="tfidf",
                 dimensions=len(dense_vec),
                 metadata={
-                    'vocabulary_size': len(self.vectorizer.vocabulary_),
-                    'sparsity': 1.0 - (np.count_nonzero(dense_vec) / len(dense_vec))
-                }
+                    "vocabulary_size": len(self.vectorizer.vocabulary_),
+                    "sparsity": 1.0 - (np.count_nonzero(dense_vec) / len(dense_vec)),
+                },
             )
 
         except Exception as e:
@@ -162,15 +160,17 @@ class TFIDFEmbedding(EmbeddingProvider):
             vocab_size = len(self.vectorizer.vocabulary_)
 
             for vec in dense_matrix:
-                responses.append(EmbeddingResponse(
-                    embedding=vec.tolist(),
-                    model="tfidf",
-                    dimensions=len(vec),
-                    metadata={
-                        'vocabulary_size': vocab_size,
-                        'sparsity': 1.0 - (np.count_nonzero(vec) / len(vec))
-                    }
-                ))
+                responses.append(
+                    EmbeddingResponse(
+                        embedding=vec.tolist(),
+                        model="tfidf",
+                        dimensions=len(vec),
+                        metadata={
+                            "vocabulary_size": vocab_size,
+                            "sparsity": 1.0 - (np.count_nonzero(vec) / len(vec)),
+                        },
+                    )
+                )
 
             return responses
 
@@ -186,16 +186,18 @@ class TFIDFEmbedding(EmbeddingProvider):
         Returns:
             List with single EmbeddingInfo
         """
-        return [EmbeddingInfo(
-            id="tfidf",
-            name="TF-IDF Vectorizer",
-            dimensions=self._dimensions or 0,
-            metadata={
-                'fitted': self._is_fitted,
-                'max_features': self.vectorizer.max_features,
-                'ngram_range': self.vectorizer.ngram_range,
-            }
-        )]
+        return [
+            EmbeddingInfo(
+                id="tfidf",
+                name="TF-IDF Vectorizer",
+                dimensions=self._dimensions or 0,
+                metadata={
+                    "fitted": self._is_fitted,
+                    "max_features": self.vectorizer.max_features,
+                    "ngram_range": self.vectorizer.ngram_range,
+                },
+            )
+        ]
 
     def get_dimensions(self) -> int:
         """
@@ -227,12 +229,15 @@ class TFIDFEmbedding(EmbeddingProvider):
             raise EmbeddingProviderError("Cannot save: vectorizer not fitted")
 
         try:
-            with open(path, 'wb') as f:
-                pickle.dump({
-                    'vectorizer': self.vectorizer,
-                    'dimensions': self._dimensions,
-                    'config': self.config,
-                }, f)
+            with open(path, "wb") as f:
+                pickle.dump(
+                    {
+                        "vectorizer": self.vectorizer,
+                        "dimensions": self._dimensions,
+                        "config": self.config,
+                    },
+                    f,
+                )
         except Exception as e:
             raise EmbeddingProviderError(f"Failed to save vectorizer: {e}")
 
@@ -247,11 +252,11 @@ class TFIDFEmbedding(EmbeddingProvider):
             EmbeddingProviderError: If load fails
         """
         try:
-            with open(path, 'rb') as f:
+            with open(path, "rb") as f:
                 data = pickle.load(f)
-                self.vectorizer = data['vectorizer']
-                self._dimensions = data['dimensions']
-                self.config = data.get('config', self.config)
+                self.vectorizer = data["vectorizer"]
+                self._dimensions = data["dimensions"]
+                self.config = data.get("config", self.config)
                 self._is_fitted = True
         except Exception as e:
             raise EmbeddingProviderError(f"Failed to load vectorizer: {e}")
@@ -297,8 +302,7 @@ class TFIDFEmbedding(EmbeddingProvider):
         top_indices = np.argsort(embedding_array)[-top_k:][::-1]
 
         return [
-            (feature_names[idx], float(embedding_array[idx]))
-            for idx in top_indices
+            (feature_names[idx], float(embedding_array[idx])) for idx in top_indices
         ]
 
     @property

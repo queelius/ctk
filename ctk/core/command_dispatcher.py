@@ -6,9 +6,9 @@ including support for piping between commands.
 """
 
 import sys
-from io import StringIO
-from typing import Dict, Callable, Optional, List, Any
 from dataclasses import dataclass
+from io import StringIO
+from typing import Any, Callable, Dict, List, Optional
 
 from ctk.core.shell_parser import ParsedCommand, ParsedPipeline
 
@@ -16,6 +16,7 @@ from ctk.core.shell_parser import ParsedCommand, ParsedPipeline
 @dataclass
 class CommandResult:
     """Result from command execution"""
+
     success: bool
     output: str
     error: Optional[str] = None
@@ -60,7 +61,7 @@ class CommandDispatcher:
         """Check if a command is registered"""
         return name in self.handlers
 
-    def execute_command(self, command: ParsedCommand, stdin: str = '') -> CommandResult:
+    def execute_command(self, command: ParsedCommand, stdin: str = "") -> CommandResult:
         """
         Execute a single parsed command
 
@@ -77,9 +78,9 @@ class CommandDispatcher:
         if not self.has_command(cmd_name):
             return CommandResult(
                 success=False,
-                output='',
+                output="",
                 error=f"Command not found: {cmd_name}",
-                exit_code=127
+                exit_code=127,
             )
 
         # Get handler and execute
@@ -105,9 +106,9 @@ class CommandDispatcher:
         except Exception as e:
             return CommandResult(
                 success=False,
-                output='',
+                output="",
                 error=f"Error executing {cmd_name}: {str(e)}",
-                exit_code=1
+                exit_code=1,
             )
 
     def execute_pipeline(self, pipeline: ParsedPipeline) -> CommandResult:
@@ -134,10 +135,12 @@ class CommandDispatcher:
             -> Execute cat, pipe to grep, pipe to head, return head output
         """
         if not pipeline.commands:
-            return CommandResult(success=False, output='', error='No command to execute')
+            return CommandResult(
+                success=False, output="", error="No command to execute"
+            )
 
         # Execute first command with no stdin
-        result = self.execute_command(pipeline.commands[0], stdin='')
+        result = self.execute_command(pipeline.commands[0], stdin="")
 
         # If single command or first command failed, return immediately
         if not pipeline.has_pipe or not result.success:
@@ -154,7 +157,9 @@ class CommandDispatcher:
 
         return result
 
-    def execute(self, pipeline: ParsedPipeline, print_output: bool = True) -> CommandResult:
+    def execute(
+        self, pipeline: ParsedPipeline, print_output: bool = True
+    ) -> CommandResult:
         """
         Execute a pipeline and optionally print output
 
@@ -169,7 +174,7 @@ class CommandDispatcher:
 
         if print_output:
             if result.output:
-                print(result.output, end='')
+                print(result.output, end="")
             if result.error:
                 print(f"Error: {result.error}", file=sys.stderr)
 
@@ -177,68 +182,70 @@ class CommandDispatcher:
 
 
 # Example usage and testing
-if __name__ == '__main__':
+if __name__ == "__main__":
     from ctk.core.shell_parser import ShellParser
 
     # Create dispatcher
     dispatcher = CommandDispatcher()
 
     # Register some test commands
-    def cmd_echo(args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_echo(args: List[str], stdin: str = "") -> CommandResult:
         """Echo command"""
-        output = ' '.join(args) + '\n'
+        output = " ".join(args) + "\n"
         return CommandResult(success=True, output=output)
 
-    def cmd_cat(args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_cat(args: List[str], stdin: str = "") -> CommandResult:
         """Cat command (simulated)"""
         if stdin:
             return CommandResult(success=True, output=stdin)
         output = f"Content of {args[0] if args else 'stdin'}\n"
         return CommandResult(success=True, output=output)
 
-    def cmd_grep(args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_grep(args: List[str], stdin: str = "") -> CommandResult:
         """Grep command (simulated)"""
         if not args:
             return CommandResult(success=False, error="grep: no pattern specified")
 
         pattern = args[0]
-        lines = stdin.split('\n') if stdin else []
+        lines = stdin.split("\n") if stdin else []
         matching = [line for line in lines if pattern in line]
-        output = '\n'.join(matching) + ('\n' if matching else '')
+        output = "\n".join(matching) + ("\n" if matching else "")
         return CommandResult(success=True, output=output)
 
-    def cmd_head(args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_head(args: List[str], stdin: str = "") -> CommandResult:
         """Head command (simulated)"""
         n = int(args[0]) if args else 10
-        lines = stdin.split('\n') if stdin else []
-        output = '\n'.join(lines[:n]) + '\n' if lines[:n] else ''
+        lines = stdin.split("\n") if stdin else []
+        output = "\n".join(lines[:n]) + "\n" if lines[:n] else ""
         return CommandResult(success=True, output=output)
 
-    dispatcher.register_commands({
-        'echo': cmd_echo,
-        'cat': cmd_cat,
-        'grep': cmd_grep,
-        'head': cmd_head,
-    })
+    dispatcher.register_commands(
+        {
+            "echo": cmd_echo,
+            "cat": cmd_cat,
+            "grep": cmd_grep,
+            "head": cmd_head,
+        }
+    )
 
     # Test single command
     parser = ShellParser()
     print("=== Test 1: Single command ===")
-    pipeline = parser.parse('echo Hello World')
+    pipeline = parser.parse("echo Hello World")
     result = dispatcher.execute(pipeline, print_output=False)
     print(f"Output: {result.output!r}")
     print()
 
     # Test simple pipe
     print("=== Test 2: Simple pipe ===")
-    pipeline = parser.parse('cat test | grep error')
+    pipeline = parser.parse("cat test | grep error")
     result = dispatcher.execute(pipeline, print_output=False)
     print(f"Output: {result.output!r}")
     print()
 
     # Test multi-stage pipe (would need actual data)
     print("=== Test 3: Command not found ===")
-    pipeline = parser.parse('nonexistent command')
+    pipeline = parser.parse("nonexistent command")
     result = dispatcher.execute(pipeline, print_output=False)
     print(f"Success: {result.success}")
     print(f"Error: {result.error}")

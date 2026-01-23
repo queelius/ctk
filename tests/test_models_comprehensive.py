@@ -4,20 +4,15 @@ Comprehensive test suite for CTK models
 Tests ConversationTree, Message, MessageContent, and related classes
 """
 
-import unittest
 import json
-from datetime import datetime, timedelta
-from typing import List, Optional
 import tempfile
+import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import List, Optional
 
-from ctk.core.models import (
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-    ConversationMetadata
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 
 
 class TestMessageContent(unittest.TestCase):
@@ -33,9 +28,7 @@ class TestMessageContent(unittest.TestCase):
 
     def test_create_multimodal_content(self):
         """Test creating content with media"""
-        content = MessageContent(
-            text="Check these files"
-        )
+        content = MessageContent(text="Check these files")
 
         # Add image
         content.add_image(url="image.jpg")
@@ -52,14 +45,13 @@ class TestMessageContent(unittest.TestCase):
                 "type": "function",
                 "function": {
                     "name": "get_weather",
-                    "arguments": json.dumps({"location": "San Francisco"})
-                }
+                    "arguments": json.dumps({"location": "San Francisco"}),
+                },
             }
         ]
 
         content = MessageContent(
-            text="I'll check the weather for you",
-            tool_calls=tool_calls
+            text="I'll check the weather for you", tool_calls=tool_calls
         )
 
         self.assertEqual(len(content.tool_calls), 1)
@@ -69,16 +61,14 @@ class TestMessageContent(unittest.TestCase):
         """Test content with metadata"""
         content = MessageContent(
             text="The answer is 42",
-            metadata={"reasoning": "Let me calculate: 6 * 7 = 42"}
+            metadata={"reasoning": "Let me calculate: 6 * 7 = 42"},
         )
 
         self.assertEqual(content.metadata["reasoning"], "Let me calculate: 6 * 7 = 42")
 
     def test_content_serialization(self):
         """Test content serialization to dict"""
-        content = MessageContent(
-            text="Test message"
-        )
+        content = MessageContent(text="Test message")
 
         # Add tool call
         content.add_tool_call("test_function", {"param": "value"})
@@ -94,7 +84,7 @@ class TestMessageContent(unittest.TestCase):
             "text": "Hello",
             "tool_calls": [{"name": "test_tool", "arguments": {}}],
             "images": [{"url": "image.jpg"}],
-            "metadata": {"key": "value"}
+            "metadata": {"key": "value"},
         }
 
         content = MessageContent.from_dict(data)
@@ -137,7 +127,7 @@ class TestMessage(unittest.TestCase):
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
 
         self.assertEqual(msg.id, "msg_001")
@@ -153,7 +143,7 @@ class TestMessage(unittest.TestCase):
             id="msg_001",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Response"),
-            timestamp=custom_time
+            timestamp=custom_time,
         )
 
         self.assertEqual(msg.timestamp, custom_time)
@@ -164,24 +154,20 @@ class TestMessage(unittest.TestCase):
             id="msg_002",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Reply"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
 
         self.assertEqual(msg.parent_id, "msg_001")
 
     def test_message_with_metadata(self):
         """Test message with metadata"""
-        metadata = {
-            "model": "gpt-4",
-            "temperature": 0.7,
-            "tokens": 150
-        }
+        metadata = {"model": "gpt-4", "temperature": 0.7, "tokens": 150}
 
         msg = Message(
             id="msg_001",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Response"),
-            metadata=metadata
+            metadata=metadata,
         )
 
         self.assertEqual(msg.metadata["model"], "gpt-4")
@@ -193,14 +179,14 @@ class TestMessage(unittest.TestCase):
             MessageRole.USER,
             MessageRole.ASSISTANT,
             MessageRole.SYSTEM,
-            MessageRole.TOOL
+            MessageRole.TOOL,
         ]
 
         for role in roles:
             msg = Message(
                 id=f"msg_{role.value}",
                 role=role,
-                content=MessageContent(text=f"Message from {role.value}")
+                content=MessageContent(text=f"Message from {role.value}"),
             )
             self.assertEqual(msg.role, role)
 
@@ -212,7 +198,7 @@ class TestMessage(unittest.TestCase):
             content=MessageContent(text="Test"),
             parent_id="parent_001",
             timestamp=datetime.now(),
-            metadata={"key": "value"}
+            metadata={"key": "value"},
         )
 
         data = msg.to_dict()
@@ -232,7 +218,7 @@ class TestMessage(unittest.TestCase):
             "content": {"text": "Hello"},
             "parent_id": "parent_001",
             "timestamp": datetime.now().isoformat(),
-            "metadata": {"source": "test"}
+            "metadata": {"source": "test"},
         }
 
         msg = Message.from_dict(data)
@@ -244,27 +230,28 @@ class TestMessage(unittest.TestCase):
     def test_message_equality(self):
         """Test message equality - compare by id"""
         from datetime import datetime
+
         fixed_time = datetime(2024, 1, 1, 12, 0, 0)
 
         msg1 = Message(
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Same"),
-            timestamp=fixed_time
+            timestamp=fixed_time,
         )
 
         msg2 = Message(
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Same"),
-            timestamp=fixed_time
+            timestamp=fixed_time,
         )
 
         msg3 = Message(
             id="msg_002",
             role=MessageRole.USER,
             content=MessageContent(text="Different"),
-            timestamp=fixed_time
+            timestamp=fixed_time,
         )
 
         self.assertEqual(msg1, msg2)
@@ -275,10 +262,9 @@ class TestMessage(unittest.TestCase):
         msg = Message(
             id="tool_001",
             role=MessageRole.TOOL,
-            content=MessageContent(text=json.dumps({
-                "result": "success",
-                "data": {"temperature": 72}
-            }))
+            content=MessageContent(
+                text=json.dumps({"result": "success", "data": {"temperature": 72}})
+            ),
         )
 
         self.assertEqual(msg.role, MessageRole.TOOL)
@@ -313,7 +299,7 @@ class TestConversationMetadata(unittest.TestCase):
             model="gpt-4",
             project="test_project",
             tags=["python", "testing"],
-            custom_data={"extra": "data"}
+            custom_data={"extra": "data"},
         )
 
         self.assertEqual(metadata.source, "chatgpt")
@@ -327,9 +313,7 @@ class TestConversationMetadata(unittest.TestCase):
     def test_metadata_serialization(self):
         """Test metadata serialization"""
         metadata = ConversationMetadata(
-            source="test",
-            tags=["tag1", "tag2"],
-            model="test-model"
+            source="test", tags=["tag1", "tag2"], model="test-model"
         )
 
         data = metadata.to_dict()
@@ -346,7 +330,7 @@ class TestConversationMetadata(unittest.TestCase):
             "source": "anthropic",
             "model": "claude-3",
             "tags": ["ai", "conversation"],
-            "custom_field": "custom_value"
+            "custom_field": "custom_value",
         }
 
         metadata = ConversationMetadata.from_dict(data)
@@ -392,10 +376,7 @@ class TestConversationTree(unittest.TestCase):
 
     def test_create_empty_tree(self):
         """Test creating an empty conversation tree"""
-        tree = ConversationTree(
-            id="conv_001",
-            title="Test Conversation"
-        )
+        tree = ConversationTree(id="conv_001", title="Test Conversation")
 
         self.assertEqual(tree.id, "conv_001")
         self.assertEqual(tree.title, "Test Conversation")
@@ -407,9 +388,7 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(id="conv_001", title="Linear Chat")
 
         msg1 = Message(
-            id="msg_001",
-            role=MessageRole.USER,
-            content=MessageContent(text="Hello")
+            id="msg_001", role=MessageRole.USER, content=MessageContent(text="Hello")
         )
         tree.add_message(msg1)
 
@@ -417,7 +396,7 @@ class TestConversationTree(unittest.TestCase):
             id="msg_002",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Hi there"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         tree.add_message(msg2)
 
@@ -425,7 +404,7 @@ class TestConversationTree(unittest.TestCase):
             id="msg_003",
             role=MessageRole.USER,
             content=MessageContent(text="How are you?"),
-            parent_id="msg_002"
+            parent_id="msg_002",
         )
         tree.add_message(msg3)
 
@@ -440,9 +419,7 @@ class TestConversationTree(unittest.TestCase):
 
         # Root message
         msg1 = Message(
-            id="msg_001",
-            role=MessageRole.USER,
-            content=MessageContent(text="Question")
+            id="msg_001", role=MessageRole.USER, content=MessageContent(text="Question")
         )
         tree.add_message(msg1)
 
@@ -451,7 +428,7 @@ class TestConversationTree(unittest.TestCase):
             id="msg_002a",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Answer A"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         tree.add_message(msg2a)
 
@@ -459,7 +436,7 @@ class TestConversationTree(unittest.TestCase):
             id="msg_002b",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Answer B"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         tree.add_message(msg2b)
 
@@ -479,28 +456,41 @@ class TestConversationTree(unittest.TestCase):
         # msg1 -> msg2a -> msg3
         #      -> msg2b -> msg4
 
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="Start"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Start")
+        )
         tree.add_message(msg1)
 
-        msg2a = Message(id="msg2a", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Path A"),
-                       parent_id="msg1")
+        msg2a = Message(
+            id="msg2a",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Path A"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2a)
 
-        msg2b = Message(id="msg2b", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Path B"),
-                       parent_id="msg1")
+        msg2b = Message(
+            id="msg2b",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Path B"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2b)
 
-        msg3 = Message(id="msg3", role=MessageRole.USER,
-                      content=MessageContent(text="Continue A"),
-                      parent_id="msg2a")
+        msg3 = Message(
+            id="msg3",
+            role=MessageRole.USER,
+            content=MessageContent(text="Continue A"),
+            parent_id="msg2a",
+        )
         tree.add_message(msg3)
 
-        msg4 = Message(id="msg4", role=MessageRole.USER,
-                      content=MessageContent(text="Continue B"),
-                      parent_id="msg2b")
+        msg4 = Message(
+            id="msg4",
+            role=MessageRole.USER,
+            content=MessageContent(text="Continue B"),
+            parent_id="msg2b",
+        )
         tree.add_message(msg4)
 
         paths = tree.get_all_paths()
@@ -524,7 +514,7 @@ class TestConversationTree(unittest.TestCase):
                 id=f"msg_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=parent_id
+                parent_id=parent_id,
             )
             tree.add_message(msg)
             messages.append(msg)
@@ -535,7 +525,7 @@ class TestConversationTree(unittest.TestCase):
             id="branch_1",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Short branch"),
-            parent_id="msg_1"
+            parent_id="msg_1",
         )
         tree.add_message(branch_msg)
 
@@ -549,18 +539,25 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(id="conv_001", title="Multiple roots")
 
         # Add multiple root messages (no parent)
-        root1 = Message(id="root1", role=MessageRole.USER,
-                       content=MessageContent(text="First root"))
+        root1 = Message(
+            id="root1", role=MessageRole.USER, content=MessageContent(text="First root")
+        )
         tree.add_message(root1)
 
-        root2 = Message(id="root2", role=MessageRole.USER,
-                       content=MessageContent(text="Second root"))
+        root2 = Message(
+            id="root2",
+            role=MessageRole.USER,
+            content=MessageContent(text="Second root"),
+        )
         tree.add_message(root2)
 
         # Add child to first root
-        child = Message(id="child1", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Reply"),
-                       parent_id="root1")
+        child = Message(
+            id="child1",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Reply"),
+            parent_id="root1",
+        )
         tree.add_message(child)
 
         # Find root messages manually
@@ -575,24 +572,34 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(id="conv_001", title="Leaf test")
 
         # Create a tree with multiple leaves
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="Start"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Start")
+        )
         tree.add_message(msg1)
 
-        msg2 = Message(id="msg2", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Middle"),
-                      parent_id="msg1")
+        msg2 = Message(
+            id="msg2",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Middle"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2)
 
         # Two leaves branching from msg2
-        leaf1 = Message(id="leaf1", role=MessageRole.USER,
-                       content=MessageContent(text="Leaf 1"),
-                       parent_id="msg2")
+        leaf1 = Message(
+            id="leaf1",
+            role=MessageRole.USER,
+            content=MessageContent(text="Leaf 1"),
+            parent_id="msg2",
+        )
         tree.add_message(leaf1)
 
-        leaf2 = Message(id="leaf2", role=MessageRole.USER,
-                       content=MessageContent(text="Leaf 2"),
-                       parent_id="msg2")
+        leaf2 = Message(
+            id="leaf2",
+            role=MessageRole.USER,
+            content=MessageContent(text="Leaf 2"),
+            parent_id="msg2",
+        )
         tree.add_message(leaf2)
 
         # Find leaf messages (no children)
@@ -610,11 +617,12 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(
             id="conv_001",
             title="Test Serialization",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
 
-        msg = Message(id="msg1", role=MessageRole.USER,
-                     content=MessageContent(text="Test"))
+        msg = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Test")
+        )
         tree.add_message(msg)
 
         data = tree.to_dict()
@@ -630,24 +638,21 @@ class TestConversationTree(unittest.TestCase):
         data = {
             "id": "conv_001",
             "title": "Imported Conversation",
-            "metadata": {
-                "source": "import",
-                "tags": ["imported"]
-            },
+            "metadata": {"source": "import", "tags": ["imported"]},
             "messages": [
                 {
                     "id": "msg1",
                     "role": "user",
                     "content": {"text": "Hello"},
-                    "parent_id": None
+                    "parent_id": None,
                 },
                 {
                     "id": "msg2",
                     "role": "assistant",
                     "content": {"text": "Hi"},
-                    "parent_id": "msg1"
-                }
-            ]
+                    "parent_id": "msg1",
+                },
+            ],
         }
 
         tree = ConversationTree.from_dict(data)
@@ -662,22 +667,29 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(id="conv_001", title="Valid Tree")
 
         # Add connected messages
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="Start"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Start")
+        )
         tree.add_message(msg1)
 
-        msg2 = Message(id="msg2", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Reply"),
-                      parent_id="msg1")
+        msg2 = Message(
+            id="msg2",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Reply"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2)
 
         # Check messages were added
         self.assertEqual(len(tree.message_map), 2)
 
         # Add orphaned message (invalid parent)
-        orphan = Message(id="orphan", role=MessageRole.USER,
-                        content=MessageContent(text="Orphaned"),
-                        parent_id="nonexistent")
+        orphan = Message(
+            id="orphan",
+            role=MessageRole.USER,
+            content=MessageContent(text="Orphaned"),
+            parent_id="nonexistent",
+        )
         tree.add_message(orphan)
 
         # Orphan should be added even with invalid parent
@@ -694,14 +706,18 @@ class TestConversationTree(unittest.TestCase):
                 id=f"msg_{i}",
                 role=role,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=f"msg_{i-1}" if i > 0 else None
+                parent_id=f"msg_{i-1}" if i > 0 else None,
             )
             tree.add_message(msg)
 
         # Calculate statistics manually
         total_messages = len(tree.message_map)
-        user_messages = sum(1 for m in tree.message_map.values() if m.role == MessageRole.USER)
-        assistant_messages = sum(1 for m in tree.message_map.values() if m.role == MessageRole.ASSISTANT)
+        user_messages = sum(
+            1 for m in tree.message_map.values() if m.role == MessageRole.USER
+        )
+        assistant_messages = sum(
+            1 for m in tree.message_map.values() if m.role == MessageRole.ASSISTANT
+        )
 
         self.assertEqual(total_messages, 10)
         self.assertEqual(user_messages, 5)
@@ -712,30 +728,43 @@ class TestConversationTree(unittest.TestCase):
         tree = ConversationTree(id="conv_001", title="Prune Test")
 
         # Create tree with branch to prune
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="Keep"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Keep")
+        )
         tree.add_message(msg1)
 
-        msg2 = Message(id="msg2", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Keep"),
-                      parent_id="msg1")
+        msg2 = Message(
+            id="msg2",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Keep"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2)
 
         # Branch to prune
-        prune_root = Message(id="prune1", role=MessageRole.USER,
-                           content=MessageContent(text="Prune this"),
-                           parent_id="msg2")
+        prune_root = Message(
+            id="prune1",
+            role=MessageRole.USER,
+            content=MessageContent(text="Prune this"),
+            parent_id="msg2",
+        )
         tree.add_message(prune_root)
 
-        prune_child = Message(id="prune2", role=MessageRole.ASSISTANT,
-                            content=MessageContent(text="Prune this too"),
-                            parent_id="prune1")
+        prune_child = Message(
+            id="prune2",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Prune this too"),
+            parent_id="prune1",
+        )
         tree.add_message(prune_child)
 
         # Keep this branch
-        keep = Message(id="keep1", role=MessageRole.USER,
-                      content=MessageContent(text="Keep this"),
-                      parent_id="msg2")
+        keep = Message(
+            id="keep1",
+            role=MessageRole.USER,
+            content=MessageContent(text="Keep this"),
+            parent_id="msg2",
+        )
         tree.add_message(keep)
 
         # Manually remove the branch
@@ -753,13 +782,15 @@ class TestConversationTree(unittest.TestCase):
         tree2 = ConversationTree(id="conv_002", title="Tree 2")
 
         # Add messages to tree1
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="From tree 1"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="From tree 1")
+        )
         tree1.add_message(msg1)
 
         # Add messages to tree2
-        msg2 = Message(id="msg2", role=MessageRole.USER,
-                      content=MessageContent(text="From tree 2"))
+        msg2 = Message(
+            id="msg2", role=MessageRole.USER, content=MessageContent(text="From tree 2")
+        )
         tree2.add_message(msg2)
 
         # Manually merge tree2 into tree1
@@ -776,13 +807,7 @@ class TestConversationFormats(unittest.TestCase):
 
     def test_format_values(self):
         """Test format values as strings"""
-        formats = [
-            "chatgpt",
-            "claude",
-            "gemini",
-            "copilot",
-            "custom"
-        ]
+        formats = ["chatgpt", "claude", "gemini", "copilot", "custom"]
 
         for fmt in formats:
             self.assertIsNotNone(fmt)
@@ -800,13 +825,17 @@ class TestEdgeCases(unittest.TestCase):
         """Test handling circular parent references"""
         tree = ConversationTree(id="conv_001", title="Circular Test")
 
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="First"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="First")
+        )
         tree.add_message(msg1)
 
-        msg2 = Message(id="msg2", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Second"),
-                      parent_id="msg1")
+        msg2 = Message(
+            id="msg2",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Second"),
+            parent_id="msg1",
+        )
         tree.add_message(msg2)
 
         # Try to create circular reference by modifying parent_id
@@ -822,12 +851,16 @@ class TestEdgeCases(unittest.TestCase):
         """Test handling duplicate message IDs"""
         tree = ConversationTree(id="conv_001", title="Duplicate Test")
 
-        msg1 = Message(id="duplicate", role=MessageRole.USER,
-                      content=MessageContent(text="First"))
+        msg1 = Message(
+            id="duplicate", role=MessageRole.USER, content=MessageContent(text="First")
+        )
         tree.add_message(msg1)
 
-        msg2 = Message(id="duplicate", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Second"))
+        msg2 = Message(
+            id="duplicate",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Second"),
+        )
 
         # Adding duplicate ID should raise error or overwrite
         tree.add_message(msg2)
@@ -855,7 +888,7 @@ class TestEdgeCases(unittest.TestCase):
                 id=f"msg_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=parent_id
+                parent_id=parent_id,
             )
             tree.add_message(msg)
             parent_id = msg.id
@@ -872,8 +905,9 @@ class TestEdgeCases(unittest.TestCase):
         tree = ConversationTree(id="wide", title="Wide Tree")
 
         # Create root
-        root = Message(id="root", role=MessageRole.USER,
-                      content=MessageContent(text="Root"))
+        root = Message(
+            id="root", role=MessageRole.USER, content=MessageContent(text="Root")
+        )
         tree.add_message(root)
 
         # Add many children to root
@@ -882,7 +916,7 @@ class TestEdgeCases(unittest.TestCase):
                 id=f"child_{i}",
                 role=MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Child {i}"),
-                parent_id="root"
+                parent_id="root",
             )
             tree.add_message(child)
 
@@ -893,11 +927,7 @@ class TestEdgeCases(unittest.TestCase):
     def test_unicode_content(self):
         """Test handling unicode in messages"""
         content = MessageContent(text="Hello 世界 🌍 مرحبا")
-        msg = Message(
-            id="unicode",
-            role=MessageRole.USER,
-            content=content
-        )
+        msg = Message(id="unicode", role=MessageRole.USER, content=content)
 
         tree = ConversationTree(id="unicode_test", title="Unicode Test")
         tree.add_message(msg)
@@ -907,10 +937,9 @@ class TestEdgeCases(unittest.TestCase):
         tree2 = ConversationTree.from_dict(data)
 
         self.assertEqual(
-            tree2.message_map["unicode"].content.text,
-            "Hello 世界 🌍 مرحبا"
+            tree2.message_map["unicode"].content.text, "Hello 世界 🌍 مرحبا"
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

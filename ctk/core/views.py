@@ -9,26 +9,28 @@ without modifying the underlying data. They follow SICP principles:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Union, Literal
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional, Union
 
 
 class ViewSelectionType(Enum):
     """How a view selects its conversations."""
-    ITEMS = "items"           # Explicit list of conversation IDs
-    QUERY = "query"           # Dynamic query against database
-    SQL = "sql"               # Raw SQL query returning conversation IDs
-    UNION = "union"           # Union of other views
-    INTERSECT = "intersect"   # Intersection of other views
-    SUBTRACT = "subtract"     # Set difference (A - B)
+
+    ITEMS = "items"  # Explicit list of conversation IDs
+    QUERY = "query"  # Dynamic query against database
+    SQL = "sql"  # Raw SQL query returning conversation IDs
+    UNION = "union"  # Union of other views
+    INTERSECT = "intersect"  # Intersection of other views
+    SUBTRACT = "subtract"  # Set difference (A - B)
 
 
 class PathSelection(Enum):
     """How to select paths within a conversation tree."""
-    DEFAULT = "default"       # Longest path (default behavior)
-    ALL = "all"               # Entire tree
-    EXPLICIT = "explicit"     # Explicit path specified
+
+    DEFAULT = "default"  # Longest path (default behavior)
+    ALL = "all"  # Entire tree
+    EXPLICIT = "explicit"  # Explicit path specified
 
 
 @dataclass
@@ -42,24 +44,25 @@ class TreePath:
         TreePath(subtree="m23")             # Subtree rooted at m23
         TreePath(selection=PathSelection.ALL)  # Entire tree
     """
+
     selection: PathSelection = PathSelection.DEFAULT
-    path: Optional[str] = None       # e.g., "m1/m3/m47"
-    subtree: Optional[str] = None    # Root of subtree to include
+    path: Optional[str] = None  # e.g., "m1/m3/m47"
+    subtree: Optional[str] = None  # Root of subtree to include
 
     @classmethod
-    def default(cls) -> 'TreePath':
+    def default(cls) -> "TreePath":
         return cls(selection=PathSelection.DEFAULT)
 
     @classmethod
-    def from_path(cls, path: str) -> 'TreePath':
+    def from_path(cls, path: str) -> "TreePath":
         return cls(selection=PathSelection.EXPLICIT, path=path)
 
     @classmethod
-    def from_subtree(cls, root: str) -> 'TreePath':
+    def from_subtree(cls, root: str) -> "TreePath":
         return cls(selection=PathSelection.EXPLICIT, subtree=root)
 
     @classmethod
-    def all(cls) -> 'TreePath':
+    def all(cls) -> "TreePath":
         return cls(selection=PathSelection.ALL)
 
 
@@ -69,8 +72,9 @@ class ContentSnapshot:
     Optional snapshot of conversation state when added to view.
     Used for drift detection, not data storage.
     """
-    hash: str                        # Content hash for drift detection
-    title: Optional[str] = None      # Title at snapshot time
+
+    hash: str  # Content hash for drift detection
+    title: Optional[str] = None  # Title at snapshot time
     message_count: Optional[int] = None
     captured_at: Optional[datetime] = None
 
@@ -83,12 +87,13 @@ class ViewItem:
     Overrides (title, description, note) exist only in the view context
     and don't modify the underlying conversation.
     """
-    id: str                                    # Conversation ID
+
+    id: str  # Conversation ID
 
     # Metadata overrides (view-local, don't touch original)
-    title: Optional[str] = None                # Override display title
-    description: Optional[str] = None          # Override description
-    note: Optional[str] = None                 # Annotation/commentary
+    title: Optional[str] = None  # Override display title
+    description: Optional[str] = None  # Override description
+    note: Optional[str] = None  # Annotation/commentary
 
     # Tree selection
     tree_path: TreePath = field(default_factory=TreePath.default)
@@ -104,6 +109,7 @@ class ViewSection:
     A section marker in a narrative view.
     Provides structure and context between conversation items.
     """
+
     title: str
     note: Optional[str] = None
 
@@ -118,9 +124,10 @@ class ViewQuery:
     Query specification for dynamic view selection.
     All fields are optional filters (AND-ed together).
     """
-    tags: Optional[List[str]] = None           # Must have these tags
-    source: Optional[str] = None               # e.g., "ChatGPT", "Claude"
-    model: Optional[str] = None                # e.g., "gpt-4", "claude-3"
+
+    tags: Optional[List[str]] = None  # Must have these tags
+    source: Optional[str] = None  # e.g., "ChatGPT", "Claude"
+    model: Optional[str] = None  # e.g., "gpt-4", "claude-3"
     starred: Optional[bool] = None
     pinned: Optional[bool] = None
     archived: Optional[bool] = None
@@ -128,22 +135,23 @@ class ViewQuery:
     created_before: Optional[datetime] = None
     updated_after: Optional[datetime] = None
     updated_before: Optional[datetime] = None
-    title_contains: Optional[str] = None       # Title search
-    content_contains: Optional[str] = None     # Full-text search
+    title_contains: Optional[str] = None  # Title search
+    content_contains: Optional[str] = None  # Full-text search
 
 
 @dataclass
 class ViewOrder:
     """Ordering specification for view results."""
-    field: str = "created_at"                  # Field to sort by
-    descending: bool = True                    # Sort direction
+
+    field: str = "created_at"  # Field to sort by
+    descending: bool = True  # Sort direction
 
     @classmethod
-    def parse(cls, spec: str) -> 'ViewOrder':
+    def parse(cls, spec: str) -> "ViewOrder":
         """Parse order spec like 'created_at desc' or 'title asc'."""
         parts = spec.strip().split()
         field = parts[0] if parts else "created_at"
-        descending = len(parts) < 2 or parts[1].lower() in ('desc', 'descending')
+        descending = len(parts) < 2 or parts[1].lower() in ("desc", "descending")
         return cls(field=field, descending=descending)
 
     def __str__(self) -> str:
@@ -156,6 +164,7 @@ class ViewComposition:
     """
     Composition of multiple views via set operations.
     """
+
     operation: Literal["union", "intersect", "subtract"]
     view_names: List[str]  # Names of views to compose
 
@@ -166,9 +175,10 @@ class ExportHints:
     Optional hints for exporters consuming this view.
     These don't affect view semantics, just export behavior.
     """
-    format: Optional[str] = None               # Preferred format
-    draft: bool = False                        # Mark as draft
-    date_prefix: bool = True                   # Include date in filenames
+
+    format: Optional[str] = None  # Preferred format
+    draft: bool = False  # Mark as draft
+    date_prefix: bool = True  # Include date in filenames
 
 
 @dataclass
@@ -188,6 +198,7 @@ class View:
     - Narrative sections
     - Change tracking
     """
+
     # Identity
     name: str
     description: Optional[str] = None
@@ -197,10 +208,10 @@ class View:
     version: int = 1
 
     # Selection (exactly one of these should be set)
-    items: Optional[List[SequenceItem]] = None      # Explicit list
-    query: Optional[ViewQuery] = None                # Dynamic query
-    sql: Optional[str] = None                        # Raw SQL (must SELECT conversation IDs)
-    composition: Optional[ViewComposition] = None    # Set operation on views
+    items: Optional[List[SequenceItem]] = None  # Explicit list
+    query: Optional[ViewQuery] = None  # Dynamic query
+    sql: Optional[str] = None  # Raw SQL (must SELECT conversation IDs)
+    composition: Optional[ViewComposition] = None  # Set operation on views
 
     # Additional filtering (applied after selection)
     where: Optional[ViewQuery] = None
@@ -256,13 +267,14 @@ class EvaluatedViewItem:
     """
     A view item after evaluation - includes resolved conversation data.
     """
-    item: ViewItem                             # Original view item
-    conversation: Any                          # Resolved ConversationTree
-    effective_title: str                       # Title (override or original)
-    effective_description: Optional[str]       # Description (override or original)
-    index: int                                 # Position in view
-    section: Optional[str] = None              # Current section (if any)
-    drift_detected: bool = False               # Content changed since snapshot
+
+    item: ViewItem  # Original view item
+    conversation: Any  # Resolved ConversationTree
+    effective_title: str  # Title (override or original)
+    effective_description: Optional[str]  # Description (override or original)
+    index: int  # Position in view
+    section: Optional[str] = None  # Current section (if any)
+    drift_detected: bool = False  # Content changed since snapshot
 
 
 @dataclass
@@ -271,10 +283,11 @@ class EvaluatedView:
     A view after evaluation against a database.
     Contains resolved conversation references ready for use.
     """
-    view: View                                 # Original view spec
-    items: List[EvaluatedViewItem]             # Resolved items
+
+    view: View  # Original view spec
+    items: List[EvaluatedViewItem]  # Resolved items
     missing_ids: List[str] = field(default_factory=list)  # IDs not found
-    drift_count: int = 0                       # Number of items with drift
+    drift_count: int = 0  # Number of items with drift
     evaluated_at: datetime = field(default_factory=datetime.now)
 
     def __len__(self) -> int:
@@ -293,6 +306,7 @@ class EvaluatedView:
 # YAML Serialization / Deserialization
 # =============================================================================
 
+
 def _parse_datetime(value: Any) -> Optional[datetime]:
     """Parse datetime from various formats."""
     if value is None:
@@ -302,7 +316,7 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, str):
         # Try ISO format first
         try:
-            return datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             pass
         # Try date only
@@ -344,7 +358,7 @@ def _parse_view_item(data: Dict[str, Any]) -> ViewItem:
             hash=snap_data.get("hash", ""),
             title=snap_data.get("title"),
             message_count=snap_data.get("message_count"),
-            captured_at=_parse_datetime(snap_data.get("captured_at"))
+            captured_at=_parse_datetime(snap_data.get("captured_at")),
         )
 
     return ViewItem(
@@ -354,7 +368,7 @@ def _parse_view_item(data: Dict[str, Any]) -> ViewItem:
         note=data.get("note"),
         tree_path=_parse_tree_path(data.get("path")),
         snapshot=snapshot,
-        added_at=_parse_datetime(data.get("added_at"))
+        added_at=_parse_datetime(data.get("added_at")),
     )
 
 
@@ -362,7 +376,7 @@ def _parse_view_section(data: Dict[str, Any]) -> ViewSection:
     """Parse a section marker from YAML dict."""
     return ViewSection(
         title=data.get("section", data.get("title", "Untitled Section")),
-        note=data.get("note")
+        note=data.get("note"),
     )
 
 
@@ -393,7 +407,7 @@ def _parse_query(data: Optional[Dict[str, Any]]) -> Optional[ViewQuery]:
         updated_after=_parse_datetime(data.get("updated_after")),
         updated_before=_parse_datetime(data.get("updated_before")),
         title_contains=data.get("title_contains"),
-        content_contains=data.get("content_contains")
+        content_contains=data.get("content_contains"),
     )
 
 
@@ -414,7 +428,7 @@ def _parse_export_hints(data: Optional[Dict[str, Any]]) -> Optional[ExportHints]
     return ExportHints(
         format=data.get("format"),
         draft=data.get("draft", False),
-        date_prefix=data.get("date_prefix", True)
+        date_prefix=data.get("date_prefix", True),
     )
 
 
@@ -450,7 +464,7 @@ def parse_view(data: Dict[str, Any]) -> View:
         elif isinstance(order_val, dict):
             order = ViewOrder(
                 field=order_val.get("field", "created_at"),
-                descending=order_val.get("descending", True)
+                descending=order_val.get("descending", True),
             )
 
     return View(
@@ -469,7 +483,7 @@ def parse_view(data: Dict[str, Any]) -> View:
         limit=data.get("limit"),
         track_changes=data.get("track_changes", False),
         skip_missing=data.get("skip_missing", True),
-        export=_parse_export_hints(data.get("export"))
+        export=_parse_export_hints(data.get("export")),
     )
 
 
@@ -484,7 +498,8 @@ def load_view(path: str) -> View:
         View object
     """
     import yaml
-    with open(path, 'r', encoding='utf-8') as f:
+
+    with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return parse_view(data)
 
@@ -655,9 +670,12 @@ def save_view(view: View, path: str) -> None:
         path: Path to YAML file
     """
     import yaml
+
     data = serialize_view(view)
-    with open(path, 'w', encoding='utf-8') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.dump(
+            data, f, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
 
 
 # =============================================================================
@@ -671,19 +689,23 @@ def _compute_content_hash(conversation: Any) -> str:
     """Compute a hash of conversation content for drift detection."""
     # Get all message content
     content_parts = []
-    if hasattr(conversation, 'message_map'):
+    if hasattr(conversation, "message_map"):
         for msg_id, msg in sorted(conversation.message_map.items()):
-            if hasattr(msg, 'content') and msg.content:
-                text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+            if hasattr(msg, "content") and msg.content:
+                text = (
+                    msg.content.get_text()
+                    if hasattr(msg.content, "get_text")
+                    else str(msg.content)
+                )
                 content_parts.append(f"{msg_id}:{text}")
 
     content_str = "\n".join(content_parts)
-    return hashlib.sha256(content_str.encode('utf-8')).hexdigest()[:16]
+    return hashlib.sha256(content_str.encode("utf-8")).hexdigest()[:16]
 
 
 def _matches_query(conversation: Any, query: ViewQuery) -> bool:
     """Check if a conversation matches query criteria."""
-    meta = conversation.metadata if hasattr(conversation, 'metadata') else None
+    meta = conversation.metadata if hasattr(conversation, "metadata") else None
 
     # Tags filter
     if query.tags:
@@ -748,10 +770,14 @@ def _matches_query(conversation: Any, query: ViewQuery) -> bool:
     if query.content_contains:
         found = False
         search_term = query.content_contains.lower()
-        if hasattr(conversation, 'message_map'):
+        if hasattr(conversation, "message_map"):
             for msg in conversation.message_map.values():
-                if hasattr(msg, 'content') and msg.content:
-                    text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                if hasattr(msg, "content") and msg.content:
+                    text = (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    )
                     if search_term in text.lower():
                         found = True
                         break
@@ -762,15 +788,14 @@ def _matches_query(conversation: Any, query: ViewQuery) -> bool:
 
 
 def _sort_conversations(
-    conversations: List[Any],
-    order: Optional[ViewOrder]
+    conversations: List[Any], order: Optional[ViewOrder]
 ) -> List[Any]:
     """Sort conversations according to order specification."""
     if not order:
         return conversations
 
     def get_sort_key(conv):
-        meta = conv.metadata if hasattr(conv, 'metadata') else None
+        meta = conv.metadata if hasattr(conv, "metadata") else None
 
         if order.field == "created_at":
             return meta.created_at if meta and meta.created_at else datetime.min
@@ -779,7 +804,7 @@ def _sort_conversations(
         elif order.field == "title":
             return (conv.title or "").lower()
         elif order.field == "message_count":
-            return len(conv.message_map) if hasattr(conv, 'message_map') else 0
+            return len(conv.message_map) if hasattr(conv, "message_map") else 0
         else:
             return meta.created_at if meta and meta.created_at else datetime.min
 
@@ -833,7 +858,7 @@ class ViewEvaluator:
 
         # Step 4: Apply limit
         if view.limit and len(conversations) > view.limit:
-            conversations = conversations[:view.limit]
+            conversations = conversations[: view.limit]
 
         # Step 5: Build evaluated items
         evaluated_items = []
@@ -868,39 +893,49 @@ class ViewEvaluator:
                             drift_count += 1
 
                     # Determine effective title/description
-                    effective_title = item.title or conv.title or f"Conversation {conv.id[:8]}"
+                    effective_title = (
+                        item.title or conv.title or f"Conversation {conv.id[:8]}"
+                    )
                     effective_desc = item.description
-                    if not effective_desc and hasattr(conv, 'metadata') and conv.metadata:
-                        effective_desc = getattr(conv.metadata, 'description', None)
+                    if (
+                        not effective_desc
+                        and hasattr(conv, "metadata")
+                        and conv.metadata
+                    ):
+                        effective_desc = getattr(conv.metadata, "description", None)
 
-                    evaluated_items.append(EvaluatedViewItem(
-                        item=item,
-                        conversation=conv,
-                        effective_title=effective_title,
-                        effective_description=effective_desc,
-                        index=len(evaluated_items),
-                        section=current_section,
-                        drift_detected=drift
-                    ))
+                    evaluated_items.append(
+                        EvaluatedViewItem(
+                            item=item,
+                            conversation=conv,
+                            effective_title=effective_title,
+                            effective_description=effective_desc,
+                            index=len(evaluated_items),
+                            section=current_section,
+                            drift_detected=drift,
+                        )
+                    )
         else:
             # For query/composition results, create simple items
             for idx, conv in enumerate(conversations):
                 item = ViewItem(id=conv.id)
-                evaluated_items.append(EvaluatedViewItem(
-                    item=item,
-                    conversation=conv,
-                    effective_title=conv.title or f"Conversation {conv.id[:8]}",
-                    effective_description=None,
-                    index=idx,
-                    section=None,
-                    drift_detected=False
-                ))
+                evaluated_items.append(
+                    EvaluatedViewItem(
+                        item=item,
+                        conversation=conv,
+                        effective_title=conv.title or f"Conversation {conv.id[:8]}",
+                        effective_description=None,
+                        index=idx,
+                        section=None,
+                        drift_detected=False,
+                    )
+                )
 
         return EvaluatedView(
             view=view,
             items=evaluated_items,
             missing_ids=missing_ids,
-            drift_count=drift_count
+            drift_count=drift_count,
         )
 
     def _resolve_selection(self, view: View) -> List[Any]:
@@ -913,7 +948,11 @@ class ViewEvaluator:
             return self._resolve_query(view)
         elif selection_type == ViewSelectionType.SQL:
             return self._resolve_sql(view)
-        elif selection_type in (ViewSelectionType.UNION, ViewSelectionType.INTERSECT, ViewSelectionType.SUBTRACT):
+        elif selection_type in (
+            ViewSelectionType.UNION,
+            ViewSelectionType.INTERSECT,
+            ViewSelectionType.SUBTRACT,
+        ):
             return self._resolve_composition(view)
         else:
             return []
@@ -966,11 +1005,19 @@ class ViewEvaluator:
 
         # Safety check: only allow SELECT statements
         sql_upper = sql.upper()
-        if not sql_upper.startswith('SELECT'):
+        if not sql_upper.startswith("SELECT"):
             raise ValueError("SQL view queries must be SELECT statements")
 
         # Disallow dangerous keywords
-        dangerous = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE']
+        dangerous = [
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "DROP",
+            "CREATE",
+            "ALTER",
+            "TRUNCATE",
+        ]
         for keyword in dangerous:
             if keyword in sql_upper:
                 raise ValueError(f"SQL view queries cannot contain {keyword}")
@@ -993,7 +1040,7 @@ class ViewEvaluator:
             columns = [desc[0].lower() for desc in cursor.description]
             id_index = None
             for i, col in enumerate(columns):
-                if col in ('id', 'conversation_id', 'conv_id'):
+                if col in ("id", "conversation_id", "conv_id"):
                     id_index = i
                     break
 
@@ -1051,21 +1098,28 @@ class ViewEvaluator:
             # Intersection: only conversations in ALL views
             if not evaluated_views:
                 return []
-            id_sets = [set(item.conversation.id for item in ev.items) for ev in evaluated_views]
+            id_sets = [
+                set(item.conversation.id for item in ev.items) for ev in evaluated_views
+            ]
             common_ids = id_sets[0]
             for ids in id_sets[1:]:
                 common_ids &= ids
 
             # Return from first view to maintain order
-            return [item.conversation for item in evaluated_views[0].items
-                    if item.conversation.id in common_ids]
+            return [
+                item.conversation
+                for item in evaluated_views[0].items
+                if item.conversation.id in common_ids
+            ]
 
         elif op == "subtract":
             # Difference: A - B - C - ...
             if not evaluated_views:
                 return []
-            base_convs = {item.conversation.id: item.conversation
-                         for item in evaluated_views[0].items}
+            base_convs = {
+                item.conversation.id: item.conversation
+                for item in evaluated_views[0].items
+            }
             for ev in evaluated_views[1:]:
                 for item in ev.items:
                     base_convs.pop(item.conversation.id, None)
@@ -1087,7 +1141,9 @@ class ViewEvaluator:
         return None
 
 
-def evaluate_view(view: View, db: Any, view_loader: Optional[callable] = None) -> EvaluatedView:
+def evaluate_view(
+    view: View, db: Any, view_loader: Optional[callable] = None
+) -> EvaluatedView:
     """
     Convenience function to evaluate a view.
 
@@ -1107,8 +1163,8 @@ def evaluate_view(view: View, db: Any, view_loader: Optional[callable] = None) -
 # View Storage (views/ directory management)
 # =============================================================================
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 
 class ViewStore:
@@ -1229,14 +1285,16 @@ class ViewStore:
         for name in self.list_views():
             view = self.load(name)
             if view:
-                result.append({
-                    "name": view.name,
-                    "description": view.description,
-                    "selection_type": view.selection_type.value,
-                    "item_count": len(view.items) if view.items else 0,
-                    "created": view.created,
-                    "updated": view.updated,
-                })
+                result.append(
+                    {
+                        "name": view.name,
+                        "description": view.description,
+                        "selection_type": view.selection_type.value,
+                        "item_count": len(view.items) if view.items else 0,
+                        "created": view.created,
+                        "updated": view.updated,
+                    }
+                )
         return result
 
     def get_view_loader(self) -> callable:
@@ -1291,7 +1349,7 @@ class ViewStore:
             "resolved_items": len(evaluated.items),
             "missing_ids": evaluated.missing_ids,
             "drift_count": evaluated.drift_count,
-            "issues": len(evaluated.missing_ids) + evaluated.drift_count
+            "issues": len(evaluated.missing_ids) + evaluated.drift_count,
         }
 
     def create_view(
@@ -1300,7 +1358,7 @@ class ViewStore:
         description: Optional[str] = None,
         items: Optional[List[str]] = None,
         query: Optional[Dict[str, Any]] = None,
-        author: Optional[str] = None
+        author: Optional[str] = None,
     ) -> View:
         """
         Create a new view with common options.
@@ -1329,7 +1387,7 @@ class ViewStore:
                 pinned=query.get("pinned"),
                 archived=query.get("archived"),
                 title_contains=query.get("title_contains"),
-                content_contains=query.get("content_contains")
+                content_contains=query.get("content_contains"),
             )
 
         return View(
@@ -1338,7 +1396,7 @@ class ViewStore:
             author=author,
             created=datetime.now(),
             items=view_items,
-            query=view_query
+            query=view_query,
         )
 
     def add_to_view(
@@ -1347,7 +1405,7 @@ class ViewStore:
         conversation_id: str,
         title: Optional[str] = None,
         note: Optional[str] = None,
-        db: Optional[Any] = None
+        db: Optional[Any] = None,
     ) -> bool:
         """
         Add a conversation to an existing view.
@@ -1383,8 +1441,10 @@ class ViewStore:
                 snapshot = ContentSnapshot(
                     hash=_compute_content_hash(conv),
                     title=conv.title,
-                    message_count=len(conv.message_map) if hasattr(conv, 'message_map') else 0,
-                    captured_at=datetime.now()
+                    message_count=(
+                        len(conv.message_map) if hasattr(conv, "message_map") else 0
+                    ),
+                    captured_at=datetime.now(),
                 )
 
         item = ViewItem(
@@ -1392,7 +1452,7 @@ class ViewStore:
             title=title,
             note=note,
             snapshot=snapshot,
-            added_at=datetime.now()
+            added_at=datetime.now(),
         )
 
         view.items.append(item)
@@ -1416,7 +1476,8 @@ class ViewStore:
 
         original_len = len(view.items)
         view.items = [
-            item for item in view.items
+            item
+            for item in view.items
             if not (isinstance(item, ViewItem) and item.id == conversation_id)
         ]
 

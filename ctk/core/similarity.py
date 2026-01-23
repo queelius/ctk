@@ -7,26 +7,26 @@ This module provides:
 - ConversationGraphBuilder: Build weighted graphs of conversation relationships
 """
 
-from typing import Dict, List, Optional, Any, Union, Tuple
-from dataclasses import dataclass, field, asdict
-from enum import Enum
-import numpy as np
 import hashlib
 import json
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 
 from ctk.core.models import ConversationTree, MessageRole
-from ctk.integrations.embeddings.base import (
-    EmbeddingProvider,
-    ChunkingStrategy,
-    AggregationStrategy,
-)
-
+from ctk.integrations.embeddings.base import (AggregationStrategy,
+                                              ChunkingStrategy,
+                                              EmbeddingProvider)
 
 # ==================== Configuration ====================
+
 
 @dataclass
 class ConversationEmbeddingConfig:
     """Configuration for conversation embedding"""
+
     provider: str = "tfidf"  # tfidf, ollama, openai, etc.
     model: Optional[str] = None  # Provider-specific model name
 
@@ -37,14 +37,16 @@ class ConversationEmbeddingConfig:
     aggregation: AggregationStrategy = AggregationStrategy.WEIGHTED_MEAN
 
     # Role weights (for WEIGHTED_MEAN aggregation)
-    role_weights: Dict[str, float] = field(default_factory=lambda: {
-        "user": 2.0,      # User messages weighted 2x
-        "assistant": 1.0,  # Assistant messages baseline
-        "system": 0.5,     # System messages weighted 0.5x
-        "tool": 0.3,       # Tool messages weighted less
-        "function": 0.3,
-        "tool_result": 0.3,
-    })
+    role_weights: Dict[str, float] = field(
+        default_factory=lambda: {
+            "user": 2.0,  # User messages weighted 2x
+            "assistant": 1.0,  # Assistant messages baseline
+            "system": 0.5,  # System messages weighted 0.5x
+            "tool": 0.3,  # Tool messages weighted less
+            "function": 0.3,
+            "tool_result": 0.3,
+        }
+    )
 
     # Text extraction
     include_title: bool = True
@@ -58,20 +60,29 @@ class ConversationEmbeddingConfig:
         """Generate hash of configuration for cache invalidation"""
         # Create deterministic JSON representation
         config_dict = {
-            'provider': self.provider,
-            'model': self.model,
-            'chunking': self.chunking.value if isinstance(self.chunking, ChunkingStrategy) else self.chunking,
-            'aggregation': self.aggregation.value if isinstance(self.aggregation, AggregationStrategy) else self.aggregation,
-            'role_weights': dict(sorted(self.role_weights.items())),
-            'include_title': self.include_title,
-            'include_tags': self.include_tags,
-            'title_weight': self.title_weight,
+            "provider": self.provider,
+            "model": self.model,
+            "chunking": (
+                self.chunking.value
+                if isinstance(self.chunking, ChunkingStrategy)
+                else self.chunking
+            ),
+            "aggregation": (
+                self.aggregation.value
+                if isinstance(self.aggregation, AggregationStrategy)
+                else self.aggregation
+            ),
+            "role_weights": dict(sorted(self.role_weights.items())),
+            "include_title": self.include_title,
+            "include_tags": self.include_tags,
+            "title_weight": self.title_weight,
         }
         config_json = json.dumps(config_dict, sort_keys=True)
         return hashlib.sha256(config_json.encode()).hexdigest()[:16]
 
 
 # ==================== Conversation Embedder ====================
+
 
 class ConversationEmbedder:
     """
@@ -87,7 +98,7 @@ class ConversationEmbedder:
     def __init__(
         self,
         config: ConversationEmbeddingConfig,
-        provider: Optional[EmbeddingProvider] = None
+        provider: Optional[EmbeddingProvider] = None,
     ):
         """
         Initialize conversation embedder.
@@ -105,9 +116,11 @@ class ConversationEmbedder:
 
         if provider_name == "tfidf":
             from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+
             return TFIDFEmbedding(self.config.provider_config)
         elif provider_name == "ollama":
             from ctk.integrations.embeddings.ollama import OllamaEmbedding
+
             return OllamaEmbedding(self.config.provider_config)
         else:
             raise ValueError(f"Unknown embedding provider: {provider_name}")
@@ -144,22 +157,17 @@ class ConversationEmbedder:
         # Aggregate using specified strategy
         if self.config.aggregation == AggregationStrategy.WEIGHTED_MEAN:
             aggregated = self.provider.aggregate_embeddings(
-                embeddings,
-                strategy=AggregationStrategy.WEIGHTED_MEAN,
-                weights=weights
+                embeddings, strategy=AggregationStrategy.WEIGHTED_MEAN, weights=weights
             )
         else:
             aggregated = self.provider.aggregate_embeddings(
-                embeddings,
-                strategy=self.config.aggregation
+                embeddings, strategy=self.config.aggregation
             )
 
         return np.array(aggregated)
 
     def embed_conversations(
-        self,
-        conversations: List[ConversationTree],
-        show_progress: bool = False
+        self, conversations: List[ConversationTree], show_progress: bool = False
     ) -> List[np.ndarray]:
         """
         Batch embed multiple conversations.
@@ -176,6 +184,7 @@ class ConversationEmbedder:
         if show_progress:
             try:
                 from tqdm import tqdm
+
                 conversations = tqdm(conversations, desc="Embedding conversations")
             except ImportError:
                 pass
@@ -187,8 +196,7 @@ class ConversationEmbedder:
         return embeddings
 
     def _extract_text_chunks(
-        self,
-        conversation: ConversationTree
+        self, conversation: ConversationTree
     ) -> List[Tuple[str, float]]:
         """
         Extract text chunks with weights from conversation.
@@ -239,10 +247,10 @@ class ConversationEmbedder:
     def _extract_message_text(self, message) -> str:
         """Extract text content from a message"""
         # Handle both dict and object access
-        if hasattr(message, 'content'):
+        if hasattr(message, "content"):
             content = message.content
         elif isinstance(message, dict):
-            content = message.get('content', '')
+            content = message.get("content", "")
         else:
             return ""
 
@@ -254,8 +262,8 @@ class ConversationEmbedder:
             text_parts = []
             for part in content:
                 if isinstance(part, dict):
-                    if part.get('type') == 'text':
-                        text_parts.append(part.get('text', ''))
+                    if part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
                 elif isinstance(part, str):
                     text_parts.append(part)
             return " ".join(text_parts)
@@ -270,12 +278,12 @@ class ConversationEmbedder:
             Weight multiplier for this message
         """
         # Get role
-        if hasattr(message, 'role'):
+        if hasattr(message, "role"):
             role = message.role
         elif isinstance(message, dict):
-            role = message.get('role', 'user')
+            role = message.get("role", "user")
         else:
-            role = 'user'
+            role = "user"
 
         # Convert to string if enum
         if isinstance(role, MessageRole):
@@ -290,9 +298,11 @@ class ConversationEmbedder:
 
 # ==================== Similarity Results ====================
 
+
 @dataclass
 class SimilarityResult:
     """Result of similarity computation"""
+
     conversation1_id: str
     conversation2_id: str
     similarity: float  # 0.0 to 1.0 for cosine similarity
@@ -306,6 +316,7 @@ class SimilarityResult:
 
 class SimilarityMetric(Enum):
     """Similarity metrics"""
+
     COSINE = "cosine"  # Cosine similarity (default)
     EUCLIDEAN = "euclidean"  # Euclidean distance (inverted)
     DOT_PRODUCT = "dot"  # Dot product
@@ -313,6 +324,7 @@ class SimilarityMetric(Enum):
 
 
 # ==================== Similarity Computer ====================
+
 
 class SimilarityComputer:
     """
@@ -323,7 +335,7 @@ class SimilarityComputer:
         self,
         embedder: ConversationEmbedder,
         metric: SimilarityMetric = SimilarityMetric.COSINE,
-        db=None  # Database instance for caching
+        db=None,  # Database instance for caching
     ):
         """
         Initialize similarity computer.
@@ -341,7 +353,7 @@ class SimilarityComputer:
         self,
         vec1: Union[ConversationTree, np.ndarray, str],
         vec2: Union[ConversationTree, np.ndarray, str],
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> SimilarityResult:
         """
         Compute similarity between two conversations or vectors.
@@ -361,9 +373,10 @@ class SimilarityComputer:
         # Check cache for similarity
         if use_cache and self.db and id1 and id2:
             cached = self.db.get_similarity(
-                id1, id2,
+                id1,
+                id2,
                 metric=self.metric.value,
-                provider=self.embedder.config.provider
+                provider=self.embedder.config.provider,
             )
             if cached is not None:
                 return SimilarityResult(
@@ -371,7 +384,7 @@ class SimilarityComputer:
                     conversation2_id=id2,
                     similarity=cached,
                     method=self.metric.value,
-                    metadata={'cached': True}
+                    metadata={"cached": True},
                 )
 
         # Compute similarity
@@ -380,10 +393,11 @@ class SimilarityComputer:
         # Cache result
         if self.db and id1 and id2:
             self.db.save_similarity(
-                id1, id2,
+                id1,
+                id2,
                 similarity=similarity,
                 metric=self.metric.value,
-                provider=self.embedder.config.provider
+                provider=self.embedder.config.provider,
             )
 
         return SimilarityResult(
@@ -391,7 +405,7 @@ class SimilarityComputer:
             conversation2_id=id2 or "unknown",
             similarity=similarity,
             method=self.metric.value,
-            metadata={'cached': False}
+            metadata={"cached": False},
         )
 
     def find_similar(
@@ -400,7 +414,7 @@ class SimilarityComputer:
         candidates: Optional[List[Union[ConversationTree, str]]] = None,
         top_k: int = 10,
         threshold: Optional[float] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> List[SimilarityResult]:
         """
         Find conversations similar to a given conversation.
@@ -438,7 +452,10 @@ class SimilarityComputer:
             # Ensure query conversation is always conversation1_id
             if result.conversation1_id != query_id:
                 # Swap if needed
-                result.conversation1_id, result.conversation2_id = result.conversation2_id, result.conversation1_id
+                result.conversation1_id, result.conversation2_id = (
+                    result.conversation2_id,
+                    result.conversation1_id,
+                )
 
             # Apply threshold
             if threshold is not None and result.similarity < threshold:
@@ -456,7 +473,7 @@ class SimilarityComputer:
         self,
         conversations: List[Union[ConversationTree, str]],
         use_cache: bool = True,
-        show_progress: bool = False
+        show_progress: bool = False,
     ) -> np.ndarray:
         """
         Compute pairwise similarity matrix.
@@ -483,6 +500,7 @@ class SimilarityComputer:
         if show_progress:
             try:
                 from tqdm import tqdm
+
                 iterator = tqdm(iterator, desc="Computing similarity matrix")
             except ImportError:
                 pass
@@ -499,9 +517,7 @@ class SimilarityComputer:
         return matrix
 
     def _get_embedding(
-        self,
-        source: Union[ConversationTree, np.ndarray, str],
-        use_cache: bool
+        self, source: Union[ConversationTree, np.ndarray, str], use_cache: bool
     ) -> Tuple[np.ndarray, Optional[str]]:
         """
         Get embedding from various sources.
@@ -523,9 +539,7 @@ class SimilarityComputer:
             model_name = self.embedder.config.model or self.embedder.config.provider
             if use_cache:
                 cached_emb = self.db.get_embedding(
-                    source,
-                    provider=self.embedder.config.provider,
-                    model=model_name
+                    source, provider=self.embedder.config.provider, model=model_name
                 )
                 if cached_emb is not None:
                     return cached_emb, source
@@ -546,7 +560,7 @@ class SimilarityComputer:
                     model=self.embedder.config.model or self.embedder.config.provider,
                     chunking_strategy=self.embedder.config.chunking.value,
                     aggregation_strategy=self.embedder.config.aggregation.value,
-                    aggregation_weights=self.embedder.config.role_weights
+                    aggregation_weights=self.embedder.config.role_weights,
                 )
 
             return emb, source
@@ -559,9 +573,7 @@ class SimilarityComputer:
             model_name = self.embedder.config.model or self.embedder.config.provider
             if use_cache and self.db and conv_id:
                 cached_emb = self.db.get_embedding(
-                    conv_id,
-                    provider=self.embedder.config.provider,
-                    model=model_name
+                    conv_id, provider=self.embedder.config.provider, model=model_name
                 )
                 if cached_emb is not None:
                     return cached_emb, conv_id
@@ -578,18 +590,14 @@ class SimilarityComputer:
                     model=self.embedder.config.model or self.embedder.config.provider,
                     chunking_strategy=self.embedder.config.chunking.value,
                     aggregation_strategy=self.embedder.config.aggregation.value,
-                    aggregation_weights=self.embedder.config.role_weights
+                    aggregation_weights=self.embedder.config.role_weights,
                 )
 
             return emb, conv_id
 
         raise TypeError(f"Unsupported source type: {type(source)}")
 
-    def _compute_metric(
-        self,
-        vec1: np.ndarray,
-        vec2: np.ndarray
-    ) -> float:
+    def _compute_metric(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
         """
         Compute similarity metric between two vectors.
 
@@ -628,9 +636,11 @@ class SimilarityComputer:
 
 # ==================== Graph Builder ====================
 
+
 @dataclass
 class ConversationLink:
     """Weighted link between conversations"""
+
     source_id: str
     target_id: str
     weight: float  # Similarity score
@@ -644,6 +654,7 @@ class ConversationLink:
 @dataclass
 class ConversationGraph:
     """Graph of conversation relationships"""
+
     nodes: List[str]  # Conversation IDs
     links: List[ConversationLink]
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -651,9 +662,9 @@ class ConversationGraph:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary (JSON-serializable)"""
         return {
-            'nodes': self.nodes,
-            'links': [link.to_dict() for link in self.links],
-            'metadata': self.metadata,
+            "nodes": self.nodes,
+            "links": [link.to_dict() for link in self.links],
+            "metadata": self.metadata,
         }
 
     def to_networkx(self):
@@ -661,7 +672,9 @@ class ConversationGraph:
         try:
             import networkx as nx
         except ImportError:
-            raise ImportError("NetworkX required for graph operations: pip install networkx")
+            raise ImportError(
+                "NetworkX required for graph operations: pip install networkx"
+            )
 
         G = nx.Graph()
         G.add_nodes_from(self.nodes)
@@ -676,6 +689,7 @@ class ConversationGraph:
         G = self.to_networkx()
         try:
             import networkx as nx
+
             nx.write_gexf(G, path)
         except Exception as e:
             raise Exception(f"Failed to export to GEXF: {e}")
@@ -685,23 +699,23 @@ class ConversationGraph:
         import json
 
         cytoscape_data = {
-            'elements': {
-                'nodes': [{'data': {'id': node}} for node in self.nodes],
-                'edges': [
+            "elements": {
+                "nodes": [{"data": {"id": node}} for node in self.nodes],
+                "edges": [
                     {
-                        'data': {
-                            'id': f"{link.source_id}-{link.target_id}",
-                            'source': link.source_id,
-                            'target': link.target_id,
-                            'weight': link.weight,
+                        "data": {
+                            "id": f"{link.source_id}-{link.target_id}",
+                            "source": link.source_id,
+                            "target": link.target_id,
+                            "weight": link.weight,
                         }
                     }
                     for link in self.links
-                ]
+                ],
             }
         }
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(cytoscape_data, f, indent=2)
 
 
@@ -725,7 +739,7 @@ class ConversationGraphBuilder:
         threshold: float = 0.3,
         max_links_per_node: Optional[int] = 10,
         use_cache: bool = True,
-        show_progress: bool = False
+        show_progress: bool = False,
     ) -> ConversationGraph:
         """
         Build graph of conversation relationships.
@@ -748,9 +762,7 @@ class ConversationGraphBuilder:
 
         # Compute similarity matrix
         matrix = self.similarity.compute_similarity_matrix(
-            conversations,
-            use_cache=use_cache,
-            show_progress=show_progress
+            conversations, use_cache=use_cache, show_progress=show_progress
         )
 
         # Build links
@@ -775,11 +787,13 @@ class ConversationGraphBuilder:
 
                 # Only add if not already added (avoid duplicates)
                 if i < j:  # Only add edge once
-                    links.append(ConversationLink(
-                        source_id=conversations[i],
-                        target_id=conversations[j],
-                        weight=sim
-                    ))
+                    links.append(
+                        ConversationLink(
+                            source_id=conversations[i],
+                            target_id=conversations[j],
+                            weight=sim,
+                        )
+                    )
 
                 count += 1
 
@@ -787,17 +801,15 @@ class ConversationGraphBuilder:
             nodes=conversations,
             links=links,
             metadata={
-                'threshold': threshold,
-                'max_links_per_node': max_links_per_node,
-                'total_nodes': len(conversations),
-                'total_links': len(links),
-            }
+                "threshold": threshold,
+                "max_links_per_node": max_links_per_node,
+                "total_nodes": len(conversations),
+                "total_links": len(links),
+            },
         )
 
     def detect_communities(
-        self,
-        graph: ConversationGraph,
-        algorithm: str = "louvain"
+        self, graph: ConversationGraph, algorithm: str = "louvain"
     ) -> Dict[str, int]:
         """
         Detect communities in the conversation graph.
@@ -813,18 +825,19 @@ class ConversationGraphBuilder:
             import networkx as nx
             import networkx.algorithms.community as nx_comm
         except ImportError:
-            raise ImportError("NetworkX required for community detection: pip install networkx")
+            raise ImportError(
+                "NetworkX required for community detection: pip install networkx"
+            )
 
         G = graph.to_networkx()
 
         if algorithm == "louvain":
             try:
                 import community as community_louvain
+
                 communities = community_louvain.best_partition(G)
             except ImportError:
-                raise ImportError(
-                    "python-louvain required: pip install python-louvain"
-                )
+                raise ImportError("python-louvain required: pip install python-louvain")
 
         elif algorithm == "label_propagation":
             communities_iter = nx_comm.label_propagation_communities(G)

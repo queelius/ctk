@@ -1,16 +1,28 @@
 """
 Markdown exporter for CTK conversations
+
+Security note: This exporter includes path traversal protection to ensure
+exported files stay within the specified output directory.
 """
 
-from typing import List, Dict, Any, Optional, TextIO
 import io
+import logging
 import os
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional, TextIO
 
-from ctk.core.plugin import ExporterPlugin
 from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.plugin import ExporterPlugin
+
+logger = logging.getLogger(__name__)
+
+
+class PathTraversalError(Exception):
+    """Raised when a path traversal attack is detected"""
+
+    pass
 
 
 class MarkdownExporter(ExporterPlugin):
@@ -29,7 +41,9 @@ class MarkdownExporter(ExporterPlugin):
         """Export conversations to markdown"""
         return self.export_conversations(conversations, **kwargs)
 
-    def export_to_file(self, conversations: List[ConversationTree], file_path: str, **kwargs) -> None:
+    def export_to_file(
+        self, conversations: List[ConversationTree], file_path: str, **kwargs
+    ) -> None:
         """
         Export conversations to markdown file(s).
 
@@ -41,10 +55,10 @@ class MarkdownExporter(ExporterPlugin):
         # Determine if we should output to directory (one file per conversation)
         # Directory mode if: path is existing directory, ends with /, or has no extension
         is_directory_mode = (
-            path.is_dir() or
-            file_path.endswith('/') or
-            file_path.endswith(os.sep) or
-            (not path.suffix and not path.exists())
+            path.is_dir()
+            or file_path.endswith("/")
+            or file_path.endswith(os.sep)
+            or (not path.suffix and not path.exists())
         )
 
         if is_directory_mode:
@@ -53,28 +67,76 @@ class MarkdownExporter(ExporterPlugin):
             # Single file mode
             content = self.export_conversations(conversations, **kwargs)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding='utf-8')
+            path.write_text(content, encoding="utf-8")
 
     def _export_to_directory(
-        self,
-        conversations: List[ConversationTree],
-        output_dir: Path,
-        **kwargs
+        self, conversations: List[ConversationTree], output_dir: Path, **kwargs
     ) -> None:
-        """Export each conversation to its own markdown file"""
+        """
+        Export each conversation to its own markdown file.
+
+        Includes path traversal protection to ensure files stay within output_dir.
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
+        # Resolve to absolute path for security checks
+        output_dir_resolved = output_dir.resolve()
 
         for conv in conversations:
             # Generate filename: YYYY-MM-DD-title-id.md
             filename = self._generate_filename(conv)
             file_path = output_dir / filename
 
+            # Security: Validate that the resolved path stays within output directory
+            file_path_resolved = file_path.resolve()
+            if not self._is_safe_path(file_path_resolved, output_dir_resolved):
+                logger.error(
+                    f"Path traversal attempt detected for conversation {conv.id}: "
+                    f"'{filename}' resolves outside output directory"
+                )
+                raise PathTraversalError(
+                    f"Generated filename '{filename}' would escape output directory"
+                )
+
             # Export single conversation
             content = self.export_conversations([conv], **kwargs)
-            file_path.write_text(content, encoding='utf-8')
+            file_path.write_text(content, encoding="utf-8")
+
+    def _is_safe_path(self, file_path: Path, base_dir: Path) -> bool:
+        """
+        Check if file_path is safely within base_dir.
+
+        Args:
+            file_path: Resolved absolute path to check
+            base_dir: Resolved absolute base directory
+
+        Returns:
+            True if file_path is within base_dir, False otherwise
+        """
+        try:
+            # Both paths should already be resolved, but ensure they are
+            file_path = file_path.resolve()
+            base_dir = base_dir.resolve()
+
+            # Check if file_path starts with base_dir
+            # Using is_relative_to (Python 3.9+) or manual check
+            try:
+                file_path.relative_to(base_dir)
+                return True
+            except ValueError:
+                return False
+        except Exception as e:
+            logger.warning(f"Error checking path safety: {e}")
+            return False
 
     def _generate_filename(self, conv: ConversationTree) -> str:
-        """Generate a filename for a conversation"""
+        """
+        Generate a safe filename for a conversation.
+
+        Security: This method sanitizes the filename to prevent:
+        - Path traversal (../, /, etc.)
+        - Shell injection via special characters
+        - Reserved filenames on Windows
+        """
         # Get date prefix
         date_str = ""
         if conv.metadata and conv.metadata.created_at:
@@ -82,17 +144,37 @@ class MarkdownExporter(ExporterPlugin):
 
         # Sanitize title
         title = conv.title or "untitled"
-        # Remove or replace problematic characters
-        sanitized = re.sub(r'[^\w\s-]', '', title.lower())
-        sanitized = re.sub(r'[\s_]+', '-', sanitized)
-        sanitized = re.sub(r'-+', '-', sanitized).strip('-')
+
+        # Security: First, strip any path separators and traversal attempts
+        title = title.replace("/", "-").replace("\\", "-")
+        title = title.replace("..", "")
+
+        # Remove or replace problematic characters (keep only alphanumeric, space, dash)
+        sanitized = re.sub(r"[^\w\s-]", "", title.lower())
+        sanitized = re.sub(r"[\s_]+", "-", sanitized)
+        sanitized = re.sub(r"-+", "-", sanitized).strip("-")
+
+        # Security: Ensure sanitized name is not empty
+        if not sanitized:
+            sanitized = "conversation"
+
         # Truncate to reasonable length
         sanitized = sanitized[:50]
 
-        # Add short ID for uniqueness
+        # Add short ID for uniqueness (also sanitize the ID)
         short_id = conv.id[:8] if conv.id else "unknown"
+        short_id = re.sub(r"[^\w-]", "", short_id)  # Only allow alphanumeric and dash
 
-        return f"{date_str}{sanitized}-{short_id}.md"
+        # Security: Final check - ensure no path separators in result
+        filename = f"{date_str}{sanitized}-{short_id}.md"
+        if "/" in filename or "\\" in filename or ".." in filename:
+            # Fallback to a completely safe filename
+            logger.warning(
+                f"Filename generation produced unsafe result, using fallback"
+            )
+            filename = f"{date_str}conversation-{short_id}.md"
+
+        return filename
 
     def export_conversations(
         self,
@@ -102,7 +184,7 @@ class MarkdownExporter(ExporterPlugin):
         include_metadata: bool = True,
         include_timestamps: bool = True,
         include_tree_structure: bool = False,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         Export conversations to Markdown format
@@ -143,16 +225,13 @@ class MarkdownExporter(ExporterPlugin):
 
         # Write to file if specified
         if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(content)
 
         return content
 
     def _write_conversation_header(
-        self,
-        output: TextIO,
-        conv: ConversationTree,
-        include_metadata: bool
+        self, output: TextIO, conv: ConversationTree, include_metadata: bool
     ):
         """Write conversation header with metadata"""
         # Title
@@ -182,10 +261,7 @@ class MarkdownExporter(ExporterPlugin):
             output.write("\n")
 
     def _write_conversation_path(
-        self,
-        output: TextIO,
-        path: List[Message],
-        include_timestamps: bool
+        self, output: TextIO, path: List[Message], include_timestamps: bool
     ):
         """Write a single conversation path"""
         output.write("## Conversation\n\n")
@@ -246,10 +322,7 @@ class MarkdownExporter(ExporterPlugin):
                 output.write("\n")
 
     def _write_tree_structure(
-        self,
-        output: TextIO,
-        conv: ConversationTree,
-        include_timestamps: bool
+        self, output: TextIO, conv: ConversationTree, include_timestamps: bool
     ):
         """Write conversation as a tree structure"""
         output.write("## Conversation Tree\n\n")
@@ -267,7 +340,7 @@ class MarkdownExporter(ExporterPlugin):
         message_id: str,
         prefix: str,
         include_timestamps: bool,
-        is_last: bool = True
+        is_last: bool = True,
     ):
         """Recursively write tree nodes"""
         msg = conv.message_map.get(message_id)
@@ -294,7 +367,7 @@ class MarkdownExporter(ExporterPlugin):
         # Get children and recurse
         children = conv.get_children(message_id)
         for i, child in enumerate(children):
-            is_last_child = (i == len(children) - 1)
+            is_last_child = i == len(children) - 1
 
             if prefix:
                 new_prefix = prefix + ("    " if is_last else "│   ")
@@ -302,8 +375,7 @@ class MarkdownExporter(ExporterPlugin):
                 new_prefix = ""
 
             self._write_tree_node(
-                output, conv, child.id, new_prefix,
-                include_timestamps, is_last_child
+                output, conv, child.id, new_prefix, include_timestamps, is_last_child
             )
 
     def _has_branches(self, conv: ConversationTree) -> bool:
@@ -335,7 +407,7 @@ class MarkdownExporter(ExporterPlugin):
             MessageRole.SYSTEM: "⚙️",
             MessageRole.TOOL: "🔧",
             MessageRole.FUNCTION: "⚡",
-            MessageRole.TOOL_RESULT: "📊"
+            MessageRole.TOOL_RESULT: "📊",
         }
         return emoji_map.get(role, "💬")
 
@@ -347,7 +419,7 @@ class MarkdownExporter(ExporterPlugin):
             MessageRole.SYSTEM: "System",
             MessageRole.TOOL: "Tool",
             MessageRole.FUNCTION: "Function",
-            MessageRole.TOOL_RESULT: "Tool Result"
+            MessageRole.TOOL_RESULT: "Tool Result",
         }
         return name_map.get(role, role.value.title())
 
@@ -366,7 +438,7 @@ class MarkdownExporter(ExporterPlugin):
                 return "[empty]"
 
         # Clean up and truncate
-        text = text.replace('\n', ' ').strip()
+        text = text.replace("\n", " ").strip()
         if len(text) > max_length:
             return text[:max_length] + "..."
         return text

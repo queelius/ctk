@@ -32,42 +32,42 @@ def generate_slug(title: Optional[str], max_length: int = 60) -> Optional[str]:
         return None
 
     # Normalize unicode characters
-    slug = unicodedata.normalize('NFKD', title)
-    slug = slug.encode('ascii', 'ignore').decode('ascii')
+    slug = unicodedata.normalize("NFKD", title)
+    slug = slug.encode("ascii", "ignore").decode("ascii")
 
     # Convert to lowercase
     slug = slug.lower()
 
     # Replace common separators with hyphens
-    slug = re.sub(r'[:\-_/\\|]', '-', slug)
+    slug = re.sub(r"[:\-_/\\|]", "-", slug)
 
     # Handle contractions - keep the letters, just remove apostrophe
-    slug = re.sub(r"'s\b", 's', slug)  # "what's" -> "whats"
-    slug = re.sub(r"n't\b", 'nt', slug)  # "don't" -> "dont"
-    slug = re.sub(r"'ll\b", 'll', slug)  # "we'll" -> "well"
-    slug = re.sub(r"'re\b", 're', slug)  # "they're" -> "theyre"
-    slug = re.sub(r"'ve\b", 've', slug)  # "I've" -> "ive"
-    slug = re.sub(r"'d\b", 'd', slug)  # "I'd" -> "id"
-    slug = re.sub(r"'", '', slug)  # Remove remaining apostrophes
+    slug = re.sub(r"'s\b", "s", slug)  # "what's" -> "whats"
+    slug = re.sub(r"n't\b", "nt", slug)  # "don't" -> "dont"
+    slug = re.sub(r"'ll\b", "ll", slug)  # "we'll" -> "well"
+    slug = re.sub(r"'re\b", "re", slug)  # "they're" -> "theyre"
+    slug = re.sub(r"'ve\b", "ve", slug)  # "I've" -> "ive"
+    slug = re.sub(r"'d\b", "d", slug)  # "I'd" -> "id"
+    slug = re.sub(r"'", "", slug)  # Remove remaining apostrophes
 
     # Replace any non-alphanumeric characters with hyphens
-    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
 
     # Remove leading/trailing hyphens
-    slug = slug.strip('-')
+    slug = slug.strip("-")
 
     # Collapse multiple hyphens
-    slug = re.sub(r'-+', '-', slug)
+    slug = re.sub(r"-+", "-", slug)
 
     # Truncate to max length, respecting word boundaries
     if len(slug) > max_length:
         # Try to break at a hyphen
         truncated = slug[:max_length]
-        last_hyphen = truncated.rfind('-')
+        last_hyphen = truncated.rfind("-")
         if last_hyphen > max_length // 2:
             slug = truncated[:last_hyphen]
         else:
-            slug = truncated.rstrip('-')
+            slug = truncated.rstrip("-")
 
     return slug if slug else None
 
@@ -100,6 +100,7 @@ def make_unique_slug(base_slug: str, existing_slugs: set, max_suffix: int = 100)
 
     # Fallback: use timestamp
     import time
+
     return f"{base_slug}-{int(time.time())}"
 
 
@@ -134,12 +135,14 @@ def slug_matches(slug: str, query: str) -> bool:
         return True
 
     # Word-based partial match (all query words must appear in order)
-    query_words = query.split('-')
-    slug_words = slug.split('-')
+    query_words = query.split("-")
+    slug_words = slug.split("-")
 
     query_idx = 0
     for slug_word in slug_words:
-        if query_idx < len(query_words) and slug_word.startswith(query_words[query_idx]):
+        if query_idx < len(query_words) and slug_word.startswith(
+            query_words[query_idx]
+        ):
             query_idx += 1
         if query_idx == len(query_words):
             return True

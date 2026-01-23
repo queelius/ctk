@@ -5,23 +5,19 @@ Implements Unix-philosophy database manipulation tools
 """
 
 import argparse
-import sys
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, List
-import logging
 import json
+import logging
+import sys
+from datetime import datetime
 from glob import glob
+from pathlib import Path
+from typing import List, Optional
 
 from sqlalchemy import text
 
-from ctk.core.db_operations import (
-    DatabaseOperations,
-    DuplicateStrategy,
-    MergeStrategy,
-    ConversationComparator
-)
 from ctk.core.database import ConversationDB
+from ctk.core.db_operations import (ConversationComparator, DatabaseOperations,
+                                    DuplicateStrategy, MergeStrategy)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +32,7 @@ def get_db_size(db_path: str) -> int:
 
 def format_size(size_bytes: int) -> str:
     """Format bytes as human-readable size"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
@@ -47,343 +43,251 @@ def add_db_commands(subparsers):
     """Add database operation commands to CLI"""
 
     db_parser = subparsers.add_parser(
-        'db',
-        help='Database operations (merge, diff, intersect, filter, etc.)'
+        "db", help="Database operations (merge, diff, intersect, filter, etc.)"
     )
 
     db_subparsers = db_parser.add_subparsers(
-        dest='db_command',
-        help='Database operation to perform'
+        dest="db_command", help="Database operation to perform"
     )
 
     # INIT command
-    init_parser = db_subparsers.add_parser(
-        'init',
-        help='Initialize a new database'
+    init_parser = db_subparsers.add_parser("init", help="Initialize a new database")
+    init_parser.add_argument(
+        "path", nargs="?", help="Path for new database (default: uses configured path)"
     )
     init_parser.add_argument(
-        'path',
-        nargs='?',
-        help='Path for new database (default: uses configured path)'
-    )
-    init_parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Overwrite existing database'
+        "--force", action="store_true", help="Overwrite existing database"
     )
     init_parser.set_defaults(func=cmd_init)
 
     # INFO command
-    info_parser = db_subparsers.add_parser(
-        'info',
-        help='Show database information'
-    )
+    info_parser = db_subparsers.add_parser("info", help="Show database information")
     info_parser.add_argument(
-        'path',
-        nargs='?',
-        help='Database path (default: uses configured path)'
+        "path", nargs="?", help="Database path (default: uses configured path)"
     )
-    info_parser.add_argument(
-        '--json',
-        action='store_true',
-        help='Output as JSON'
-    )
+    info_parser.add_argument("--json", action="store_true", help="Output as JSON")
     info_parser.set_defaults(func=cmd_info)
 
     # VACUUM command
     vacuum_parser = db_subparsers.add_parser(
-        'vacuum',
-        help='Reclaim unused space and optimize database'
+        "vacuum", help="Reclaim unused space and optimize database"
     )
     vacuum_parser.add_argument(
-        'path',
-        nargs='?',
-        help='Database path (default: uses configured path)'
+        "path", nargs="?", help="Database path (default: uses configured path)"
     )
     vacuum_parser.add_argument(
-        '--analyze',
-        action='store_true',
-        help='Also run ANALYZE to update query statistics'
+        "--analyze",
+        action="store_true",
+        help="Also run ANALYZE to update query statistics",
     )
     vacuum_parser.set_defaults(func=cmd_vacuum)
 
     # BACKUP command
     backup_parser = db_subparsers.add_parser(
-        'backup',
-        help='Create a backup of the database'
+        "backup", help="Create a backup of the database"
     )
     backup_parser.add_argument(
-        'output',
-        nargs='?',
-        help='Backup destination (default: timestamped file)'
+        "output", nargs="?", help="Backup destination (default: timestamped file)"
     )
     backup_parser.add_argument(
-        '--source',
-        help='Source database (default: uses configured path)'
+        "--source", help="Source database (default: uses configured path)"
     )
     backup_parser.add_argument(
-        '--compress',
-        action='store_true',
-        help='Compress backup with gzip'
+        "--compress", action="store_true", help="Compress backup with gzip"
     )
     backup_parser.set_defaults(func=cmd_backup)
 
     # MERGE command
     merge_parser = db_subparsers.add_parser(
-        'merge',
-        help='Merge multiple databases into one'
+        "merge", help="Merge multiple databases into one"
     )
     merge_parser.add_argument(
-        'inputs',
-        nargs='+',
-        help='Input database files (supports glob patterns)'
+        "inputs", nargs="+", help="Input database files (supports glob patterns)"
     )
     merge_parser.add_argument(
-        '-o', '--output',
-        required=True,
-        help='Output database file'
+        "-o", "--output", required=True, help="Output database file"
     )
     merge_parser.add_argument(
-        '--strategy',
-        choices=['newest', 'oldest', 'longest', 'skip'],
-        default='newest',
-        help='Conflict resolution strategy (default: newest)'
+        "--strategy",
+        choices=["newest", "oldest", "longest", "skip"],
+        default="newest",
+        help="Conflict resolution strategy (default: newest)",
     )
     merge_parser.add_argument(
-        '--dedupe',
-        choices=['exact', 'hash', 'similarity', 'smart'],
-        default='exact',
-        help='Deduplication strategy (default: exact)'
+        "--dedupe",
+        choices=["exact", "hash", "similarity", "smart"],
+        default="exact",
+        help="Deduplication strategy (default: exact)",
     )
     merge_parser.add_argument(
-        '--progress',
-        action='store_true',
-        help='Show progress during merge'
+        "--progress", action="store_true", help="Show progress during merge"
     )
     merge_parser.set_defaults(func=cmd_merge)
 
     # DIFF command
     diff_parser = db_subparsers.add_parser(
-        'diff',
-        help='Find differences between databases'
+        "diff", help="Find differences between databases"
+    )
+    diff_parser.add_argument("left", help="Left database file")
+    diff_parser.add_argument("right", help="Right database file")
+    diff_parser.add_argument(
+        "-o", "--output", help="Output database for unique conversations"
     )
     diff_parser.add_argument(
-        'left',
-        help='Left database file'
+        "--symmetric", action="store_true", help="Show differences from both sides"
     )
     diff_parser.add_argument(
-        'right',
-        help='Right database file'
+        "--comparison",
+        choices=["exact", "hash", "similarity"],
+        default="exact",
+        help="Comparison method (default: exact)",
     )
     diff_parser.add_argument(
-        '-o', '--output',
-        help='Output database for unique conversations'
-    )
-    diff_parser.add_argument(
-        '--symmetric',
-        action='store_true',
-        help='Show differences from both sides'
-    )
-    diff_parser.add_argument(
-        '--comparison',
-        choices=['exact', 'hash', 'similarity'],
-        default='exact',
-        help='Comparison method (default: exact)'
-    )
-    diff_parser.add_argument(
-        '--stats-only',
-        action='store_true',
-        help='Only show statistics, don\'t save output'
+        "--stats-only",
+        action="store_true",
+        help="Only show statistics, don't save output",
     )
     diff_parser.set_defaults(func=cmd_diff)
 
     # INTERSECT command
     intersect_parser = db_subparsers.add_parser(
-        'intersect',
-        help='Find conversations common to multiple databases'
+        "intersect", help="Find conversations common to multiple databases"
     )
     intersect_parser.add_argument(
-        'inputs',
-        nargs='+',
-        help='Input database files (supports glob patterns)'
+        "inputs", nargs="+", help="Input database files (supports glob patterns)"
     )
     intersect_parser.add_argument(
-        '-o', '--output',
-        required=True,
-        help='Output database file'
+        "-o", "--output", required=True, help="Output database file"
     )
     intersect_parser.add_argument(
-        '--min-count',
+        "--min-count",
         type=int,
-        help='Minimum databases conversation must appear in (default: all)'
+        help="Minimum databases conversation must appear in (default: all)",
     )
     intersect_parser.add_argument(
-        '--comparison',
-        choices=['exact', 'hash', 'similarity'],
-        default='exact',
-        help='Comparison method (default: exact)'
+        "--comparison",
+        choices=["exact", "hash", "similarity"],
+        default="exact",
+        help="Comparison method (default: exact)",
     )
     intersect_parser.set_defaults(func=cmd_intersect)
 
     # FILTER command
     filter_parser = db_subparsers.add_parser(
-        'filter',
-        help='Filter conversations based on criteria'
+        "filter", help="Filter conversations based on criteria"
+    )
+    filter_parser.add_argument("input", help="Input database file")
+    filter_parser.add_argument(
+        "-o", "--output", required=True, help="Output database file"
     )
     filter_parser.add_argument(
-        'input',
-        help='Input database file'
+        "--source", help="Filter by source (chatgpt, claude, copilot, etc.)"
     )
     filter_parser.add_argument(
-        '-o', '--output',
-        required=True,
-        help='Output database file'
-    )
-    filter_parser.add_argument(
-        '--source',
-        help='Filter by source (chatgpt, claude, copilot, etc.)'
-    )
-    filter_parser.add_argument(
-        '--after',
+        "--after",
         type=lambda s: datetime.fromisoformat(s),
-        help='Only conversations after date (YYYY-MM-DD)'
+        help="Only conversations after date (YYYY-MM-DD)",
     )
     filter_parser.add_argument(
-        '--before',
+        "--before",
         type=lambda s: datetime.fromisoformat(s),
-        help='Only conversations before date (YYYY-MM-DD)'
+        help="Only conversations before date (YYYY-MM-DD)",
     )
+    filter_parser.add_argument("--tags", help="Required tags (comma-separated)")
+    filter_parser.add_argument("--min-messages", type=int, help="Minimum message count")
+    filter_parser.add_argument("--max-messages", type=int, help="Maximum message count")
     filter_parser.add_argument(
-        '--tags',
-        help='Required tags (comma-separated)'
-    )
-    filter_parser.add_argument(
-        '--min-messages',
-        type=int,
-        help='Minimum message count'
-    )
-    filter_parser.add_argument(
-        '--max-messages',
-        type=int,
-        help='Maximum message count'
-    )
-    filter_parser.add_argument(
-        '--query',
-        help='SQL WHERE clause for advanced filtering'
+        "--query", help="SQL WHERE clause for advanced filtering"
     )
     filter_parser.set_defaults(func=cmd_filter)
 
     # SPLIT command
     split_parser = db_subparsers.add_parser(
-        'split',
-        help='Split database into multiple databases'
+        "split", help="Split database into multiple databases"
     )
+    split_parser.add_argument("input", help="Input database file")
     split_parser.add_argument(
-        'input',
-        help='Input database file'
-    )
-    split_parser.add_argument(
-        '-o', '--output-dir',
-        default='./split',
-        help='Output directory for split databases (default: ./split)'
+        "-o",
+        "--output-dir",
+        default="./split",
+        help="Output directory for split databases (default: ./split)",
     )
     split_group = split_parser.add_mutually_exclusive_group()
     split_group.add_argument(
-        '--by',
-        choices=['source', 'month', 'model', 'project'],
-        default='source',
-        help='Field to split by (default: source)'
+        "--by",
+        choices=["source", "month", "model", "project"],
+        default="source",
+        help="Field to split by (default: source)",
     )
     split_group.add_argument(
-        '--chunks',
-        type=int,
-        help='Split into N equal-sized chunks'
+        "--chunks", type=int, help="Split into N equal-sized chunks"
     )
     split_parser.set_defaults(func=cmd_split)
 
     # DEDUPE command
     dedupe_parser = db_subparsers.add_parser(
-        'dedupe',
-        help='Remove duplicate conversations from database'
+        "dedupe", help="Remove duplicate conversations from database"
+    )
+    dedupe_parser.add_argument("input", help="Input database file")
+    dedupe_parser.add_argument(
+        "-o", "--output", help="Output database file (if not specified, modifies input)"
     )
     dedupe_parser.add_argument(
-        'input',
-        help='Input database file'
+        "--strategy",
+        choices=["exact", "hash", "similarity"],
+        default="exact",
+        help="Deduplication strategy (default: exact)",
     )
     dedupe_parser.add_argument(
-        '-o', '--output',
-        help='Output database file (if not specified, modifies input)'
-    )
-    dedupe_parser.add_argument(
-        '--strategy',
-        choices=['exact', 'hash', 'similarity'],
-        default='exact',
-        help='Deduplication strategy (default: exact)'
-    )
-    dedupe_parser.add_argument(
-        '--similarity',
+        "--similarity",
         type=float,
         default=0.95,
-        help='Similarity threshold for fuzzy matching (0-1, default: 0.95)'
+        help="Similarity threshold for fuzzy matching (0-1, default: 0.95)",
     )
     dedupe_parser.add_argument(
-        '--keep',
-        choices=['newest', 'oldest', 'longest'],
-        default='newest',
-        help='Which duplicate to keep (default: newest)'
+        "--keep",
+        choices=["newest", "oldest", "longest"],
+        default="newest",
+        help="Which duplicate to keep (default: newest)",
     )
     dedupe_parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be removed without actually removing'
+        "--dry-run",
+        action="store_true",
+        help="Show what would be removed without actually removing",
     )
     dedupe_parser.set_defaults(func=cmd_dedupe)
 
     # STATS command
     stats_parser = db_subparsers.add_parser(
-        'stats',
-        help='Show database statistics and analysis'
+        "stats", help="Show database statistics and analysis"
     )
     stats_parser.add_argument(
-        'inputs',
-        nargs='+',
-        help='Database files to analyze (supports glob patterns)'
+        "inputs", nargs="+", help="Database files to analyze (supports glob patterns)"
     )
     stats_parser.add_argument(
-        '--compare',
-        action='store_true',
-        help='Compare databases'
+        "--compare", action="store_true", help="Compare databases"
     )
     stats_parser.add_argument(
-        '--overlap',
-        action='store_true',
-        help='Show overlap matrix between databases'
+        "--overlap", action="store_true", help="Show overlap matrix between databases"
     )
     stats_parser.add_argument(
-        '--format',
-        choices=['text', 'json', 'csv'],
-        default='text',
-        help='Output format (default: text)'
+        "--format",
+        choices=["text", "json", "csv"],
+        default="text",
+        help="Output format (default: text)",
     )
     stats_parser.set_defaults(func=cmd_stats)
 
     # VALIDATE command
     validate_parser = db_subparsers.add_parser(
-        'validate',
-        help='Check database integrity'
+        "validate", help="Check database integrity"
+    )
+    validate_parser.add_argument("input", help="Database file to validate")
+    validate_parser.add_argument(
+        "--repair", action="store_true", help="Attempt to repair issues"
     )
     validate_parser.add_argument(
-        'input',
-        help='Database file to validate'
-    )
-    validate_parser.add_argument(
-        '--repair',
-        action='store_true',
-        help='Attempt to repair issues'
-    )
-    validate_parser.add_argument(
-        '-o', '--output',
-        help='Output file for repaired database'
+        "-o", "--output", help="Output file for repaired database"
     )
     validate_parser.set_defaults(func=cmd_validate)
 
@@ -439,7 +343,7 @@ def cmd_merge(args):
             args.output,
             strategy=strategy,
             dedupe=dedupe,
-            progress_callback=callback
+            progress_callback=callback,
         )
 
         if args.progress:
@@ -475,7 +379,7 @@ def cmd_diff(args):
             args.right,
             output_db=args.output if not args.stats_only else None,
             symmetric=args.symmetric,
-            comparison=comparison
+            comparison=comparison,
         )
 
         print(f"\nDiff results:")
@@ -516,10 +420,7 @@ def cmd_intersect(args):
 
     try:
         stats = db_ops.intersect(
-            input_files,
-            args.output,
-            min_count=args.min_count,
-            comparison=comparison
+            input_files, args.output, min_count=args.min_count, comparison=comparison
         )
 
         print(f"\nIntersect results:")
@@ -527,7 +428,9 @@ def cmd_intersect(args):
         print(f"  Common to all databases: {stats['common_to_all']}")
 
         if args.min_count:
-            print(f"  Common to at least {args.min_count} databases: {stats['common_to_min']}")
+            print(
+                f"  Common to at least {args.min_count} databases: {stats['common_to_min']}"
+            )
 
         print(f"  Output saved to: {args.output}")
 
@@ -546,7 +449,7 @@ def cmd_filter(args):
     print(f"Filtering {args.input}...")
 
     # Parse tags if provided
-    tags = args.tags.split(',') if args.tags else None
+    tags = args.tags.split(",") if args.tags else None
 
     try:
         stats = db_ops.filter(
@@ -558,7 +461,7 @@ def cmd_filter(args):
             tags=tags,
             min_messages=args.min_messages,
             max_messages=args.max_messages,
-            query=args.query
+            query=args.query,
         )
 
         print(f"\nFilter results:")
@@ -586,10 +489,7 @@ def cmd_split(args):
 
     try:
         stats = db_ops.split(
-            args.input,
-            args.output_dir,
-            by=args.by,
-            chunks=args.chunks
+            args.input, args.output_dir, by=args.by, chunks=args.chunks
         )
 
         print(f"\nSplit results:")
@@ -625,7 +525,7 @@ def cmd_dedupe(args):
             strategy=strategy,
             similarity_threshold=args.similarity,
             keep=args.keep,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
         )
 
         print(f"\nDedupe results:")
@@ -656,7 +556,11 @@ def cmd_dedupe(args):
 def cmd_stats(args):
     """Execute stats command"""
     import sys
-    print("[DEPRECATED] 'ctk db stats' is deprecated. Use 'ctk lib stats' instead.", file=sys.stderr)
+
+    print(
+        "[DEPRECATED] 'ctk db stats' is deprecated. Use 'ctk lib stats' instead.",
+        file=sys.stderr,
+    )
 
     # Expand glob patterns
     input_files = expand_globs(args.inputs)
@@ -671,24 +575,24 @@ def cmd_stats(args):
                 stats = db.get_statistics()
                 all_stats[db_file] = stats
 
-                if args.format == 'text':
+                if args.format == "text":
                     print(f"\n{db_file}:")
                     print(f"  Total conversations: {stats['total_conversations']}")
                     print(f"  Total messages: {stats['total_messages']}")
                     print(f"  Messages by role: {stats['messages_by_role']}")
 
-                    if 'sources' in stats:
+                    if "sources" in stats:
                         print(f"  Sources: {stats['sources']}")
-                    if 'date_range' in stats:
+                    if "date_range" in stats:
                         print(f"  Date range: {stats['date_range']}")
 
         except Exception as e:
             print(f"Error reading {db_file}: {e}")
 
-    if args.format == 'json':
+    if args.format == "json":
         print(json.dumps(all_stats, indent=2, default=str))
 
-    elif args.format == 'csv':
+    elif args.format == "csv":
         # Simple CSV output
         print("database,conversations,messages")
         for db, stats in all_stats.items():
@@ -734,8 +638,9 @@ def cmd_validate(args):
 def get_default_db_path() -> str:
     """Get default database path from config"""
     from ctk.core.config import get_config
+
     config = get_config()
-    db_path = config.get('database.default_path', '~/.ctk/conversations.db')
+    db_path = config.get("database.default_path", "~/.ctk/conversations.db")
     return str(Path(db_path).expanduser())
 
 
@@ -754,7 +659,7 @@ def resolve_db_path(path_arg: Optional[str]) -> tuple[Path, Path]:
     path = Path(db_path).expanduser()
 
     # If it looks like a file path (has .db suffix), use parent as dir
-    if path.suffix == '.db':
+    if path.suffix == ".db":
         db_dir = path.parent
         db_file = path
     else:
@@ -767,8 +672,10 @@ def resolve_db_path(path_arg: Optional[str]) -> tuple[Path, Path]:
 
 def cmd_init(args):
     """Initialize a new database"""
-    from rich.console import Console
     import shutil
+
+    from rich.console import Console
+
     console = Console()
 
     # Get database path
@@ -822,12 +729,16 @@ def cmd_info(args):
             # Get additional info via raw SQL
             with db.session_scope() as session:
                 # Get table sizes
-                table_info = session.execute(text(
-                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-                )).fetchall()
+                table_info = session.execute(
+                    text(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                    )
+                ).fetchall()
 
                 # Get SQLite version
-                sqlite_version = session.execute(text("SELECT sqlite_version()")).fetchone()[0]
+                sqlite_version = session.execute(
+                    text("SELECT sqlite_version()")
+                ).fetchone()[0]
 
                 # Get page size and count
                 page_size = session.execute(text("PRAGMA page_size")).fetchone()[0]
@@ -846,7 +757,7 @@ def cmd_info(args):
                 "page_count": page_count,
                 "freelist_pages": freelist,
                 "tables": [t[0] for t in table_info],
-                **stats
+                **stats,
             }
             print(json.dumps(info, indent=2, default=str))
             return 0
@@ -861,15 +772,17 @@ def cmd_info(args):
         console.print("[bold]Content Statistics:[/bold]")
         console.print(f"  Conversations: {stats.get('total_conversations', 0)}")
         console.print(f"  Messages: {stats.get('total_messages', 0)}")
-        if stats.get('messages_by_role'):
-            for role, count in stats['messages_by_role'].items():
+        if stats.get("messages_by_role"):
+            for role, count in stats["messages_by_role"].items():
                 console.print(f"    {role}: {count}")
         console.print()
 
         console.print("[bold]Storage Details:[/bold]")
         console.print(f"  Page size: {page_size} bytes")
         console.print(f"  Total pages: {page_count}")
-        console.print(f"  Used space: {format_size(page_size * (page_count - freelist))}")
+        console.print(
+            f"  Used space: {format_size(page_size * (page_count - freelist))}"
+        )
         console.print(f"  Free pages: {freelist} ({format_size(page_size * freelist)})")
         console.print()
 
@@ -920,7 +833,9 @@ def cmd_vacuum(args):
         console.print(f"  After:  {format_size(size_after)}")
 
         if saved > 0:
-            console.print(f"  Saved:  {format_size(saved)} ({100 * saved / size_before:.1f}%)")
+            console.print(
+                f"  Saved:  {format_size(saved)} ({100 * saved / size_before:.1f}%)"
+            )
         else:
             console.print(f"  [dim]No space reclaimed[/dim]")
 
@@ -934,8 +849,9 @@ def cmd_vacuum(args):
 
 def cmd_backup(args):
     """Create database backup"""
-    import shutil
     import gzip
+    import shutil
+
     from rich.console import Console
 
     console = Console()
@@ -953,8 +869,8 @@ def cmd_backup(args):
         # If output looks like a directory, append filename
         if not output_path.suffix:
             output_path = output_path / source_file.name
-        if args.compress and not output_path.suffix.endswith('.gz'):
-            output_path = Path(str(output_path) + '.gz')
+        if args.compress and not output_path.suffix.endswith(".gz"):
+            output_path = Path(str(output_path) + ".gz")
         output_file = output_path
     else:
         # Generate timestamped backup name
@@ -972,8 +888,8 @@ def cmd_backup(args):
 
         if args.compress:
             # Compressed backup
-            with open(source_file, 'rb') as f_in:
-                with gzip.open(output_file, 'wb') as f_out:
+            with open(source_file, "rb") as f_in:
+                with gzip.open(output_file, "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
         else:
             # Simple copy

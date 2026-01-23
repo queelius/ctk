@@ -3,14 +3,16 @@ Base embedding provider abstraction for CTK.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
+
 import numpy as np
 
 
 class ChunkingStrategy(Enum):
     """Strategy for splitting text into embeddable chunks"""
+
     WHOLE = "whole"  # Embed entire text as-is
     MESSAGE = "message"  # Embed each message separately
     FIXED_SIZE = "fixed_size"  # Fixed token/char chunks with overlap
@@ -19,6 +21,7 @@ class ChunkingStrategy(Enum):
 
 class AggregationStrategy(Enum):
     """Strategy for aggregating multiple embeddings into one"""
+
     MEAN = "mean"  # Simple average
     WEIGHTED_MEAN = "weighted_mean"  # Weighted by role (user:assistant)
     MAX_POOL = "max_pool"  # Element-wise maximum
@@ -30,6 +33,7 @@ class AggregationStrategy(Enum):
 @dataclass
 class EmbeddingInfo:
     """Information about an embedding model"""
+
     id: str
     name: str
     dimensions: int
@@ -40,6 +44,7 @@ class EmbeddingInfo:
 @dataclass
 class EmbeddingResponse:
     """Response from embedding generation"""
+
     embedding: List[float]
     model: str
     dimensions: int
@@ -62,7 +67,7 @@ class EmbeddingProvider(ABC):
             config: Provider-specific configuration (API keys, endpoints, model, etc.)
         """
         self.config = config
-        self.model = config.get('model')
+        self.model = config.get("model")
 
     @abstractmethod
     def embed(self, text: str, **kwargs) -> EmbeddingResponse:
@@ -149,7 +154,7 @@ class EmbeddingProvider(ABC):
         self,
         embeddings: List[List[float]],
         strategy: AggregationStrategy = AggregationStrategy.MEAN,
-        weights: Optional[List[float]] = None
+        weights: Optional[List[float]] = None,
     ) -> List[float]:
         """
         Aggregate multiple embeddings into a single embedding.
@@ -177,7 +182,9 @@ class EmbeddingProvider(ABC):
             if weights is None:
                 raise ValueError("WEIGHTED_MEAN requires weights parameter")
             if len(weights) != len(embeddings):
-                raise ValueError(f"Weights length {len(weights)} must match embeddings length {len(embeddings)}")
+                raise ValueError(
+                    f"Weights length {len(weights)} must match embeddings length {len(embeddings)}"
+                )
             weights_array = np.array(weights).reshape(-1, 1)
             weights_array = weights_array / weights_array.sum()  # Normalize
             return (embeddings_array * weights_array).sum(axis=0).tolist()
@@ -200,7 +207,11 @@ class EmbeddingProvider(ABC):
     @property
     def name(self) -> str:
         """Provider name (e.g., 'ollama', 'openai')"""
-        return self.__class__.__name__.replace('Provider', '').replace('Embedding', '').lower()
+        return (
+            self.__class__.__name__.replace("Provider", "")
+            .replace("Embedding", "")
+            .lower()
+        )
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(model={self.model})"
@@ -208,21 +219,26 @@ class EmbeddingProvider(ABC):
 
 # ==================== Exceptions ====================
 
+
 class EmbeddingProviderError(Exception):
     """Base exception for embedding provider errors"""
+
     pass
 
 
 class AuthenticationError(EmbeddingProviderError):
     """API authentication failed"""
+
     pass
 
 
 class RateLimitError(EmbeddingProviderError):
     """Rate limit exceeded"""
+
     pass
 
 
 class ModelNotFoundError(EmbeddingProviderError):
     """Requested model not available"""
+
     pass

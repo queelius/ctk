@@ -4,11 +4,12 @@ Organization command handlers
 Implements: star, pin, archive, unstar, unpin, unarchive, title
 """
 
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
+
 from ctk.core.command_dispatcher import CommandResult
-from ctk.core.vfs_navigator import VFSNavigator
-from ctk.core.vfs import VFSPathParser, PathType
 from ctk.core.database import ConversationDB
+from ctk.core.vfs import PathType, VFSPathParser
+from ctk.core.vfs_navigator import VFSNavigator
 
 
 class OrganizationCommands:
@@ -40,7 +41,7 @@ class OrganizationCommands:
 
             # Try as path first
             try:
-                if conv_id_or_prefix.startswith('/'):
+                if conv_id_or_prefix.startswith("/"):
                     parsed = VFSPathParser.parse(conv_id_or_prefix)
                     if parsed.conversation_id:
                         return (parsed.conversation_id, None)
@@ -49,9 +50,11 @@ class OrganizationCommands:
                 else:
                     # Try prefix resolution
                     if self.tui:
-                        chats_path = VFSPathParser.parse('/chats')
+                        chats_path = VFSPathParser.parse("/chats")
                         try:
-                            conv_id = self.navigator.resolve_prefix(conv_id_or_prefix, chats_path)
+                            conv_id = self.navigator.resolve_prefix(
+                                conv_id_or_prefix, chats_path
+                            )
                             if conv_id:
                                 return (conv_id, None)
                         except ValueError:
@@ -73,7 +76,7 @@ class OrganizationCommands:
             else:
                 return (None, "Not in a conversation directory")
 
-    def cmd_star(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_star(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Star a conversation
 
@@ -95,11 +98,13 @@ class OrganizationCommands:
         # Star the conversation
         try:
             self.db.star_conversation(conv_id)
-            return CommandResult(success=True, output=f"Starred conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Starred conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"star: {str(e)}")
 
-    def cmd_unstar(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_unstar(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Unstar a conversation
 
@@ -120,11 +125,13 @@ class OrganizationCommands:
 
         try:
             self.db.star_conversation(conv_id, star=False)
-            return CommandResult(success=True, output=f"Unstarred conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Unstarred conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"unstar: {str(e)}")
 
-    def cmd_pin(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_pin(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Pin a conversation
 
@@ -145,11 +152,13 @@ class OrganizationCommands:
 
         try:
             self.db.pin_conversation(conv_id)
-            return CommandResult(success=True, output=f"Pinned conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Pinned conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"pin: {str(e)}")
 
-    def cmd_unpin(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_unpin(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Unpin a conversation
 
@@ -170,11 +179,13 @@ class OrganizationCommands:
 
         try:
             self.db.pin_conversation(conv_id, pin=False)
-            return CommandResult(success=True, output=f"Unpinned conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Unpinned conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"unpin: {str(e)}")
 
-    def cmd_archive(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_archive(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Archive a conversation
 
@@ -195,11 +206,13 @@ class OrganizationCommands:
 
         try:
             self.db.archive_conversation(conv_id)
-            return CommandResult(success=True, output=f"Archived conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Archived conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"archive: {str(e)}")
 
-    def cmd_unarchive(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_unarchive(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Unarchive a conversation
 
@@ -220,11 +233,13 @@ class OrganizationCommands:
 
         try:
             self.db.archive_conversation(conv_id, archive=False)
-            return CommandResult(success=True, output=f"Unarchived conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Unarchived conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"unarchive: {str(e)}")
 
-    def cmd_title(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_title(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Set conversation title
 
@@ -240,7 +255,9 @@ class OrganizationCommands:
             CommandResult with success status
         """
         if not args:
-            return CommandResult(success=False, output="", error="title: no title provided")
+            return CommandResult(
+                success=False, output="", error="title: no title provided"
+            )
 
         # Check if first arg is a conversation ID or part of title
         first_arg = args[0]
@@ -249,14 +266,16 @@ class OrganizationCommands:
         conv_id = None
         title_parts = args
 
-        if first_arg.startswith('/') or len(first_arg) >= 8:
+        if first_arg.startswith("/") or len(first_arg) >= 8:
             # Might be a conversation ID
             test_id, error = self._get_conversation_id([first_arg])
             if not error:
                 conv_id = test_id
                 title_parts = args[1:]
                 if not title_parts:
-                    return CommandResult(success=False, output="", error="title: no title provided")
+                    return CommandResult(
+                        success=False, output="", error="title: no title provided"
+                    )
 
         # If no explicit ID, use current path
         if conv_id is None:
@@ -265,18 +284,22 @@ class OrganizationCommands:
                 return CommandResult(success=False, output="", error=f"title: {error}")
 
         # Join remaining args as title
-        new_title = ' '.join(title_parts)
+        new_title = " ".join(title_parts)
 
         try:
             success = self.db.update_conversation_metadata(conv_id, title=new_title)
             if success:
-                return CommandResult(success=True, output=f"Set title to: {new_title}\n")
+                return CommandResult(
+                    success=True, output=f"Set title to: {new_title}\n"
+                )
             else:
-                return CommandResult(success=False, output="", error=f"title: Conversation not found")
+                return CommandResult(
+                    success=False, output="", error=f"title: Conversation not found"
+                )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"title: {str(e)}")
 
-    def cmd_delete(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_delete(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Delete a conversation
 
@@ -293,8 +316,8 @@ class OrganizationCommands:
             CommandResult with success status
         """
         # Check for force flag
-        force = '-f' in args or '--force' in args
-        args = [a for a in args if a not in ['-f', '--force']]
+        force = "-f" in args or "--force" in args
+        args = [a for a in args if a not in ["-f", "--force"]]
 
         conv_id, error = self._get_conversation_id(args)
         if error:
@@ -304,22 +327,26 @@ class OrganizationCommands:
             # Get conversation info for confirmation
             conv = self.db.load_conversation(conv_id)
             if not conv:
-                return CommandResult(success=False, output="", error=f"delete: Conversation not found")
+                return CommandResult(
+                    success=False, output="", error=f"delete: Conversation not found"
+                )
 
             if not force:
                 title = conv.title or "Untitled"
                 return CommandResult(
                     success=False,
                     output="",
-                    error=f"delete: Use -f to confirm deletion of '{title}' ({conv_id[:8]}...)"
+                    error=f"delete: Use -f to confirm deletion of '{title}' ({conv_id[:8]}...)",
                 )
 
             self.db.delete_conversation(conv_id)
-            return CommandResult(success=True, output=f"Deleted conversation: {conv_id[:8]}\n")
+            return CommandResult(
+                success=True, output=f"Deleted conversation: {conv_id[:8]}\n"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"delete: {str(e)}")
 
-    def cmd_duplicate(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_duplicate(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Duplicate a conversation
 
@@ -345,14 +372,16 @@ class OrganizationCommands:
                 title = new_conv.title if new_conv else "Unknown"
                 return CommandResult(
                     success=True,
-                    output=f"Duplicated conversation\n  New ID: {new_id[:8]}...\n  Title: {title}\n"
+                    output=f"Duplicated conversation\n  New ID: {new_id[:8]}...\n  Title: {title}\n",
                 )
             else:
-                return CommandResult(success=False, output="", error="duplicate: Failed to duplicate")
+                return CommandResult(
+                    success=False, output="", error="duplicate: Failed to duplicate"
+                )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"duplicate: {str(e)}")
 
-    def cmd_tag(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_tag(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Add tags to a conversation
 
@@ -368,14 +397,16 @@ class OrganizationCommands:
             CommandResult with success status
         """
         if not args:
-            return CommandResult(success=False, output="", error="tag: no tags provided")
+            return CommandResult(
+                success=False, output="", error="tag: no tags provided"
+            )
 
         # Check if first arg is a conversation ID
         first_arg = args[0]
         conv_id = None
         tag_arg = args[0]
 
-        if len(args) > 1 and (first_arg.startswith('/') or len(first_arg) >= 8):
+        if len(args) > 1 and (first_arg.startswith("/") or len(first_arg) >= 8):
             test_id, error = self._get_conversation_id([first_arg])
             if not error:
                 conv_id = test_id
@@ -387,20 +418,22 @@ class OrganizationCommands:
                 return CommandResult(success=False, output="", error=f"tag: {error}")
 
         # Parse tags (comma-separated)
-        tags = [t.strip() for t in tag_arg.split(',') if t.strip()]
+        tags = [t.strip() for t in tag_arg.split(",") if t.strip()]
         if not tags:
-            return CommandResult(success=False, output="", error="tag: no valid tags provided")
+            return CommandResult(
+                success=False, output="", error="tag: no valid tags provided"
+            )
 
         try:
             self.db.add_tags(conv_id, tags)
             return CommandResult(
                 success=True,
-                output=f"Added tags to {conv_id[:8]}...: {', '.join(tags)}\n"
+                output=f"Added tags to {conv_id[:8]}...: {', '.join(tags)}\n",
             )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"tag: {str(e)}")
 
-    def cmd_untag(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_untag(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Remove a tag from a conversation
 
@@ -416,14 +449,16 @@ class OrganizationCommands:
             CommandResult with success status
         """
         if not args:
-            return CommandResult(success=False, output="", error="untag: no tag provided")
+            return CommandResult(
+                success=False, output="", error="untag: no tag provided"
+            )
 
         # Check if first arg is a conversation ID
         first_arg = args[0]
         conv_id = None
         tag = args[0]
 
-        if len(args) > 1 and (first_arg.startswith('/') or len(first_arg) >= 8):
+        if len(args) > 1 and (first_arg.startswith("/") or len(first_arg) >= 8):
             test_id, error = self._get_conversation_id([first_arg])
             if not error:
                 conv_id = test_id
@@ -437,13 +472,12 @@ class OrganizationCommands:
         try:
             self.db.remove_tag(conv_id, tag)
             return CommandResult(
-                success=True,
-                output=f"Removed tag '{tag}' from {conv_id[:8]}...\n"
+                success=True, output=f"Removed tag '{tag}' from {conv_id[:8]}...\n"
             )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"untag: {str(e)}")
 
-    def cmd_export(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_export(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Export a conversation
 
@@ -462,11 +496,11 @@ class OrganizationCommands:
         import json
 
         # Parse format flag
-        fmt = 'json'
+        fmt = "json"
         filtered_args = []
         i = 0
         while i < len(args):
-            if args[i] in ['-f', '--format'] and i + 1 < len(args):
+            if args[i] in ["-f", "--format"] and i + 1 < len(args):
                 fmt = args[i + 1]
                 i += 2
             else:
@@ -480,21 +514,25 @@ class OrganizationCommands:
         try:
             conv = self.db.load_conversation(conv_id)
             if not conv:
-                return CommandResult(success=False, output="", error="export: Conversation not found")
+                return CommandResult(
+                    success=False, output="", error="export: Conversation not found"
+                )
 
-            if fmt == 'json':
+            if fmt == "json":
                 data = conv.to_dict()
                 output = json.dumps(data, indent=2, default=str)
 
-            elif fmt == 'jsonl':
+            elif fmt == "jsonl":
                 lines = []
                 for msg in conv.get_longest_path():
-                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    role = (
+                        msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                    )
                     content = msg.content.text if msg.content else ""
                     lines.append(json.dumps({"role": role, "content": content}))
-                output = '\n'.join(lines)
+                output = "\n".join(lines)
 
-            elif fmt in ['md', 'markdown']:
+            elif fmt in ["md", "markdown"]:
                 lines = [f"# {conv.title or 'Untitled'}\n"]
                 lines.append(f"**ID:** {conv.id}\n")
                 if conv.metadata.model:
@@ -502,14 +540,18 @@ class OrganizationCommands:
                 lines.append("\n---\n")
 
                 for msg in conv.get_longest_path():
-                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    role = (
+                        msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                    )
                     content = msg.content.text if msg.content else ""
                     lines.append(f"\n## {role.upper()}\n\n{content}\n")
 
-                output = '\n'.join(lines)
+                output = "\n".join(lines)
 
             else:
-                return CommandResult(success=False, output="", error=f"export: Unknown format '{fmt}'")
+                return CommandResult(
+                    success=False, output="", error=f"export: Unknown format '{fmt}'"
+                )
 
             return CommandResult(success=True, output=output)
 
@@ -517,7 +559,9 @@ class OrganizationCommands:
             return CommandResult(success=False, output="", error=f"export: {str(e)}")
 
 
-def create_organization_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
+def create_organization_commands(
+    db: ConversationDB, navigator: VFSNavigator, tui_instance=None
+) -> Dict[str, Callable]:
     """
     Create organization command handlers
 
@@ -532,16 +576,16 @@ def create_organization_commands(db: ConversationDB, navigator: VFSNavigator, tu
     org = OrganizationCommands(db, navigator, tui_instance)
 
     return {
-        'star': org.cmd_star,
-        'unstar': org.cmd_unstar,
-        'pin': org.cmd_pin,
-        'unpin': org.cmd_unpin,
-        'archive': org.cmd_archive,
-        'unarchive': org.cmd_unarchive,
-        'title': org.cmd_title,
-        'delete': org.cmd_delete,
-        'duplicate': org.cmd_duplicate,
-        'tag': org.cmd_tag,
-        'untag': org.cmd_untag,
-        'export': org.cmd_export,
+        "star": org.cmd_star,
+        "unstar": org.cmd_unstar,
+        "pin": org.cmd_pin,
+        "unpin": org.cmd_unpin,
+        "archive": org.cmd_archive,
+        "unarchive": org.cmd_unarchive,
+        "title": org.cmd_title,
+        "delete": org.cmd_delete,
+        "duplicate": org.cmd_duplicate,
+        "tag": org.cmd_tag,
+        "untag": org.cmd_untag,
+        "export": org.cmd_export,
     }

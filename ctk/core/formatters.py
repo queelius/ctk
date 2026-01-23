@@ -11,8 +11,8 @@ Design:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Any, Optional
 from datetime import datetime
+from typing import Any, List, Optional
 
 from ctk.core.models import ConversationTree
 
@@ -21,7 +21,9 @@ class OutputFormatter(ABC):
     """Abstract base class for output formatters"""
 
     @abstractmethod
-    def format_conversation_list(self, conversations: List[Any], title: Optional[str] = None):
+    def format_conversation_list(
+        self, conversations: List[Any], title: Optional[str] = None
+    ):
         """Format and output a list of conversations"""
         pass
 
@@ -77,7 +79,9 @@ class CLIFormatter(OutputFormatter):
         """
         self.json_output = json_output
 
-    def format_conversation_list(self, conversations: List[Any], title: Optional[str] = None):
+    def format_conversation_list(
+        self, conversations: List[Any], title: Optional[str] = None
+    ):
         """Format conversation list as table or JSON"""
         if not conversations:
             print("No conversations found")
@@ -85,7 +89,10 @@ class CLIFormatter(OutputFormatter):
 
         if self.json_output:
             import json
-            conv_dicts = [c.to_dict() if hasattr(c, 'to_dict') else c for c in conversations]
+
+            conv_dicts = [
+                c.to_dict() if hasattr(c, "to_dict") else c for c in conversations
+            ]
             print(json.dumps(conv_dicts, indent=2, default=str))
         else:
             if title:
@@ -94,28 +101,30 @@ class CLIFormatter(OutputFormatter):
             print(f"{'F':<3} {'ID':<40} {'Title':<45} {'Model':<20} {'Updated'}")
             print("-" * 130)
             for conv in conversations:
-                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
 
                 # Build flags
                 flags = ""
-                if conv_dict.get('pinned_at'):
+                if conv_dict.get("pinned_at"):
                     flags += "📌"
-                if conv_dict.get('starred_at'):
+                if conv_dict.get("starred_at"):
                     flags += "⭐"
-                if conv_dict.get('archived_at'):
+                if conv_dict.get("archived_at"):
                     flags += "📦"
 
-                title = conv_dict.get('title') or 'Untitled'
+                title = conv_dict.get("title") or "Untitled"
                 if len(title) > 42:
-                    title = title[:42] + '...'
-                model = conv_dict.get('model') or 'Unknown'
+                    title = title[:42] + "..."
+                model = conv_dict.get("model") or "Unknown"
                 if len(model) > 17:
-                    model = model[:17] + '...'
-                updated = conv_dict.get('updated_at') or 'Unknown'
+                    model = model[:17] + "..."
+                updated = conv_dict.get("updated_at") or "Unknown"
                 if len(updated) > 19:
                     updated = updated[:19]
 
-                print(f"{flags:<3} {conv_dict['id']:<40} {title:<45} {model:<20} {updated}")
+                print(
+                    f"{flags:<3} {conv_dict['id']:<40} {title:<45} {model:<20} {updated}"
+                )
 
     def format_search_results(self, results: List[Any], query: str):
         """Format search results as table or JSON"""
@@ -125,29 +134,34 @@ class CLIFormatter(OutputFormatter):
 
         if self.json_output:
             import json
+
             print(json.dumps(results, indent=2, default=str))
         else:
             print(f"Found {len(results)} conversation(s):\n")
-            print(f"{'F':<3} {'ID':<40} {'Title':<45} {'Msgs':<6} {'Source':<10} {'Model':<15}")
+            print(
+                f"{'F':<3} {'ID':<40} {'Title':<45} {'Msgs':<6} {'Source':<10} {'Model':<15}"
+            )
             print("-" * 130)
             for conv in results:
-                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
 
                 # Build flags
                 flags = ""
-                if conv_dict.get('pinned_at'):
+                if conv_dict.get("pinned_at"):
                     flags += "📌"
-                if conv_dict.get('starred_at'):
+                if conv_dict.get("starred_at"):
                     flags += "⭐"
-                if conv_dict.get('archived_at'):
+                if conv_dict.get("archived_at"):
                     flags += "📦"
 
-                title = conv_dict.get('title', 'Untitled')
+                title = conv_dict.get("title", "Untitled")
                 if len(title) > 42:
-                    title = title[:42] + '...'
+                    title = title[:42] + "..."
 
-                print(f"{flags:<3} {conv_dict['id']:<40} {title:<45} {conv_dict.get('message_count', 0):<6} "
-                      f"{conv_dict.get('source', ''):<10} {conv_dict.get('model', '')[:15]:<15}")
+                print(
+                    f"{flags:<3} {conv_dict['id']:<40} {title:<45} {conv_dict.get('message_count', 0):<6} "
+                    f"{conv_dict.get('source', ''):<10} {conv_dict.get('model', '')[:15]:<15}"
+                )
 
     def format_conversation_detail(self, tree: ConversationTree):
         """Format detailed conversation view"""
@@ -182,7 +196,9 @@ class CLIFormatter(OutputFormatter):
 
         # Show tree info if conversation has branches
         if len(tree.message_map) > len(path):
-            print(f"\nNote: This conversation has branches ({len(tree.message_map)} total messages)")
+            print(
+                f"\nNote: This conversation has branches ({len(tree.message_map)} total messages)"
+            )
             print(f"Use 'ctk tree {tree.id}' to see the full tree structure")
 
     def format_error(self, message: str):
@@ -204,7 +220,7 @@ class CLIFormatter(OutputFormatter):
     def confirm(self, message: str) -> bool:
         """Prompt for confirmation"""
         response = input(f"{message} (yes/no): ").strip().lower()
-        return response == 'yes'
+        return response == "yes"
 
 
 class TUIFormatter(OutputFormatter):
@@ -225,9 +241,12 @@ class TUIFormatter(OutputFormatter):
             self.console = console
         else:
             from rich.console import Console
+
             self.console = Console()
 
-    def format_conversation_list(self, conversations: List[Any], title: Optional[str] = None):
+    def format_conversation_list(
+        self, conversations: List[Any], title: Optional[str] = None
+    ):
         """Format conversation list for TUI"""
         if not conversations:
             self.console.print("[yellow]No conversations found in database[/yellow]")
@@ -238,26 +257,28 @@ class TUIFormatter(OutputFormatter):
         self.console.print("=" * 60)
 
         for conv in conversations:
-            conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+            conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
 
-            conv_id = conv_dict['id']
-            title = conv_dict.get('title') or 'Untitled'
-            created = conv_dict.get('created_at')
+            conv_id = conv_dict["id"]
+            title = conv_dict.get("title") or "Untitled"
+            created = conv_dict.get("created_at")
 
             # Format timestamp
             if isinstance(created, datetime):
-                created = created.strftime('%Y-%m-%d %H:%M')
+                created = created.strftime("%Y-%m-%d %H:%M")
             elif isinstance(created, str):
                 try:
-                    created = datetime.fromisoformat(created).strftime('%Y-%m-%d %H:%M')
-                except:
+                    created = datetime.fromisoformat(created).strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError, AttributeError):
                     pass
 
-            model = conv_dict.get('model') or 'unknown'
-            message_count = conv_dict.get('message_count', 0)
+            model = conv_dict.get("model") or "unknown"
+            message_count = conv_dict.get("message_count", 0)
 
             self.console.print(f"\n  [bold][{conv_id[:8]}...][/bold] {title}")
-            self.console.print(f"  Created: {created} | Model: {model} | Messages: {message_count}")
+            self.console.print(
+                f"  Created: {created} | Model: {model} | Messages: {message_count}"
+            )
 
         self.console.print("=" * 60)
         self.console.print("[dim]Use '/load <id>' to continue a conversation[/dim]\n")
@@ -265,30 +286,34 @@ class TUIFormatter(OutputFormatter):
     def format_search_results(self, results: List[Any], query: str):
         """Format search results for TUI"""
         if not results:
-            self.console.print(f"[yellow]No conversations found matching '{query}'[/yellow]")
+            self.console.print(
+                f"[yellow]No conversations found matching '{query}'[/yellow]"
+            )
             return
 
-        self.console.print(f"\n[bold cyan]Found {len(results)} conversation(s) matching '{query}':[/bold cyan]")
+        self.console.print(
+            f"\n[bold cyan]Found {len(results)} conversation(s) matching '{query}':[/bold cyan]"
+        )
         self.console.print("-" * 60)
 
         for conv in results:
-            conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+            conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
 
-            conv_id = conv_dict['id']
-            title = conv_dict.get('title') or 'Untitled'
-            created = conv_dict.get('created_at')
+            conv_id = conv_dict["id"]
+            title = conv_dict.get("title") or "Untitled"
+            created = conv_dict.get("created_at")
 
             # Format timestamp
             if isinstance(created, datetime):
-                created = created.strftime('%Y-%m-%d %H:%M')
+                created = created.strftime("%Y-%m-%d %H:%M")
             elif isinstance(created, str):
                 try:
-                    created = datetime.fromisoformat(created).strftime('%Y-%m-%d %H:%M')
-                except:
+                    created = datetime.fromisoformat(created).strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError, AttributeError):
                     pass
 
-            model = conv_dict.get('model') or 'unknown'
-            message_count = conv_dict.get('message_count', 0)
+            model = conv_dict.get("model") or "unknown"
+            message_count = conv_dict.get("message_count", 0)
 
             self.console.print(f"\n  [bold]ID:[/bold] {conv_id[:8]}...")
             self.console.print(f"  [bold]Title:[/bold] {title}")
@@ -304,7 +329,9 @@ class TUIFormatter(OutputFormatter):
         self.console.print(f"\n[bold cyan]Conversation:[/bold cyan] {tree.title}")
         self.console.print(f"[dim]ID: {tree.id[:8]}...[/dim]")
         if tree.metadata:
-            self.console.print(f"[dim]Source: {tree.metadata.source or 'unknown'}[/dim]")
+            self.console.print(
+                f"[dim]Source: {tree.metadata.source or 'unknown'}[/dim]"
+            )
             self.console.print(f"[dim]Model: {tree.metadata.model or 'unknown'}[/dim]")
         self.console.print(f"[dim]Messages: {len(tree.message_map)}[/dim]\n")
 
@@ -327,16 +354,16 @@ class TUIFormatter(OutputFormatter):
     def confirm(self, message: str) -> bool:
         """Prompt for confirmation"""
         response = input(f"{message} (yes/no): ").strip().lower()
-        return response == 'yes'
+        return response == "yes"
 
 
 def format_datetime(dt: Any) -> str:
     """Helper to format datetime consistently"""
     if isinstance(dt, datetime):
-        return dt.strftime('%Y-%m-%d %H:%M')
+        return dt.strftime("%Y-%m-%d %H:%M")
     elif isinstance(dt, str):
         try:
-            return datetime.fromisoformat(dt).strftime('%Y-%m-%d %H:%M')
-        except:
+            return datetime.fromisoformat(dt).strftime("%Y-%m-%d %H:%M")
+        except (ValueError, TypeError, AttributeError):
             return dt
-    return str(dt) if dt else 'Unknown'
+    return str(dt) if dt else "Unknown"

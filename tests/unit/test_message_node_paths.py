@@ -6,7 +6,8 @@ in conversation trees.
 """
 
 import pytest
-from ctk.core.vfs import VFSPathParser, VFSPath, PathType
+
+from ctk.core.vfs import PathType, VFSPath, VFSPathParser
 
 
 class TestMessageNodePaths:

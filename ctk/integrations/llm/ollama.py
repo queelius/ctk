@@ -2,19 +2,14 @@
 Ollama LLM provider implementation.
 """
 
-import requests
-from typing import List, Dict, Optional, Iterator, Any
 import json
+from typing import Any, Dict, Iterator, List, Optional
 
-from ctk.integrations.llm.base import (
-    LLMProvider,
-    Message,
-    MessageRole,
-    ChatResponse,
-    ModelInfo,
-    LLMProviderError,
-    ModelNotFoundError,
-)
+import requests
+
+from ctk.integrations.llm.base import (ChatResponse, LLMProvider,
+                                       LLMProviderError, Message, MessageRole,
+                                       ModelInfo, ModelNotFoundError)
 
 
 class OllamaProvider(LLMProvider):
@@ -35,8 +30,8 @@ class OllamaProvider(LLMProvider):
                 - timeout: Request timeout in seconds (default: 120)
         """
         super().__init__(config)
-        self.base_url = config.get('base_url', 'http://localhost:11434').rstrip('/')
-        self.timeout = config.get('timeout', 120)
+        self.base_url = config.get("base_url", "http://localhost:11434").rstrip("/")
+        self.timeout = config.get("timeout", 120)
 
         if not self.model:
             raise ValueError("Model name is required for Ollama provider")
@@ -46,7 +41,7 @@ class OllamaProvider(LLMProvider):
         messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> ChatResponse:
         """
         Send messages and get response from Ollama.
@@ -70,30 +65,28 @@ class OllamaProvider(LLMProvider):
 
         # Build request payload
         payload = {
-            'model': self.model,
-            'messages': ollama_messages,
-            'stream': False,
-            'options': {
-                'temperature': temperature,
-            }
+            "model": self.model,
+            "messages": ollama_messages,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+            },
         }
 
         if max_tokens:
-            payload['options']['num_predict'] = max_tokens
+            payload["options"]["num_predict"] = max_tokens
 
         # Extract tools before adding other kwargs to options
-        tools = kwargs.pop('tools', None)
+        tools = kwargs.pop("tools", None)
         if tools:
-            payload['tools'] = tools
+            payload["tools"] = tools
 
         # Add remaining options
-        payload['options'].update(kwargs)
+        payload["options"].update(kwargs)
 
         try:
             response = requests.post(
-                f'{self.base_url}/api/chat',
-                json=payload,
-                timeout=self.timeout
+                f"{self.base_url}/api/chat", json=payload, timeout=self.timeout
             )
             response.raise_for_status()
 
@@ -101,21 +94,22 @@ class OllamaProvider(LLMProvider):
 
             # Extract tool calls if present
             tool_calls = None
-            message = result.get('message', {})
-            if 'tool_calls' in message:
-                tool_calls = message['tool_calls']
+            message = result.get("message", {})
+            if "tool_calls" in message:
+                tool_calls = message["tool_calls"]
 
             return ChatResponse(
-                content=message.get('content', ''),
-                model=result.get('model', self.model),
-                finish_reason=result.get('done_reason'),
+                content=message.get("content", ""),
+                model=result.get("model", self.model),
+                finish_reason=result.get("done_reason"),
                 usage={
-                    'prompt_tokens': result.get('prompt_eval_count', 0),
-                    'completion_tokens': result.get('eval_count', 0),
-                    'total_tokens': result.get('prompt_eval_count', 0) + result.get('eval_count', 0)
+                    "prompt_tokens": result.get("prompt_eval_count", 0),
+                    "completion_tokens": result.get("eval_count", 0),
+                    "total_tokens": result.get("prompt_eval_count", 0)
+                    + result.get("eval_count", 0),
                 },
                 metadata=result,
-                tool_calls=tool_calls
+                tool_calls=tool_calls,
             )
 
         except requests.exceptions.ConnectionError:
@@ -140,7 +134,7 @@ class OllamaProvider(LLMProvider):
         messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> Iterator[str]:
         """
         Stream response from Ollama token by token.
@@ -164,31 +158,31 @@ class OllamaProvider(LLMProvider):
 
         # Build request payload
         payload = {
-            'model': self.model,
-            'messages': ollama_messages,
-            'stream': True,
-            'options': {
-                'temperature': temperature,
-            }
+            "model": self.model,
+            "messages": ollama_messages,
+            "stream": True,
+            "options": {
+                "temperature": temperature,
+            },
         }
 
         if max_tokens:
-            payload['options']['num_predict'] = max_tokens
+            payload["options"]["num_predict"] = max_tokens
 
         # Extract tools before adding other kwargs to options
-        tools = kwargs.pop('tools', None)
+        tools = kwargs.pop("tools", None)
         if tools:
-            payload['tools'] = tools
+            payload["tools"] = tools
 
         # Add remaining options
-        payload['options'].update(kwargs)
+        payload["options"].update(kwargs)
 
         try:
             response = requests.post(
-                f'{self.base_url}/api/chat',
+                f"{self.base_url}/api/chat",
                 json=payload,
                 stream=True,
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             response.raise_for_status()
 
@@ -196,17 +190,16 @@ class OllamaProvider(LLMProvider):
             for line in response.iter_lines():
                 if line:
                     chunk = json.loads(line)
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        yield chunk['message']['content']
+                    if "message" in chunk and "content" in chunk["message"]:
+                        yield chunk["message"]["content"]
 
                     # Check if done
-                    if chunk.get('done'):
+                    if chunk.get("done"):
                         break
 
         except requests.exceptions.ConnectionError:
             raise LLMProviderError(
-                f"Cannot connect to Ollama at {self.base_url}. "
-                "Is Ollama running?"
+                f"Cannot connect to Ollama at {self.base_url}. " "Is Ollama running?"
             )
         except requests.exceptions.Timeout:
             raise LLMProviderError(f"Request timed out after {self.timeout}s")
@@ -231,34 +224,31 @@ class OllamaProvider(LLMProvider):
             LLMProviderError: On API errors
         """
         try:
-            response = requests.get(
-                f'{self.base_url}/api/tags',
-                timeout=10
-            )
+            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
             response.raise_for_status()
 
             result = response.json()
             models = []
 
-            for model_data in result.get('models', []):
+            for model_data in result.get("models", []):
                 # Extract context window from model details if available
                 context_window = None
 
                 # Try to get model info for max context window
                 try:
                     show_response = requests.post(
-                        f'{self.base_url}/api/show',
-                        json={'name': model_data['name']},
-                        timeout=5
+                        f"{self.base_url}/api/show",
+                        json={"name": model_data["name"]},
+                        timeout=5,
                     )
                     if show_response.ok:
                         show_data = show_response.json()
                         # Get max context from model_info (e.g., llama.context_length)
-                        if 'model_info' in show_data:
-                            model_info = show_data['model_info']
+                        if "model_info" in show_data:
+                            model_info = show_data["model_info"]
                             # Look for context_length in model_info
                             for key, value in model_info.items():
-                                if 'context_length' in key.lower():
+                                if "context_length" in key.lower():
                                     try:
                                         context_window = int(value)
                                         break
@@ -267,26 +257,27 @@ class OllamaProvider(LLMProvider):
                 except:
                     pass  # context_window remains None if we can't get it
 
-                models.append(ModelInfo(
-                    id=model_data['name'],
-                    name=model_data['name'],
-                    context_window=context_window,
-                    supports_streaming=True,
-                    supports_system_message=True,
-                    supports_tools=False,  # Basic models don't support tools
-                    metadata={
-                        'size': model_data.get('size'),
-                        'modified': model_data.get('modified_at'),
-                        'digest': model_data.get('digest'),
-                    }
-                ))
+                models.append(
+                    ModelInfo(
+                        id=model_data["name"],
+                        name=model_data["name"],
+                        context_window=context_window,
+                        supports_streaming=True,
+                        supports_system_message=True,
+                        supports_tools=False,  # Basic models don't support tools
+                        metadata={
+                            "size": model_data.get("size"),
+                            "modified": model_data.get("modified_at"),
+                            "digest": model_data.get("digest"),
+                        },
+                    )
+                )
 
             return models
 
         except requests.exceptions.ConnectionError:
             raise LLMProviderError(
-                f"Cannot connect to Ollama at {self.base_url}. "
-                "Is Ollama running?"
+                f"Cannot connect to Ollama at {self.base_url}. " "Is Ollama running?"
             )
         except Exception as e:
             raise LLMProviderError(f"Failed to list models: {e}")
@@ -306,9 +297,9 @@ class OllamaProvider(LLMProvider):
         """
         try:
             response = requests.post(
-                f'{self.base_url}/api/show',
-                json={'name': model_name},
-                timeout=self.timeout
+                f"{self.base_url}/api/show",
+                json={"name": model_name},
+                timeout=self.timeout,
             )
             response.raise_for_status()
 
@@ -316,8 +307,7 @@ class OllamaProvider(LLMProvider):
 
         except requests.exceptions.ConnectionError:
             raise LLMProviderError(
-                f"Cannot connect to Ollama at {self.base_url}. "
-                "Is Ollama running?"
+                f"Cannot connect to Ollama at {self.base_url}. " "Is Ollama running?"
             )
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
@@ -334,7 +324,7 @@ class OllamaProvider(LLMProvider):
             True if Ollama is available, False otherwise
         """
         try:
-            response = requests.get(f'{self.base_url}/api/tags', timeout=2)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=2)
             return response.ok
         except:
             return False
@@ -355,17 +345,21 @@ class OllamaProvider(LLMProvider):
         """
         formatted = []
         for tool in tools:
-            formatted.append({
-                'type': 'function',
-                'function': {
-                    'name': tool['name'],
-                    'description': tool.get('description', ''),
-                    'parameters': tool.get('input_schema', {})
+            formatted.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("input_schema", {}),
+                    },
                 }
-            })
+            )
         return formatted
 
-    def format_tool_result_message(self, tool_name: str, tool_result: Any, tool_call_id: Optional[str] = None) -> Message:
+    def format_tool_result_message(
+        self, tool_name: str, tool_result: Any, tool_call_id: Optional[str] = None
+    ) -> Message:
         """
         Format a tool result as a message for Ollama.
 
@@ -382,16 +376,16 @@ class OllamaProvider(LLMProvider):
             content = tool_result
         elif isinstance(tool_result, dict):
             import json
+
             content = json.dumps(tool_result)
         else:
             content = str(tool_result)
 
-        return Message(
-            role=MessageRole.TOOL,
-            content=content
-        )
+        return Message(role=MessageRole.TOOL, content=content)
 
-    def extract_tool_calls(self, response: ChatResponse) -> Optional[List[Dict[str, Any]]]:
+    def extract_tool_calls(
+        self, response: ChatResponse
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Extract tool calls from response, with detection for hallucinated tool calls.
 
@@ -415,12 +409,12 @@ class OllamaProvider(LLMProvider):
 
         # Patterns that indicate hallucinated tool calls
         hallucination_patterns = [
-            r'<\|python_tag\|>',  # Llama internal token leak
-            r'<tool_call>',  # Generic tool call tag
-            r'<\|start_tool\|>',  # Some models use this
+            r"<\|python_tag\|>",  # Llama internal token leak
+            r"<tool_call>",  # Generic tool call tag
+            r"<\|start_tool\|>",  # Some models use this
             r'"function":\s*{\s*"name"',  # JSON tool call format
-            r'```(?:json|plaintext)?\s*\n?\s*(?:search_|list_|get_)\w+\s*\(',  # Code block with function call
-            r'(?:search_|list_|get_|execute_)\w+\s*\(\s*(?:query|id|limit)',  # Function call syntax
+            r"```(?:json|plaintext)?\s*\n?\s*(?:search_|list_|get_)\w+\s*\(",  # Code block with function call
+            r"(?:search_|list_|get_|execute_)\w+\s*\(\s*(?:query|id|limit)",  # Function call syntax
             r'"id":\s*"conv_\d',  # Fake conversation IDs
         ]
 
@@ -428,11 +422,25 @@ class OllamaProvider(LLMProvider):
             if re.search(pattern, content, re.IGNORECASE):
                 # Log warning - model is trying to call tools but not using API
                 import sys
-                print(f"\n⚠️  WARNING: Model is hallucinating tool calls!", file=sys.stderr)
-                print(f"   The model output fake tool calls/results instead of using the API.", file=sys.stderr)
-                print(f"   This model ({self.model}) may not support function calling properly.", file=sys.stderr)
-                print(f"   Try: ctk chat --no-tools  (to disable tools)", file=sys.stderr)
-                print(f"   Or use a larger model with better tool support.\n", file=sys.stderr)
+
+                print(
+                    f"\n⚠️  WARNING: Model is hallucinating tool calls!", file=sys.stderr
+                )
+                print(
+                    f"   The model output fake tool calls/results instead of using the API.",
+                    file=sys.stderr,
+                )
+                print(
+                    f"   This model ({self.model}) may not support function calling properly.",
+                    file=sys.stderr,
+                )
+                print(
+                    f"   Try: ctk chat --no-tools  (to disable tools)", file=sys.stderr
+                )
+                print(
+                    f"   Or use a larger model with better tool support.\n",
+                    file=sys.stderr,
+                )
                 break
 
         return None

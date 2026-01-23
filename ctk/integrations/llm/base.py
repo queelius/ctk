@@ -3,13 +3,14 @@ Base LLM provider abstraction for CTK chat integration.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Iterator, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict, Iterator, List, Optional
 
 
 class MessageRole(Enum):
     """Standard message roles across all providers"""
+
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
@@ -19,30 +20,29 @@ class MessageRole(Enum):
 @dataclass
 class Message:
     """Standardized message format"""
+
     role: MessageRole
     content: str
     metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for API calls"""
-        return {
-            "role": self.role.value,
-            "content": self.content
-        }
+        return {"role": self.role.value, "content": self.content}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Message':
+    def from_dict(cls, data: Dict[str, Any]) -> "Message":
         """Create Message from dict"""
         return cls(
-            role=MessageRole(data['role']),
-            content=data['content'],
-            metadata=data.get('metadata')
+            role=MessageRole(data["role"]),
+            content=data["content"],
+            metadata=data.get("metadata"),
         )
 
 
 @dataclass
 class ModelInfo:
     """Information about an LLM model"""
+
     id: str
     name: str
     context_window: int
@@ -55,6 +55,7 @@ class ModelInfo:
 @dataclass
 class ChatResponse:
     """Standardized response from LLM"""
+
     content: str
     model: str
     finish_reason: Optional[str] = None
@@ -79,7 +80,7 @@ class LLMProvider(ABC):
             config: Provider-specific configuration (API keys, endpoints, etc.)
         """
         self.config = config
-        self.model = config.get('model')
+        self.model = config.get("model")
 
     @abstractmethod
     def chat(
@@ -87,7 +88,7 @@ class LLMProvider(ABC):
         messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> ChatResponse:
         """
         Send messages and get response (blocking).
@@ -112,7 +113,7 @@ class LLMProvider(ABC):
         messages: List[Message],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> Iterator[str]:
         """
         Stream response token by token.
@@ -213,7 +214,9 @@ class LLMProvider(ABC):
         """
         raise NotImplementedError("This provider does not support tool calling")
 
-    def extract_tool_calls(self, response: ChatResponse) -> Optional[List[Dict[str, Any]]]:
+    def extract_tool_calls(
+        self, response: ChatResponse
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Extract tool calls from a chat response.
 
@@ -226,7 +229,9 @@ class LLMProvider(ABC):
         """
         return response.tool_calls
 
-    def format_tool_result_message(self, tool_name: str, tool_result: Any, tool_call_id: Optional[str] = None) -> Message:
+    def format_tool_result_message(
+        self, tool_name: str, tool_result: Any, tool_call_id: Optional[str] = None
+    ) -> Message:
         """
         Format a tool result as a message to send back to the LLM.
 
@@ -241,9 +246,7 @@ class LLMProvider(ABC):
         raise NotImplementedError("This provider does not support tool calling")
 
     def truncate_context(
-        self,
-        messages: List[Message],
-        max_tokens: int
+        self, messages: List[Message], max_tokens: int
     ) -> List[Message]:
         """
         Truncate message context to fit within token limit.
@@ -277,7 +280,7 @@ class LLMProvider(ABC):
     @property
     def name(self) -> str:
         """Provider name (e.g., 'ollama', 'openai')"""
-        return self.__class__.__name__.replace('Provider', '').lower()
+        return self.__class__.__name__.replace("Provider", "").lower()
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(model={self.model})"
@@ -285,26 +288,32 @@ class LLMProvider(ABC):
 
 # ==================== Exceptions ====================
 
+
 class LLMProviderError(Exception):
     """Base exception for LLM provider errors"""
+
     pass
 
 
 class AuthenticationError(LLMProviderError):
     """API authentication failed"""
+
     pass
 
 
 class RateLimitError(LLMProviderError):
     """Rate limit exceeded"""
+
     pass
 
 
 class ModelNotFoundError(LLMProviderError):
     """Requested model not available"""
+
     pass
 
 
 class ContextLengthError(LLMProviderError):
     """Context length exceeded"""
+
     pass

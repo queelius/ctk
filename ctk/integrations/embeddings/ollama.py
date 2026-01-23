@@ -2,16 +2,14 @@
 Ollama embedding provider implementation.
 """
 
-import requests
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from ctk.integrations.embeddings.base import (
-    EmbeddingProvider,
-    EmbeddingInfo,
-    EmbeddingResponse,
-    EmbeddingProviderError,
-    ModelNotFoundError,
-)
+import requests
+
+from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
+                                              EmbeddingProviderError,
+                                              EmbeddingResponse,
+                                              ModelNotFoundError)
 
 
 class OllamaEmbedding(EmbeddingProvider):
@@ -32,8 +30,8 @@ class OllamaEmbedding(EmbeddingProvider):
                 - timeout: Request timeout in seconds (default: 60)
         """
         super().__init__(config)
-        self.base_url = config.get('base_url', 'http://localhost:11434').rstrip('/')
-        self.timeout = config.get('timeout', 60)
+        self.base_url = config.get("base_url", "http://localhost:11434").rstrip("/")
+        self.timeout = config.get("timeout", 60)
 
         if not self.model:
             raise ValueError("Model name is required for Ollama embedding provider")
@@ -57,18 +55,14 @@ class OllamaEmbedding(EmbeddingProvider):
         """
         try:
             response = requests.post(
-                f'{self.base_url}/api/embeddings',
-                json={
-                    'model': self.model,
-                    'prompt': text,
-                    **kwargs
-                },
-                timeout=self.timeout
+                f"{self.base_url}/api/embeddings",
+                json={"model": self.model, "prompt": text, **kwargs},
+                timeout=self.timeout,
             )
             response.raise_for_status()
 
             result = response.json()
-            embedding = result['embedding']
+            embedding = result["embedding"]
 
             # Cache dimensions
             if self._dimensions is None:
@@ -78,7 +72,7 @@ class OllamaEmbedding(EmbeddingProvider):
                 embedding=embedding,
                 model=self.model,
                 dimensions=len(embedding),
-                metadata=result
+                metadata=result,
             )
 
         except requests.exceptions.ConnectionError:
@@ -134,35 +128,33 @@ class OllamaEmbedding(EmbeddingProvider):
             EmbeddingProviderError: On API errors
         """
         try:
-            response = requests.get(
-                f'{self.base_url}/api/tags',
-                timeout=10
-            )
+            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
             response.raise_for_status()
 
             result = response.json()
             models = []
 
-            for model_data in result.get('models', []):
+            for model_data in result.get("models", []):
                 # We can't easily determine dimensions without calling the model
                 # So we set it to None and let it be determined on first use
-                models.append(EmbeddingInfo(
-                    id=model_data['name'],
-                    name=model_data['name'],
-                    dimensions=0,  # Unknown until first embedding
-                    metadata={
-                        'size': model_data.get('size'),
-                        'modified': model_data.get('modified_at'),
-                        'digest': model_data.get('digest'),
-                    }
-                ))
+                models.append(
+                    EmbeddingInfo(
+                        id=model_data["name"],
+                        name=model_data["name"],
+                        dimensions=0,  # Unknown until first embedding
+                        metadata={
+                            "size": model_data.get("size"),
+                            "modified": model_data.get("modified_at"),
+                            "digest": model_data.get("digest"),
+                        },
+                    )
+                )
 
             return models
 
         except requests.exceptions.ConnectionError:
             raise EmbeddingProviderError(
-                f"Cannot connect to Ollama at {self.base_url}. "
-                "Is Ollama running?"
+                f"Cannot connect to Ollama at {self.base_url}. " "Is Ollama running?"
             )
         except Exception as e:
             raise EmbeddingProviderError(f"Failed to list models: {e}")
@@ -194,7 +186,7 @@ class OllamaEmbedding(EmbeddingProvider):
             True if Ollama is available, False otherwise
         """
         try:
-            response = requests.get(f'{self.base_url}/api/tags', timeout=2)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=2)
             return response.ok
         except:
             return False

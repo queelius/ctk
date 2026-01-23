@@ -5,11 +5,12 @@ Implements: find
 """
 
 import re
-from typing import List, Dict, Callable, Optional
+from typing import Callable, Dict, List, Optional
+
 from ctk.core.command_dispatcher import CommandResult
-from ctk.core.vfs_navigator import VFSNavigator
-from ctk.core.vfs import PathType, VFSPathParser
 from ctk.core.database import ConversationDB
+from ctk.core.vfs import PathType, VFSPathParser
+from ctk.core.vfs_navigator import VFSNavigator
 
 
 class SearchCommands:
@@ -28,7 +29,7 @@ class SearchCommands:
         self.navigator = navigator
         self.tui = tui_instance
 
-    def cmd_find(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_find(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Find conversations or messages in VFS
 
@@ -74,33 +75,39 @@ class SearchCommands:
         while i < len(args):
             arg = args[i]
 
-            if arg.startswith('-'):
-                if arg == '-name' and i + 1 < len(args):
+            if arg.startswith("-"):
+                if arg == "-name" and i + 1 < len(args):
                     name_pattern = args[i + 1]
                     i += 2
-                elif arg == '-content' and i + 1 < len(args):
+                elif arg == "-content" and i + 1 < len(args):
                     content_pattern = args[i + 1]
                     i += 2
-                elif arg == '-role' and i + 1 < len(args):
+                elif arg == "-role" and i + 1 < len(args):
                     role_filter = args[i + 1].lower()
                     i += 2
-                elif arg == '-type' and i + 1 < len(args):
+                elif arg == "-type" and i + 1 < len(args):
                     type_filter = args[i + 1]
                     i += 2
-                elif arg == '-i':
+                elif arg == "-i":
                     case_insensitive = True
                     i += 1
-                elif arg == '-l':
+                elif arg == "-l":
                     long_format = True
                     i += 1
-                elif arg == '-limit' and i + 1 < len(args):
+                elif arg == "-limit" and i + 1 < len(args):
                     try:
                         limit = int(args[i + 1])
                     except ValueError:
-                        return CommandResult(success=False, output="", error=f"find: invalid limit: {args[i + 1]}")
+                        return CommandResult(
+                            success=False,
+                            output="",
+                            error=f"find: invalid limit: {args[i + 1]}",
+                        )
                     i += 2
                 else:
-                    return CommandResult(success=False, output="", error=f"find: unknown option: {arg}")
+                    return CommandResult(
+                        success=False, output="", error=f"find: unknown option: {arg}"
+                    )
             else:
                 # This is the search path
                 search_path = arg
@@ -108,7 +115,7 @@ class SearchCommands:
 
         # Default to current path if not specified
         if search_path is None:
-            search_path = self.tui.vfs_cwd if self.tui else '/'
+            search_path = self.tui.vfs_cwd if self.tui else "/"
 
         # Compile regex patterns
         regex_flags = re.IGNORECASE if case_insensitive else 0
@@ -118,12 +125,14 @@ class SearchCommands:
         try:
             if name_pattern:
                 # Convert shell-style wildcards to regex
-                regex_pattern = name_pattern.replace('*', '.*').replace('?', '.')
+                regex_pattern = name_pattern.replace("*", ".*").replace("?", ".")
                 name_regex = re.compile(regex_pattern, regex_flags)
             if content_pattern:
                 content_regex = re.compile(content_pattern, regex_flags)
         except re.error as e:
-            return CommandResult(success=False, output="", error=f"find: invalid pattern: {e}")
+            return CommandResult(
+                success=False, output="", error=f"find: invalid pattern: {e}"
+            )
 
         # Perform search
         try:
@@ -138,9 +147,16 @@ class SearchCommands:
                 results = self._search_conversations(
                     name_regex, content_regex, role_filter, type_filter, limit
                 )
-            elif parsed_path.path_type in [PathType.CHATS, PathType.STARRED, PathType.PINNED,
-                                           PathType.ARCHIVED, PathType.TAGS, PathType.SOURCE,
-                                           PathType.MODEL, PathType.RECENT]:
+            elif parsed_path.path_type in [
+                PathType.CHATS,
+                PathType.STARRED,
+                PathType.PINNED,
+                PathType.ARCHIVED,
+                PathType.TAGS,
+                PathType.SOURCE,
+                PathType.MODEL,
+                PathType.RECENT,
+            ]:
                 # Search conversations in this directory
                 entries = self.navigator.list_directory(parsed_path)
                 conv_ids = [entry.name for entry in entries if entry.is_directory]
@@ -148,31 +164,39 @@ class SearchCommands:
                 results = self._search_conversations(
                     name_regex, content_regex, role_filter, type_filter, limit, conv_ids
                 )
-            elif parsed_path.path_type in [PathType.CONVERSATION_ROOT, PathType.MESSAGE_NODE]:
+            elif parsed_path.path_type in [
+                PathType.CONVERSATION_ROOT,
+                PathType.MESSAGE_NODE,
+            ]:
                 # Search within a specific conversation
                 conv_id = parsed_path.conversation_id
                 results = self._search_in_conversation(
                     conv_id, name_regex, content_regex, role_filter, type_filter, limit
                 )
             else:
-                return CommandResult(success=False, output="", error=f"find: cannot search in {search_path}")
+                return CommandResult(
+                    success=False,
+                    output="",
+                    error=f"find: cannot search in {search_path}",
+                )
 
             # Format output
             if not results:
                 return CommandResult(success=True, output="")
 
             # For long format, display rich table with metadata
-            if long_format and type_filter != 'f':
+            if long_format and type_filter != "f":
                 # Extract conversation IDs from paths
                 conv_ids = set()
                 for result_path in results:
                     # Extract conversation ID from path like /chats/abc123/ or /chats/abc123/m1/m2
-                    parts = result_path.strip('/').split('/')
-                    if len(parts) >= 2 and parts[0] == 'chats':
+                    parts = result_path.strip("/").split("/")
+                    if len(parts) >= 2 and parts[0] == "chats":
                         conv_ids.add(parts[1])
 
                 # Load conversation summaries from database
                 from ctk.core.helpers import format_conversations_table
+
                 all_summaries = self.db.list_conversations()
 
                 # Filter to only the matching conversations
@@ -180,14 +204,18 @@ class SearchCommands:
 
                 # Display rich table
                 from rich.console import Console
+
                 console = Console()
 
                 # Capture table output to string
                 import io
+
                 buffer = io.StringIO()
                 temp_console = Console(file=buffer, force_terminal=True)
 
-                format_conversations_table(conversations, show_message_count=False, console=temp_console)
+                format_conversations_table(
+                    conversations, show_message_count=False, console=temp_console
+                )
                 table_output = buffer.getvalue()
 
                 return CommandResult(success=True, output=table_output)
@@ -197,7 +225,7 @@ class SearchCommands:
             for result in results:
                 output_lines.append(result)
 
-            output = '\n'.join(output_lines) + '\n'
+            output = "\n".join(output_lines) + "\n"
             return CommandResult(success=True, output=output)
 
         except Exception as e:
@@ -210,7 +238,7 @@ class SearchCommands:
         role_filter: Optional[str],
         type_filter: Optional[str],
         limit: Optional[int],
-        conv_ids: Optional[List[str]] = None
+        conv_ids: Optional[List[str]] = None,
     ) -> List[str]:
         """
         Search conversations
@@ -243,12 +271,12 @@ class SearchCommands:
                 break
 
             # Check type filter for conversation (directory)
-            if type_filter == 'f':
+            if type_filter == "f":
                 continue  # Skip directories if looking for files
 
             # Check name pattern against title
             if name_regex:
-                if not name_regex.search(conv.title or ''):
+                if not name_regex.search(conv.title or ""):
                     # If searching by name and doesn't match, skip unless also searching content
                     if not content_regex and not role_filter:
                         continue
@@ -267,7 +295,7 @@ class SearchCommands:
                     results.append(f"/chats/{conv.id}/{msg_path}")
             else:
                 # Just list the conversation
-                if not type_filter or type_filter == 'd':
+                if not type_filter or type_filter == "d":
                     results.append(f"/chats/{conv.id}/")
 
         return results
@@ -279,7 +307,7 @@ class SearchCommands:
         content_regex: Optional[re.Pattern],
         role_filter: Optional[str],
         type_filter: Optional[str],
-        limit: Optional[int]
+        limit: Optional[int],
     ) -> List[str]:
         """
         Search within a specific conversation
@@ -320,7 +348,7 @@ class SearchCommands:
         conv,
         content_regex: Optional[re.Pattern],
         role_filter: Optional[str],
-        type_filter: Optional[str] = None
+        type_filter: Optional[str] = None,
     ) -> List[str]:
         """
         Search messages within a conversation
@@ -344,7 +372,11 @@ class SearchCommands:
             """Get path from root to message as m1/m2/m3 format"""
             path_msgs = msg.get_path_to_root()
             # Skip system messages at root if they're empty
-            if path_msgs and path_msgs[0].role.value == 'system' and not path_msgs[0].content.strip():
+            if (
+                path_msgs
+                and path_msgs[0].role.value == "system"
+                and not path_msgs[0].content.strip()
+            ):
                 path_msgs = path_msgs[1:]
 
             # Convert to m1/m2/m3 format
@@ -369,12 +401,12 @@ class SearchCommands:
                     except ValueError:
                         pass
 
-            return '/'.join(path_parts) if path_parts else ''
+            return "/".join(path_parts) if path_parts else ""
 
         # Search all messages
         for msg in nav.message_map.values():
             # Check type filter
-            if type_filter == 'd':
+            if type_filter == "d":
                 continue  # Messages are files, not directories
 
             # Check role filter
@@ -384,7 +416,11 @@ class SearchCommands:
 
             # Check content pattern
             if content_regex:
-                content = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                content = (
+                    msg.content.get_text()
+                    if hasattr(msg.content, "get_text")
+                    else str(msg.content)
+                )
                 if not content_regex.search(content):
                     continue
 
@@ -396,7 +432,9 @@ class SearchCommands:
         return results
 
 
-def create_search_commands(db: ConversationDB, navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
+def create_search_commands(
+    db: ConversationDB, navigator: VFSNavigator, tui_instance=None
+) -> Dict[str, Callable]:
     """
     Create search command handlers
 
@@ -411,5 +449,5 @@ def create_search_commands(db: ConversationDB, navigator: VFSNavigator, tui_inst
     search = SearchCommands(db, navigator, tui_instance)
 
     return {
-        'find': search.cmd_find,
+        "find": search.cmd_find,
     }

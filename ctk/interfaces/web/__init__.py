@@ -2,11 +2,11 @@
 Web interface for CTK - serves static SPA with REST API backend
 """
 
-from typing import Optional, Dict, Any
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from flask import Flask, send_from_directory, send_file
+from flask import Flask, send_file, send_from_directory
 from flask_cors import CORS
 
 from ctk.interfaces.rest.api import RestInterface
@@ -28,7 +28,7 @@ class WebInterface(RestInterface):
         self,
         db_path: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
-        static_dir: Optional[str] = None
+        static_dir: Optional[str] = None,
     ):
         super().__init__(db_path, config)
 
@@ -46,14 +46,15 @@ class WebInterface(RestInterface):
     def _setup_web_routes(self):
         """Setup routes for serving the web interface"""
 
-        @self.app.route('/')
+        @self.app.route("/")
         def index():
             """Serve the main web interface"""
             frontend_path = self.static_dir / "web_frontend.html"
             if frontend_path.exists():
                 return send_file(frontend_path)
             else:
-                return """
+                return (
+                    """
                 <!DOCTYPE html>
                 <html>
                 <head>
@@ -95,9 +96,11 @@ class WebInterface(RestInterface):
                     <div class="endpoint"><span class="method">GET</span> /api/statistics - Database stats</div>
                 </body>
                 </html>
-                """, 200
+                """,
+                    200,
+                )
 
-        @self.app.route('/static/<path:filename>')
+        @self.app.route("/static/<path:filename>")
         def serve_static(filename):
             """Serve static files (CSS, JS, images)"""
             static_path = self.static_dir / "static"

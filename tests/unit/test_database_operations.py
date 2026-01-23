@@ -2,14 +2,13 @@
 Unit tests for database organization operations (star, pin, archive, title)
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationTree, Message, MessageContent,
-    MessageRole, ConversationMetadata
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 
 
 class TestDatabaseOrganization:
@@ -114,7 +113,9 @@ class TestDatabaseOrganization:
 
         # Change title using update_conversation_metadata
         new_title = "Updated Title"
-        result = temp_db.update_conversation_metadata(sample_conversation.id, title=new_title)
+        result = temp_db.update_conversation_metadata(
+            sample_conversation.id, title=new_title
+        )
         assert result is True
 
         # Verify title changed
@@ -124,7 +125,9 @@ class TestDatabaseOrganization:
     @pytest.mark.unit
     def test_set_title_nonexistent(self, temp_db):
         """Test changing title of nonexistent conversation"""
-        result = temp_db.update_conversation_metadata("nonexistent_id", title="New Title")
+        result = temp_db.update_conversation_metadata(
+            "nonexistent_id", title="New Title"
+        )
         assert result is False
 
     @pytest.mark.unit
@@ -136,7 +139,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
             conv_ids.append(conv.id)
@@ -161,7 +164,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -189,7 +192,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -213,7 +216,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -235,16 +238,14 @@ class TestDatabaseOrganization:
         # Create conversations with different combinations
         test_cases = [
             ("conv_0", False, False),  # Neither
-            ("conv_1", True, False),   # Starred only
-            ("conv_2", False, True),   # Pinned only
-            ("conv_3", True, True),    # Both
+            ("conv_1", True, False),  # Starred only
+            ("conv_2", False, True),  # Pinned only
+            ("conv_3", True, True),  # Both
         ]
 
         for conv_id, should_star, should_pin in test_cases:
             conv = ConversationTree(
-                id=conv_id,
-                title=conv_id,
-                metadata=ConversationMetadata(source="test")
+                id=conv_id, title=conv_id, metadata=ConversationMetadata(source="test")
             )
             temp_db.save_conversation(conv)
 
@@ -271,14 +272,14 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Python Tutorial {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
 
             # Add message with searchable content
             msg = Message(
                 id=f"msg_{i}",
                 role=MessageRole.USER,
-                content=MessageContent(text="How do I use Python decorators?")
+                content=MessageContent(text="How do I use Python decorators?"),
             )
             conv.add_message(msg)
             temp_db.save_conversation(conv)
@@ -305,7 +306,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
             temp_db.star_conversation(conv.id)
@@ -326,7 +327,7 @@ class TestDatabaseOrganization:
             conv = ConversationTree(
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
-                metadata=ConversationMetadata(source="test")
+                metadata=ConversationMetadata(source="test"),
             )
             temp_db.save_conversation(conv)
 
@@ -358,11 +359,15 @@ class TestDatabaseOrganization:
 
         # Star twice - should work without error
         temp_db.star_conversation(sample_conversation.id)
-        first_starred_at = temp_db.load_conversation(sample_conversation.id).metadata.starred_at
+        first_starred_at = temp_db.load_conversation(
+            sample_conversation.id
+        ).metadata.starred_at
         assert first_starred_at is not None
 
         temp_db.star_conversation(sample_conversation.id)
-        second_starred_at = temp_db.load_conversation(sample_conversation.id).metadata.starred_at
+        second_starred_at = temp_db.load_conversation(
+            sample_conversation.id
+        ).metadata.starred_at
         assert second_starred_at is not None
 
         # Both should have starred_at set (may or may not be equal depending on implementation)
@@ -379,7 +384,9 @@ class TestDatabaseOrganization:
         temp_db.star_conversation(sample_conversation.id)
         temp_db.pin_conversation(sample_conversation.id)
         temp_db.archive_conversation(sample_conversation.id)
-        temp_db.update_conversation_metadata(sample_conversation.id, title="Updated Title")
+        temp_db.update_conversation_metadata(
+            sample_conversation.id, title="Updated Title"
+        )
 
         # Verify all are applied
         loaded = temp_db.load_conversation(sample_conversation.id)

@@ -2,18 +2,19 @@
 Base interface class that all CTK interfaces must implement
 """
 
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
-import logging
+from typing import Any, Dict, List, Optional, Union
 
-from ctk.core.models import ConversationTree, Message
 from ctk.core.database import ConversationDB
+from ctk.core.models import ConversationTree, Message
 
 
 class ResponseStatus(Enum):
     """Status codes for interface responses"""
+
     SUCCESS = "success"
     ERROR = "error"
     WARNING = "warning"
@@ -23,6 +24,7 @@ class ResponseStatus(Enum):
 @dataclass
 class InterfaceResponse:
     """Standard response structure for all interfaces"""
+
     status: ResponseStatus
     data: Optional[Any] = None
     message: Optional[str] = None
@@ -33,31 +35,23 @@ class InterfaceResponse:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            'status': self.status.value,
-            'data': self.data,
-            'message': self.message,
-            'errors': self.errors,
-            'warnings': self.warnings,
-            'metadata': self.metadata
+            "status": self.status.value,
+            "data": self.data,
+            "message": self.message,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "metadata": self.metadata,
         }
 
     @classmethod
-    def success(cls, data: Any = None, message: str = None) -> 'InterfaceResponse':
+    def success(cls, data: Any = None, message: str = None) -> "InterfaceResponse":
         """Create a success response"""
-        return cls(
-            status=ResponseStatus.SUCCESS,
-            data=data,
-            message=message
-        )
+        return cls(status=ResponseStatus.SUCCESS, data=data, message=message)
 
     @classmethod
-    def error(cls, message: str, errors: List[str] = None) -> 'InterfaceResponse':
+    def error(cls, message: str, errors: List[str] = None) -> "InterfaceResponse":
         """Create an error response"""
-        return cls(
-            status=ResponseStatus.ERROR,
-            message=message,
-            errors=errors or []
-        )
+        return cls(status=ResponseStatus.ERROR, message=message, errors=errors or [])
 
 
 class BaseInterface(ABC):
@@ -66,7 +60,9 @@ class BaseInterface(ABC):
     Each interface (CLI, REST, MCP, Web) must implement these methods.
     """
 
-    def __init__(self, db_path: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, db_path: Optional[str] = None, config: Optional[Dict[str, Any]] = None
+    ):
         """
         Initialize the interface
 
@@ -110,7 +106,7 @@ class BaseInterface(ABC):
         source: Union[str, Dict, List],
         format: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        **kwargs
+        **kwargs,
     ) -> InterfaceResponse:
         """
         Import conversations from various sources
@@ -130,7 +126,7 @@ class BaseInterface(ABC):
         format: str = "jsonl",
         conversation_ids: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> InterfaceResponse:
         """
         Export conversations to various formats
@@ -150,7 +146,7 @@ class BaseInterface(ABC):
         query: str,
         limit: int = 100,
         filters: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> InterfaceResponse:
         """
         Search conversations
@@ -170,7 +166,7 @@ class BaseInterface(ABC):
         offset: int = 0,
         sort_by: str = "updated_at",
         filters: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> InterfaceResponse:
         """
         List conversations with pagination
@@ -186,10 +182,7 @@ class BaseInterface(ABC):
 
     @abstractmethod
     def get_conversation(
-        self,
-        conversation_id: str,
-        include_paths: bool = False,
-        **kwargs
+        self, conversation_id: str, include_paths: bool = False, **kwargs
     ) -> InterfaceResponse:
         """
         Get a specific conversation
@@ -203,10 +196,7 @@ class BaseInterface(ABC):
 
     @abstractmethod
     def update_conversation(
-        self,
-        conversation_id: str,
-        updates: Dict[str, Any],
-        **kwargs
+        self, conversation_id: str, updates: Dict[str, Any], **kwargs
     ) -> InterfaceResponse:
         """
         Update a conversation's metadata
@@ -219,11 +209,7 @@ class BaseInterface(ABC):
         pass
 
     @abstractmethod
-    def delete_conversation(
-        self,
-        conversation_id: str,
-        **kwargs
-    ) -> InterfaceResponse:
+    def delete_conversation(self, conversation_id: str, **kwargs) -> InterfaceResponse:
         """
         Delete a conversation
 
@@ -249,27 +235,24 @@ class BaseInterface(ABC):
         """Validate that a format is supported"""
         return format.lower() in [f.lower() for f in valid_formats]
 
-    def apply_filters(
-        self,
-        query,
-        filters: Dict[str, Any]
-    ):
+    def apply_filters(self, query, filters: Dict[str, Any]):
         """Apply common filters to a database query"""
-        if 'source' in filters:
-            query = query.filter_by(source=filters['source'])
-        if 'model' in filters:
-            query = query.filter_by(model=filters['model'])
-        if 'project' in filters:
-            query = query.filter_by(project=filters['project'])
-        if 'tags' in filters:
+        if "source" in filters:
+            query = query.filter_by(source=filters["source"])
+        if "model" in filters:
+            query = query.filter_by(model=filters["model"])
+        if "project" in filters:
+            query = query.filter_by(project=filters["project"])
+        if "tags" in filters:
             # Handle tag filtering
             pass
         return query
 
     def handle_error(self, exception: Exception) -> InterfaceResponse:
         """Standard error handling"""
-        self.logger.error(f"Error in {self.__class__.__name__}: {str(exception)}", exc_info=True)
+        self.logger.error(
+            f"Error in {self.__class__.__name__}: {str(exception)}", exc_info=True
+        )
         return InterfaceResponse.error(
-            message=f"An error occurred: {str(exception)}",
-            errors=[str(exception)]
+            message=f"An error occurred: {str(exception)}", errors=[str(exception)]
         )

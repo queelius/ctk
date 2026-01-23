@@ -4,18 +4,17 @@ Unit tests for VFS Navigator
 Tests the VFSNavigator class for virtual filesystem navigation with caching.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime, timedelta
 from time import time
+from unittest.mock import MagicMock, Mock, patch
 
-from ctk.core.vfs_navigator import VFSNavigator, VFSEntry
-from ctk.core.vfs import VFSPath, VFSPathParser, PathType
+import pytest
+
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationTree, Message, MessageContent,
-    MessageRole, ConversationMetadata
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
+from ctk.core.vfs import PathType, VFSPath, VFSPathParser
+from ctk.core.vfs_navigator import VFSEntry, VFSNavigator
 
 
 class TestVFSEntry:
@@ -45,7 +44,7 @@ class TestVFSEntry:
             pinned=False,
             archived=False,
             source="openai",
-            model="gpt-4"
+            model="gpt-4",
         )
         assert entry.conversation_id == "conv_001"
         assert entry.title == "Test Chat"
@@ -62,7 +61,7 @@ class TestVFSEntry:
             message_id="msg_001",
             role="user",
             content_preview="Hello world...",
-            has_children=True
+            has_children=True,
         )
         assert entry.message_id == "msg_001"
         assert entry.role == "user"
@@ -76,7 +75,7 @@ class TestVFSEntry:
             name="text",
             is_directory=False,
             conversation_id="conv_001",
-            message_id="msg_001"
+            message_id="msg_001",
         )
         assert entry.is_directory is False
         assert entry.name == "text"
@@ -98,16 +97,62 @@ class TestVFSNavigatorInitialization:
         assert nav._cache == {}
 
     @pytest.mark.unit
-    def test_cache_ttl_constant(self):
-        """Test cache TTL is set correctly (10 seconds for better performance)"""
-        assert VFSNavigator.CACHE_TTL == 10.0
+    def test_cache_ttl_constants(self):
+        """Test adaptive cache TTL constants are set correctly"""
+        assert VFSNavigator.MIN_CACHE_TTL == 5.0
+        assert VFSNavigator.MAX_CACHE_TTL == 60.0
+
+    @pytest.mark.unit
+    def test_adaptive_ttl_calculation(self, mock_db):
+        """Test adaptive TTL increases with hit count"""
+        nav = VFSNavigator(mock_db)
+
+        # TTL should increase with hit count
+        ttl_0 = nav._get_adaptive_ttl(0)
+        ttl_1 = nav._get_adaptive_ttl(1)
+        ttl_2 = nav._get_adaptive_ttl(2)
+        ttl_5 = nav._get_adaptive_ttl(5)
+        ttl_10 = nav._get_adaptive_ttl(10)  # Should be capped
+
+        assert ttl_0 == 5.0  # MIN_CACHE_TTL
+        assert ttl_1 > ttl_0
+        assert ttl_2 > ttl_1
+        assert ttl_5 > ttl_2
+        # TTL should be capped after hit count 5
+        assert ttl_5 == ttl_10
+        # Should never exceed MAX_CACHE_TTL
+        assert ttl_10 <= VFSNavigator.MAX_CACHE_TTL
+
+    @pytest.mark.unit
+    def test_selective_cache_invalidation(self, mock_db):
+        """Test invalidate_conversation removes only relevant cache entries"""
+        nav = VFSNavigator(mock_db)
+
+        # Add cache entries for different conversations
+        from time import time
+        now = time()
+        nav._cache["/chats/conv_abc123"] = (now, [], 1)
+        nav._cache["/chats/conv_abc123::msg::m1"] = (now, [], 1)
+        nav._cache["/chats/conv_def456"] = (now, [], 1)
+        nav._cache["/starred"] = (now, [], 1)
+
+        # Invalidate conv_abc123
+        count = nav.invalidate_conversation("conv_abc123")
+
+        # Should have removed 2 entries (both containing conv_abc123)
+        assert count == 2
+        assert "/chats/conv_abc123" not in nav._cache
+        assert "/chats/conv_abc123::msg::m1" not in nav._cache
+        # Other entries should remain
+        assert "/chats/conv_def456" in nav._cache
+        assert "/starred" in nav._cache
 
     @pytest.mark.unit
     def test_clear_cache(self, mock_db):
         """Test cache clearing"""
         nav = VFSNavigator(mock_db)
-        # Add some fake cache data
-        nav._cache["test_key"] = (time(), [])
+        # Add some fake cache data with new (timestamp, entries, hit_count) structure
+        nav._cache["test_key"] = (time(), [], 1)
         assert len(nav._cache) > 0
 
         nav.clear_cache()
@@ -155,15 +200,19 @@ class TestVFSNavigatorPrefixResolution:
         """Test resolving a unique prefix match (slow path)"""
         # Mock list_directory to return test conversations
         mock_entries = [
-            VFSEntry(name="conv_abc123", is_directory=True, conversation_id="conv_abc123"),
-            VFSEntry(name="conv_def456", is_directory=True, conversation_id="conv_def456"),
+            VFSEntry(
+                name="conv_abc123", is_directory=True, conversation_id="conv_abc123"
+            ),
+            VFSEntry(
+                name="conv_def456", is_directory=True, conversation_id="conv_def456"
+            ),
         ]
 
         vfs_path = Mock(spec=VFSPath)
         vfs_path.normalized_path = "/starred"
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', return_value=mock_entries):
+        with patch.object(navigator, "list_directory", return_value=mock_entries):
             result = navigator.resolve_prefix("conv_abc", vfs_path)
             assert result == "conv_abc123"
 
@@ -171,13 +220,15 @@ class TestVFSNavigatorPrefixResolution:
     def test_resolve_prefix_no_match(self, navigator):
         """Test resolving prefix with no matches raises ValueError"""
         mock_entries = [
-            VFSEntry(name="conv_abc123", is_directory=True, conversation_id="conv_abc123"),
+            VFSEntry(
+                name="conv_abc123", is_directory=True, conversation_id="conv_abc123"
+            ),
         ]
 
         vfs_path = Mock(spec=VFSPath)
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', return_value=mock_entries):
+        with patch.object(navigator, "list_directory", return_value=mock_entries):
             with pytest.raises(ValueError, match="No conversation found matching"):
                 navigator.resolve_prefix("xyz", vfs_path)
 
@@ -185,15 +236,21 @@ class TestVFSNavigatorPrefixResolution:
     def test_resolve_prefix_multiple_matches(self, navigator):
         """Test resolving ambiguous prefix raises ValueError"""
         mock_entries = [
-            VFSEntry(name="conv_abc123", is_directory=True, conversation_id="conv_abc123"),
-            VFSEntry(name="conv_abc456", is_directory=True, conversation_id="conv_abc456"),
-            VFSEntry(name="conv_abc789", is_directory=True, conversation_id="conv_abc789"),
+            VFSEntry(
+                name="conv_abc123", is_directory=True, conversation_id="conv_abc123"
+            ),
+            VFSEntry(
+                name="conv_abc456", is_directory=True, conversation_id="conv_abc456"
+            ),
+            VFSEntry(
+                name="conv_abc789", is_directory=True, conversation_id="conv_abc789"
+            ),
         ]
 
         vfs_path = Mock(spec=VFSPath)
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', return_value=mock_entries):
+        with patch.object(navigator, "list_directory", return_value=mock_entries):
             with pytest.raises(ValueError, match="matches 3 conversations"):
                 navigator.resolve_prefix("conv_abc", vfs_path)
 
@@ -208,7 +265,7 @@ class TestVFSNavigatorPrefixResolution:
         vfs_path = Mock(spec=VFSPath)
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', return_value=mock_entries):
+        with patch.object(navigator, "list_directory", return_value=mock_entries):
             with pytest.raises(ValueError) as exc_info:
                 navigator.resolve_prefix("conv_", vfs_path)
 
@@ -222,7 +279,9 @@ class TestVFSNavigatorPrefixResolution:
         vfs_path = Mock(spec=VFSPath)
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', side_effect=Exception("DB error")):
+        with patch.object(
+            navigator, "list_directory", side_effect=Exception("DB error")
+        ):
             result = navigator.resolve_prefix("conv", vfs_path)
             assert result is None
 
@@ -231,13 +290,15 @@ class TestVFSNavigatorPrefixResolution:
         """Test prefix resolution ignores entries without conversation_id"""
         mock_entries = [
             VFSEntry(name="chats", is_directory=True, conversation_id=None),
-            VFSEntry(name="conv_abc123", is_directory=True, conversation_id="conv_abc123"),
+            VFSEntry(
+                name="conv_abc123", is_directory=True, conversation_id="conv_abc123"
+            ),
         ]
 
         vfs_path = Mock(spec=VFSPath)
         vfs_path.path_type = PathType.STARRED  # Use slow path (non-CHATS)
 
-        with patch.object(navigator, 'list_directory', return_value=mock_entries):
+        with patch.object(navigator, "list_directory", return_value=mock_entries):
             result = navigator.resolve_prefix("conv_abc", vfs_path)
             assert result == "conv_abc123"
 
@@ -274,13 +335,15 @@ class TestVFSNavigatorListDirectory:
         vfs_path.message_path = None
         vfs_path.path_type = PathType.CHATS
 
-        # Pre-populate cache with fresh data
+        # Pre-populate cache with fresh data (timestamp, entries, hit_count)
         cache_key = navigator._get_cache_key(vfs_path)
         cached_entries = [VFSEntry(name="cached", is_directory=True)]
-        navigator._cache[cache_key] = (time(), cached_entries)
+        navigator._cache[cache_key] = (time(), cached_entries, 1)
 
         # Mock the _list_chats method to ensure it's NOT called
-        with patch.object(navigator, '_list_chats', side_effect=AssertionError("Should use cache")):
+        with patch.object(
+            navigator, "_list_chats", side_effect=AssertionError("Should use cache")
+        ):
             result = navigator.list_directory(vfs_path)
             assert result == cached_entries
 
@@ -293,10 +356,10 @@ class TestVFSNavigatorListDirectory:
         vfs_path.message_path = None
         vfs_path.path_type = PathType.CHATS
 
-        # Pre-populate cache with old data
+        # Pre-populate cache with old data (timestamp, entries, hit_count)
         cache_key = navigator._get_cache_key(vfs_path)
         old_entries = [VFSEntry(name="old", is_directory=True)]
-        navigator._cache[cache_key] = (time() - 10, old_entries)  # 10 seconds ago
+        navigator._cache[cache_key] = (time() - 10, old_entries, 1)  # 10 seconds ago
 
         # Mock database to return new data
         mock_db.list_conversations.return_value = []
@@ -314,7 +377,7 @@ class TestVFSNavigatorListDirectory:
         vfs_path.message_path = None
         vfs_path.path_type = PathType.ROOT
 
-        with patch.object(navigator, '_list_root') as mock_list_root:
+        with patch.object(navigator, "_list_root") as mock_list_root:
             mock_list_root.return_value = []
             navigator.list_directory(vfs_path)
             mock_list_root.assert_called_once()
@@ -328,7 +391,7 @@ class TestVFSNavigatorListDirectory:
         vfs_path.path_type = PathType.CHATS
         vfs_path.message_path = None
 
-        with patch.object(navigator, '_list_chats') as mock_method:
+        with patch.object(navigator, "_list_chats") as mock_method:
             mock_method.return_value = []
             navigator.list_directory(vfs_path)
             mock_method.assert_called_once()
@@ -401,7 +464,7 @@ class TestVFSNavigatorChatsListing:
             pinned_at=None,
             archived_at=None,
             source="openai",
-            model="gpt-4"
+            model="gpt-4",
         )
 
     @pytest.mark.unit
@@ -413,7 +476,9 @@ class TestVFSNavigatorChatsListing:
         assert entries == []
 
     @pytest.mark.unit
-    def test_list_chats_single_conversation(self, navigator, mock_db, sample_conversation_metadata):
+    def test_list_chats_single_conversation(
+        self, navigator, mock_db, sample_conversation_metadata
+    ):
         """Test listing chats with single conversation"""
         mock_db.list_conversations.return_value = [sample_conversation_metadata]
 
@@ -435,9 +500,18 @@ class TestVFSNavigatorChatsListing:
     def test_list_chats_multiple_conversations(self, navigator, mock_db):
         """Test listing multiple conversations"""
         mock_convs = [
-            Mock(id=f"conv_{i}", title=f"Chat {i}", created_at=datetime.now(),
-                 updated_at=datetime.now(), tags=[], starred_at=None, pinned_at=None,
-                 archived_at=None, source="test", model="test-model")
+            Mock(
+                id=f"conv_{i}",
+                title=f"Chat {i}",
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+                tags=[],
+                starred_at=None,
+                pinned_at=None,
+                archived_at=None,
+                source="test",
+                model="test-model",
+            )
             for i in range(5)
         ]
         mock_db.list_conversations.return_value = mock_convs
@@ -467,14 +541,14 @@ class TestVFSNavigatorConversationRootListing:
         conv = ConversationTree(
             id="conv_001",
             title="Linear Chat",
-            metadata=ConversationMetadata(source="test")
+            metadata=ConversationMetadata(source="test"),
         )
 
         msg1 = Message(
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg1)
 
@@ -482,7 +556,7 @@ class TestVFSNavigatorConversationRootListing:
             id="msg_002",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Hi there!"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         conv.add_message(msg2)
 
@@ -497,7 +571,9 @@ class TestVFSNavigatorConversationRootListing:
             navigator._list_conversation_root("nonexistent")
 
     @pytest.mark.unit
-    def test_list_conversation_root_single_root(self, navigator, mock_db, linear_conversation):
+    def test_list_conversation_root_single_root(
+        self, navigator, mock_db, linear_conversation
+    ):
         """Test listing conversation with single root message"""
         mock_db.load_conversation.return_value = linear_conversation
 
@@ -522,7 +598,7 @@ class TestVFSNavigatorConversationRootListing:
                 id=f"msg_{i:03d}",
                 role=MessageRole.USER,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=None
+                parent_id=None,
             )
             conv.add_message(msg)
 
@@ -541,7 +617,7 @@ class TestVFSNavigatorConversationRootListing:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="A" * 100),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg)
 
@@ -561,7 +637,7 @@ class TestVFSNavigatorConversationRootListing:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Leaf message"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg)
 
@@ -595,7 +671,7 @@ class TestVFSNavigatorMessageNodeListing:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Root message"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg1)
 
@@ -604,7 +680,7 @@ class TestVFSNavigatorMessageNodeListing:
             id="msg_002a",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="First response"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         conv.add_message(msg2a)
 
@@ -612,7 +688,7 @@ class TestVFSNavigatorMessageNodeListing:
             id="msg_002b",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Second response"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         conv.add_message(msg2b)
 
@@ -621,7 +697,7 @@ class TestVFSNavigatorMessageNodeListing:
             id="msg_003",
             role=MessageRole.USER,
             content=MessageContent(text="Follow-up"),
-            parent_id="msg_002a"
+            parent_id="msg_002a",
         )
         conv.add_message(msg3)
 
@@ -657,8 +733,12 @@ class TestVFSNavigatorMessageNodeListing:
     def test_list_message_node_out_of_range(self, navigator, mock_db):
         """Test message node index out of range raises ValueError"""
         conv = ConversationTree(id="conv_001", title="Test")
-        msg = Message(id="msg_001", role=MessageRole.USER,
-                     content=MessageContent(text="Test"), parent_id=None)
+        msg = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Test"),
+            parent_id=None,
+        )
         conv.add_message(msg)
 
         mock_db.load_conversation.return_value = conv
@@ -670,8 +750,12 @@ class TestVFSNavigatorMessageNodeListing:
     def test_list_message_node_shows_metadata_files(self, navigator, mock_db):
         """Test message node shows metadata files"""
         conv = ConversationTree(id="conv_001", title="Test")
-        msg = Message(id="msg_001", role=MessageRole.USER,
-                     content=MessageContent(text="Test"), parent_id=None)
+        msg = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Test"),
+            parent_id=None,
+        )
         conv.add_message(msg)
 
         mock_db.load_conversation.return_value = conv
@@ -686,7 +770,9 @@ class TestVFSNavigatorMessageNodeListing:
         assert "id" in file_names
 
     @pytest.mark.unit
-    def test_list_message_node_shows_children(self, navigator, mock_db, branching_conversation):
+    def test_list_message_node_shows_children(
+        self, navigator, mock_db, branching_conversation
+    ):
         """Test message node shows child messages"""
         mock_db.load_conversation.return_value = branching_conversation
 
@@ -699,7 +785,9 @@ class TestVFSNavigatorMessageNodeListing:
         assert child_dirs[1].name == "m2"
 
     @pytest.mark.unit
-    def test_list_message_node_nested_navigation(self, navigator, mock_db, branching_conversation):
+    def test_list_message_node_nested_navigation(
+        self, navigator, mock_db, branching_conversation
+    ):
         """Test navigating to nested message node"""
         mock_db.load_conversation.return_value = branching_conversation
 
@@ -716,13 +804,20 @@ class TestVFSNavigatorMessageNodeListing:
     def test_list_message_node_content_preview(self, navigator, mock_db):
         """Test message node shows content preview for children"""
         conv = ConversationTree(id="conv_001", title="Test")
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="Parent"), parent_id=None)
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Parent"),
+            parent_id=None,
+        )
         conv.add_message(msg1)
 
-        msg2 = Message(id="msg_002", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="Child message content"),
-                      parent_id="msg_001")
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Child message content"),
+            parent_id="msg_001",
+        )
         conv.add_message(msg2)
 
         mock_db.load_conversation.return_value = conv
@@ -751,9 +846,16 @@ class TestVFSNavigatorFilteredListings:
     def test_list_starred(self, navigator, mock_db):
         """Test listing starred conversations"""
         mock_conv = Mock(
-            id="conv_001", title="Starred", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=[], starred_at=datetime.now(),
-            pinned_at=None, archived_at=None, source="test", model="test"
+            id="conv_001",
+            title="Starred",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=[],
+            starred_at=datetime.now(),
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [mock_conv]
 
@@ -767,9 +869,16 @@ class TestVFSNavigatorFilteredListings:
     def test_list_pinned(self, navigator, mock_db):
         """Test listing pinned conversations"""
         mock_conv = Mock(
-            id="conv_001", title="Pinned", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=[], starred_at=None,
-            pinned_at=datetime.now(), archived_at=None, source="test", model="test"
+            id="conv_001",
+            title="Pinned",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=[],
+            starred_at=None,
+            pinned_at=datetime.now(),
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [mock_conv]
 
@@ -783,9 +892,16 @@ class TestVFSNavigatorFilteredListings:
     def test_list_archived(self, navigator, mock_db):
         """Test listing archived conversations"""
         mock_conv = Mock(
-            id="conv_001", title="Archived", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=[], starred_at=None,
-            pinned_at=None, archived_at=datetime.now(), source="test", model="test"
+            id="conv_001",
+            title="Archived",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=datetime.now(),
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [mock_conv]
 
@@ -837,9 +953,16 @@ class TestVFSNavigatorTagsListing:
         """Test listing tag directory with conversations"""
         mock_db.list_tag_children.return_value = []
         mock_conv = Mock(
-            id="conv_001", title="Test", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=["testing"], starred_at=None,
-            pinned_at=None, archived_at=None, source="test", model="test"
+            id="conv_001",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=["testing"],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations_by_tag.return_value = [mock_conv]
 
@@ -853,9 +976,16 @@ class TestVFSNavigatorTagsListing:
         """Test listing tag directory with both tags and conversations"""
         mock_db.list_tag_children.return_value = ["python/web"]
         mock_conv = Mock(
-            id="conv_001", title="Test", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=["python"], starred_at=None,
-            pinned_at=None, archived_at=None, source="test", model="test"
+            id="conv_001",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=["python"],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations_by_tag.return_value = [mock_conv]
 
@@ -899,16 +1029,28 @@ class TestVFSNavigatorRecentListing:
         """Test /recent/today shows today's conversations"""
         now = datetime.now()
         today_conv = Mock(
-            id="conv_today", title="Today", created_at=now,
-            updated_at=now, tags=[], starred_at=None,
-            pinned_at=None, archived_at=None, source="test", model="test"
+            id="conv_today",
+            title="Today",
+            created_at=now,
+            updated_at=now,
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         old_conv = Mock(
-            id="conv_old", title="Old",
+            id="conv_old",
+            title="Old",
             created_at=now - timedelta(days=5),
-            updated_at=now - timedelta(days=5), tags=[],
-            starred_at=None, pinned_at=None, archived_at=None,
-            source="test", model="test"
+            updated_at=now - timedelta(days=5),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [today_conv, old_conv]
 
@@ -922,11 +1064,16 @@ class TestVFSNavigatorRecentListing:
         """Test /recent/this-week shows this week's conversations"""
         now = datetime.now()
         this_week_conv = Mock(
-            id="conv_week", title="This Week",
+            id="conv_week",
+            title="This Week",
             created_at=now - timedelta(days=3),
-            updated_at=now - timedelta(days=3), tags=[],
-            starred_at=None, pinned_at=None, archived_at=None,
-            source="test", model="test"
+            updated_at=now - timedelta(days=3),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [this_week_conv]
 
@@ -940,11 +1087,16 @@ class TestVFSNavigatorRecentListing:
         """Test /recent/this-month shows this month's conversations"""
         now = datetime.now()
         this_month_conv = Mock(
-            id="conv_month", title="This Month",
+            id="conv_month",
+            title="This Month",
             created_at=now - timedelta(days=15),
-            updated_at=now - timedelta(days=15), tags=[],
-            starred_at=None, pinned_at=None, archived_at=None,
-            source="test", model="test"
+            updated_at=now - timedelta(days=15),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [this_month_conv]
 
@@ -958,11 +1110,16 @@ class TestVFSNavigatorRecentListing:
         """Test /recent/older shows old conversations"""
         now = datetime.now()
         old_conv = Mock(
-            id="conv_old", title="Old",
+            id="conv_old",
+            title="Old",
             created_at=now - timedelta(days=60),
-            updated_at=now - timedelta(days=60), tags=[],
-            starred_at=None, pinned_at=None, archived_at=None,
-            source="test", model="test"
+            updated_at=now - timedelta(days=60),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [old_conv]
 
@@ -975,9 +1132,16 @@ class TestVFSNavigatorRecentListing:
     def test_list_recent_handles_none_dates(self, navigator, mock_db):
         """Test recent listing handles conversations with None dates"""
         conv_no_date = Mock(
-            id="conv_none", title="No Date", created_at=None,
-            updated_at=None, tags=[], starred_at=None,
-            pinned_at=None, archived_at=None, source="test", model="test"
+            id="conv_none",
+            title="No Date",
+            created_at=None,
+            updated_at=None,
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="test",
+            model="test",
         )
         mock_db.list_conversations.return_value = [conv_no_date]
 
@@ -1021,9 +1185,16 @@ class TestVFSNavigatorSourceListing:
     def test_list_source_specific(self, navigator, mock_db):
         """Test /source/<name> shows conversations from that source"""
         mock_conv = Mock(
-            id="conv_001", title="Test", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=[], starred_at=None,
-            pinned_at=None, archived_at=None, source="openai", model="gpt-4"
+            id="conv_001",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="openai",
+            model="gpt-4",
         )
         mock_db.list_conversations.return_value = [mock_conv]
 
@@ -1082,9 +1253,16 @@ class TestVFSNavigatorModelListing:
     def test_list_model_specific(self, navigator, mock_db):
         """Test /model/<name> shows conversations using that model"""
         mock_conv = Mock(
-            id="conv_001", title="Test", created_at=datetime.now(),
-            updated_at=datetime.now(), tags=[], starred_at=None,
-            pinned_at=None, archived_at=None, source="openai", model="gpt-4"
+            id="conv_001",
+            title="Test",
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            tags=[],
+            starred_at=None,
+            pinned_at=None,
+            archived_at=None,
+            source="openai",
+            model="gpt-4",
         )
         mock_db.list_conversations.return_value = [mock_conv]
 
@@ -1136,6 +1314,7 @@ class TestVFSNavigatorViewsListing:
     def mock_view_store(self):
         """Create mock view store"""
         from ctk.core.views import ViewStore
+
         return Mock(spec=ViewStore)
 
     @pytest.fixture
@@ -1146,7 +1325,9 @@ class TestVFSNavigatorViewsListing:
         return nav
 
     @pytest.mark.unit
-    def test_list_root_includes_views_when_store_available(self, mock_db, mock_view_store):
+    def test_list_root_includes_views_when_store_available(
+        self, mock_db, mock_view_store
+    ):
         """Test root listing includes views when view store is available"""
         nav = VFSNavigator(mock_db)
         nav._view_store = mock_view_store
@@ -1173,6 +1354,7 @@ class TestVFSNavigatorViewsListing:
     def test_list_views_shows_all_views(self, navigator_with_views, mock_view_store):
         """Test /views shows all available views"""
         from ctk.core.views import View
+
         mock_view = Mock(spec=View)
         mock_view.title = "Test View"
         mock_view.created_at = datetime.now()
@@ -1190,7 +1372,9 @@ class TestVFSNavigatorViewsListing:
         assert all(e.is_directory for e in entries)
 
     @pytest.mark.unit
-    def test_list_views_empty_when_no_views(self, navigator_with_views, mock_view_store):
+    def test_list_views_empty_when_no_views(
+        self, navigator_with_views, mock_view_store
+    ):
         """Test /views returns empty list when no views exist"""
         mock_view_store.list_views.return_value = []
 
@@ -1209,7 +1393,9 @@ class TestVFSNavigatorViewsListing:
         assert len(entries) == 0
 
     @pytest.mark.unit
-    def test_list_view_contents_shows_conversations(self, navigator_with_views, mock_view_store, mock_db):
+    def test_list_view_contents_shows_conversations(
+        self, navigator_with_views, mock_view_store, mock_db
+    ):
         """Test /views/<name> shows conversations in the view"""
         from ctk.core.views import EvaluatedView, EvaluatedViewItem
 
@@ -1246,7 +1432,9 @@ class TestVFSNavigatorViewsListing:
         mock_view_store.evaluate.assert_called_once_with("test-view", mock_db)
 
     @pytest.mark.unit
-    def test_list_view_contents_uses_title_override(self, navigator_with_views, mock_view_store, mock_db):
+    def test_list_view_contents_uses_title_override(
+        self, navigator_with_views, mock_view_store, mock_db
+    ):
         """Test view contents use title override when available"""
         from ctk.core.views import EvaluatedView, EvaluatedViewItem
 
@@ -1277,7 +1465,9 @@ class TestVFSNavigatorViewsListing:
         assert entries[0].title == "Custom Title"
 
     @pytest.mark.unit
-    def test_list_view_contents_skips_missing_conversations(self, navigator_with_views, mock_view_store, mock_db):
+    def test_list_view_contents_skips_missing_conversations(
+        self, navigator_with_views, mock_view_store, mock_db
+    ):
         """Test view contents silently skip conversations that no longer exist"""
         from ctk.core.views import EvaluatedView, EvaluatedViewItem
 
@@ -1296,7 +1486,9 @@ class TestVFSNavigatorViewsListing:
         assert len(entries) == 0
 
     @pytest.mark.unit
-    def test_list_view_contents_raises_when_view_not_found(self, navigator_with_views, mock_view_store, mock_db):
+    def test_list_view_contents_raises_when_view_not_found(
+        self, navigator_with_views, mock_view_store, mock_db
+    ):
         """Test view contents raises error when view not found"""
         mock_view_store.evaluate.return_value = None
 

@@ -4,10 +4,11 @@ Navigation command handlers
 Implements: cd, ls, pwd
 """
 
-from typing import List, Dict, Callable
+from typing import Callable, Dict, List
+
 from ctk.core.command_dispatcher import CommandResult
-from ctk.core.vfs_navigator import VFSNavigator
 from ctk.core.vfs import VFSPathParser
+from ctk.core.vfs_navigator import VFSNavigator
 
 
 class NavigationCommands:
@@ -25,9 +26,11 @@ class NavigationCommands:
         self.tui = tui_instance
 
         if not tui_instance:
-            raise ValueError("NavigationCommands requires tui_instance for state tracking")
+            raise ValueError(
+                "NavigationCommands requires tui_instance for state tracking"
+            )
 
-    def cmd_cd(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_cd(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Change directory in VFS
 
@@ -60,17 +63,17 @@ class NavigationCommands:
                 if current_path == "/":
                     return CommandResult(success=True, output="Already at root\n")
                 # Remove last segment
-                parts = current_path.rstrip('/').split('/')
-                new_path = '/'.join(parts[:-1]) or '/'
-            elif path_arg.startswith('/'):
+                parts = current_path.rstrip("/").split("/")
+                new_path = "/".join(parts[:-1]) or "/"
+            elif path_arg.startswith("/"):
                 # Absolute path
                 new_path = path_arg
             else:
                 # Relative path - combine with current
-                if current_path.endswith('/'):
+                if current_path.endswith("/"):
                     new_path = current_path + path_arg
                 else:
-                    new_path = current_path + '/' + path_arg
+                    new_path = current_path + "/" + path_arg
 
         # Validate and resolve the path
         try:
@@ -82,18 +85,24 @@ class NavigationCommands:
             resolved_prefix = False
 
             # Check if last segment looks like it might be a prefix
-            segments = new_path.rstrip('/').split('/')
-            last_segment = segments[-1] if segments else ''
+            segments = new_path.rstrip("/").split("/")
+            last_segment = segments[-1] if segments else ""
 
-            if last_segment and len(last_segment) >= 3 and not last_segment.startswith('/'):
+            if (
+                last_segment
+                and len(last_segment) >= 3
+                and not last_segment.startswith("/")
+            ):
                 # Try prefix resolution in parent directory
-                parent_path = '/'.join(segments[:-1]) or '/'
+                parent_path = "/".join(segments[:-1]) or "/"
                 parent_parsed = VFSPathParser.parse(parent_path)
 
                 try:
-                    resolved_id = self.navigator.resolve_prefix(last_segment, parent_parsed)
+                    resolved_id = self.navigator.resolve_prefix(
+                        last_segment, parent_parsed
+                    )
                     if resolved_id:
-                        result_path = parent_path + '/' + resolved_id
+                        result_path = parent_path + "/" + resolved_id
                         resolved_prefix = True
                     # If resolve_prefix returns None, prefix didn't match
                 except ValueError:
@@ -111,7 +120,9 @@ class NavigationCommands:
                     self.navigator.list_directory(final_parsed)
                 except ValueError as e:
                     # Directory doesn't exist
-                    return CommandResult(success=False, output="", error=f"cd: {str(e)}")
+                    return CommandResult(
+                        success=False, output="", error=f"cd: {str(e)}"
+                    )
 
             # Update TUI state
             self.tui.vfs_cwd = result_path
@@ -128,7 +139,7 @@ class NavigationCommands:
         except ValueError as e:
             return CommandResult(success=False, output="", error=f"cd: {str(e)}")
 
-    def cmd_ls(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_ls(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         List directory contents
 
@@ -149,8 +160,8 @@ class NavigationCommands:
         long_format = False
 
         for arg in args:
-            if arg.startswith('-'):
-                if 'l' in arg:
+            if arg.startswith("-"):
+                if "l" in arg:
                     long_format = True
             else:
                 path = arg
@@ -159,11 +170,11 @@ class NavigationCommands:
         if path:
             # Resolve relative to current path
             current_path = self.tui.vfs_cwd
-            if not path.startswith('/'):
-                if current_path.endswith('/'):
+            if not path.startswith("/"):
+                if current_path.endswith("/"):
                     full_path = current_path + path
                 else:
-                    full_path = current_path + '/' + path
+                    full_path = current_path + "/" + path
             else:
                 full_path = path
         else:
@@ -180,7 +191,7 @@ class NavigationCommands:
             # Get UUID prefix length setting (default 8)
             uuid_prefix_len = 8
             if self.tui:
-                val = getattr(self.tui, 'uuid_prefix_len', None)
+                val = getattr(self.tui, "uuid_prefix_len", None)
                 if isinstance(val, int):
                     uuid_prefix_len = val
 
@@ -190,7 +201,7 @@ class NavigationCommands:
                 name = self._format_entry_name(entry, long_format, uuid_prefix_len)
                 output_lines.append(name)
 
-            output = '\n'.join(output_lines) + '\n'
+            output = "\n".join(output_lines) + "\n"
             return CommandResult(success=True, output=output)
 
         except ValueError as e:
@@ -201,7 +212,7 @@ class NavigationCommands:
         # Message nodes inside a conversation - use simple name (m1, m2, etc.)
         if entry.message_id:
             if entry.is_directory:
-                name = entry.name + '/'
+                name = entry.name + "/"
             else:
                 name = entry.name
             # Add role indicator for long format
@@ -226,7 +237,7 @@ class NavigationCommands:
                 else:
                     name = uuid_prefix
             if entry.is_directory:
-                name += '/'
+                name += "/"
 
             # Add long format details for conversations
             if long_format:
@@ -245,13 +256,13 @@ class NavigationCommands:
 
         # Regular directory/file entries
         if entry.is_directory:
-            name = entry.name + '/'
+            name = entry.name + "/"
         else:
             name = entry.name
 
         return name
 
-    def cmd_pwd(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_pwd(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Print working directory
 
@@ -269,7 +280,9 @@ class NavigationCommands:
         return CommandResult(success=True, output=f"{current_path}\n")
 
 
-def create_navigation_commands(navigator: VFSNavigator, tui_instance=None) -> Dict[str, Callable]:
+def create_navigation_commands(
+    navigator: VFSNavigator, tui_instance=None
+) -> Dict[str, Callable]:
     """
     Create navigation command handlers
 
@@ -283,7 +296,7 @@ def create_navigation_commands(navigator: VFSNavigator, tui_instance=None) -> Di
     nav = NavigationCommands(navigator, tui_instance)
 
     return {
-        'cd': nav.cmd_cd,
-        'ls': nav.cmd_ls,
-        'pwd': nav.cmd_pwd,
+        "cd": nav.cmd_cd,
+        "ls": nav.cmd_ls,
+        "pwd": nav.cmd_pwd,
     }

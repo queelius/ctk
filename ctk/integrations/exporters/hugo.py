@@ -8,12 +8,12 @@ Each conversation becomes a directory with index.md and associated media.
 import os
 import re
 import shutil
-from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from ctk.core.plugin import ExporterPlugin
 from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.plugin import ExporterPlugin
 
 
 class HugoExporter(ExporterPlugin):
@@ -33,8 +33,9 @@ class HugoExporter(ExporterPlugin):
         # But we implement it for interface compliance
         return len(conversations)
 
-    def export_to_file(self, conversations: List[ConversationTree],
-                       file_path: str, **kwargs) -> None:
+    def export_to_file(
+        self, conversations: List[ConversationTree], file_path: str, **kwargs
+    ) -> None:
         """
         Export conversations as Hugo page bundles.
 
@@ -48,11 +49,11 @@ class HugoExporter(ExporterPlugin):
                 - include_draft: Mark as draft (default: False)
                 - date_prefix: Include date in directory name (default: True)
         """
-        db_dir = kwargs.get('db_dir')
-        section = kwargs.get('section', 'conversations')
-        path_selection = kwargs.get('path_selection', 'longest')
-        include_draft = kwargs.get('include_draft', False)
-        date_prefix = kwargs.get('date_prefix', True)
+        db_dir = kwargs.get("db_dir")
+        section = kwargs.get("section", "conversations")
+        path_selection = kwargs.get("path_selection", "longest")
+        include_draft = kwargs.get("include_draft", False)
+        date_prefix = kwargs.get("date_prefix", True)
 
         # Create output directory
         output_dir = Path(file_path)
@@ -62,16 +63,21 @@ class HugoExporter(ExporterPlugin):
         for conv in conversations:
             try:
                 self._export_conversation(
-                    conv, output_dir,
+                    conv,
+                    output_dir,
                     db_dir=db_dir,
                     path_selection=path_selection,
                     include_draft=include_draft,
-                    date_prefix=date_prefix
+                    date_prefix=date_prefix,
                 )
                 exported_count += 1
             except Exception as e:
                 import sys
-                print(f"Warning: Failed to export conversation {conv.id}: {e}", file=sys.stderr)
+
+                print(
+                    f"Warning: Failed to export conversation {conv.id}: {e}",
+                    file=sys.stderr,
+                )
 
         print(f"Exported {exported_count} conversation(s) to {output_dir}")
 
@@ -82,7 +88,7 @@ class HugoExporter(ExporterPlugin):
         db_dir: Optional[str] = None,
         path_selection: str = "longest",
         include_draft: bool = False,
-        date_prefix: bool = True
+        date_prefix: bool = True,
     ) -> None:
         """Export a single conversation as a Hugo page bundle."""
 
@@ -118,7 +124,7 @@ class HugoExporter(ExporterPlugin):
 
         # Write index.md
         index_path = bundle_dir / "index.md"
-        with open(index_path, 'w', encoding='utf-8') as f:
+        with open(index_path, "w", encoding="utf-8") as f:
             f.write("---\n")
             f.write(frontmatter)
             f.write("---\n\n")
@@ -129,13 +135,13 @@ class HugoExporter(ExporterPlugin):
         # Convert to lowercase and replace spaces
         slug = title.lower().strip()
         # Remove special characters, keep alphanumeric and spaces
-        slug = re.sub(r'[^\w\s-]', '', slug)
+        slug = re.sub(r"[^\w\s-]", "", slug)
         # Replace spaces with hyphens
-        slug = re.sub(r'[\s_]+', '-', slug)
+        slug = re.sub(r"[\s_]+", "-", slug)
         # Remove multiple consecutive hyphens
-        slug = re.sub(r'-+', '-', slug)
+        slug = re.sub(r"-+", "-", slug)
         # Trim to reasonable length
-        slug = slug[:50].rstrip('-')
+        slug = slug[:50].rstrip("-")
 
         # Add short ID suffix for uniqueness
         short_id = conv_id[:8] if conv_id else ""
@@ -155,27 +161,27 @@ class HugoExporter(ExporterPlugin):
 
         # Dates
         if conv.metadata.created_at:
-            lines.append(f'date: {conv.metadata.created_at.isoformat()}')
+            lines.append(f"date: {conv.metadata.created_at.isoformat()}")
         if conv.metadata.updated_at:
-            lines.append(f'lastmod: {conv.metadata.updated_at.isoformat()}')
+            lines.append(f"lastmod: {conv.metadata.updated_at.isoformat()}")
 
         # Draft status
         if include_draft:
-            lines.append('draft: true')
+            lines.append("draft: true")
         else:
-            lines.append('draft: false')
+            lines.append("draft: false")
 
         # Tags from metadata
         if conv.metadata.tags:
-            tags_str = ', '.join(f'"{t}"' for t in conv.metadata.tags)
-            lines.append(f'tags: [{tags_str}]')
+            tags_str = ", ".join(f'"{t}"' for t in conv.metadata.tags)
+            lines.append(f"tags: [{tags_str}]")
 
         # Categories - use source as category
         if conv.metadata.source:
             lines.append(f'categories: ["{conv.metadata.source}"]')
 
         # Custom params for CTK metadata
-        lines.append('params:')
+        lines.append("params:")
         lines.append(f'  conversation_id: "{conv.id}"')
 
         if conv.metadata.source:
@@ -184,23 +190,20 @@ class HugoExporter(ExporterPlugin):
             lines.append(f'  model: "{conv.metadata.model}"')
 
         # Message count
-        lines.append(f'  message_count: {len(conv.message_map)}')
+        lines.append(f"  message_count: {len(conv.message_map)}")
 
         # Organization flags
         if conv.metadata.starred_at:
-            lines.append('  starred: true')
+            lines.append("  starred: true")
         if conv.metadata.pinned_at:
-            lines.append('  pinned: true')
+            lines.append("  pinned: true")
         if conv.metadata.archived_at:
-            lines.append('  archived: true')
+            lines.append("  archived: true")
 
-        return '\n'.join(lines) + '\n'
+        return "\n".join(lines) + "\n"
 
     def _generate_content(
-        self,
-        conv: ConversationTree,
-        path_selection: str,
-        image_map: Dict[str, str]
+        self, conv: ConversationTree, path_selection: str, image_map: Dict[str, str]
     ) -> str:
         """Generate markdown content from conversation."""
         lines = []
@@ -220,16 +223,22 @@ class HugoExporter(ExporterPlugin):
         # Check if conversation has branches
         has_branches = len(conv.get_all_paths()) > 1
         if has_branches:
-            lines.append(f"*This conversation has multiple branches. Showing the {path_selection} path.*\n")
+            lines.append(
+                f"*This conversation has multiple branches. Showing the {path_selection} path.*\n"
+            )
 
         for msg in path:
             # Role header
-            role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             role_display = self._format_role(role)
             lines.append(f"## {role_display}\n")
 
             # Message content
-            content = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+            content = (
+                msg.content.get_text()
+                if hasattr(msg.content, "get_text")
+                else str(msg.content)
+            )
 
             # Replace image URLs with Hugo-relative paths
             content = self._replace_image_urls(content, image_map)
@@ -238,7 +247,7 @@ class HugoExporter(ExporterPlugin):
             lines.append("")  # Blank line after message
 
             # Handle images in message
-            if hasattr(msg.content, 'images') and msg.content.images:
+            if hasattr(msg.content, "images") and msg.content.images:
                 for img in msg.content.images:
                     img_ref = img.url or img.path
                     if img_ref and img_ref in image_map:
@@ -250,17 +259,17 @@ class HugoExporter(ExporterPlugin):
                             lines.append(f"![]({new_path})")
                         lines.append("")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def _format_role(self, role: str) -> str:
         """Format role for display."""
         role_map = {
-            'user': 'User',
-            'assistant': 'Assistant',
-            'system': 'System',
-            'tool': 'Tool',
-            'human': 'User',
-            'ai': 'Assistant',
+            "user": "User",
+            "assistant": "Assistant",
+            "system": "System",
+            "tool": "Tool",
+            "human": "User",
+            "ai": "Assistant",
         }
         return role_map.get(role.lower(), role.capitalize())
 
@@ -268,35 +277,34 @@ class HugoExporter(ExporterPlugin):
         """Collect all images from a conversation."""
         images = []
         for msg in conv.message_map.values():
-            if hasattr(msg.content, 'images') and msg.content.images:
+            if hasattr(msg.content, "images") and msg.content.images:
                 for img in msg.content.images:
                     img_ref = img.url or img.path
                     if img_ref:
-                        images.append({
-                            'url': img_ref,
-                            'mime_type': img.mime_type,
-                            'caption': img.caption
-                        })
+                        images.append(
+                            {
+                                "url": img_ref,
+                                "mime_type": img.mime_type,
+                                "caption": img.caption,
+                            }
+                        )
         return images
 
     def _copy_images(
-        self,
-        images: List[Dict[str, Any]],
-        db_dir: str,
-        images_dir: Path
+        self, images: List[Dict[str, Any]], db_dir: str, images_dir: Path
     ) -> Dict[str, str]:
         """Copy images to bundle and return mapping of old to new paths."""
         image_map = {}
         db_path = Path(db_dir)
 
         for img in images:
-            img_ref = img['url']
+            img_ref = img["url"]
 
             # Determine source path
-            if img_ref.startswith('media/'):
+            if img_ref.startswith("media/"):
                 src_path = db_path / img_ref
-            elif '/' not in img_ref and '\\' not in img_ref:
-                src_path = db_path / 'media' / img_ref
+            elif "/" not in img_ref and "\\" not in img_ref:
+                src_path = db_path / "media" / img_ref
             else:
                 src_path = db_path / img_ref
 
@@ -319,7 +327,7 @@ class HugoExporter(ExporterPlugin):
             # Replace various forms the URL might appear
             content = content.replace(old_url, new_path)
             # Also try with media/ prefix removed
-            if old_url.startswith('media/'):
+            if old_url.startswith("media/"):
                 content = content.replace(old_url[6:], new_path)
         return content
 

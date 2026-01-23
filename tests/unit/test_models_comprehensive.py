@@ -3,13 +3,14 @@ Comprehensive tests for core models
 Tests MediaContent, ToolCall, MessageContent, ConversationTree, and serialization
 """
 
-import pytest
 from datetime import datetime
-from ctk.core.models import (
-    MessageRole, MessageContent, Message, ConversationMetadata,
-    ConversationTree, MediaContent, ToolCall, ContentType,
-    ConversationSummary
-)
+
+import pytest
+
+from ctk.core.models import (ContentType, ConversationMetadata,
+                             ConversationSummary, ConversationTree,
+                             MediaContent, Message, MessageContent,
+                             MessageRole, ToolCall)
 
 
 class TestMediaContent:
@@ -22,7 +23,7 @@ class TestMediaContent:
             type=ContentType.IMAGE,
             url="https://example.com/image.png",
             mime_type="image/png",
-            caption="A test image"
+            caption="A test image",
         )
 
         assert media.type == ContentType.IMAGE
@@ -34,44 +35,32 @@ class TestMediaContent:
     def test_is_remote(self):
         """Test remote media detection"""
         remote = MediaContent(
-            type=ContentType.IMAGE,
-            url="https://example.com/image.png"
+            type=ContentType.IMAGE, url="https://example.com/image.png"
         )
         assert remote.is_remote() is True
 
-        local = MediaContent(
-            type=ContentType.IMAGE,
-            path="/local/image.png"
-        )
+        local = MediaContent(type=ContentType.IMAGE, path="/local/image.png")
         assert local.is_remote() is False
 
     @pytest.mark.unit
     def test_is_local(self):
         """Test local media detection"""
-        local = MediaContent(
-            type=ContentType.IMAGE,
-            path="/local/image.png"
-        )
+        local = MediaContent(type=ContentType.IMAGE, path="/local/image.png")
         assert local.is_local() is True
 
         remote = MediaContent(
-            type=ContentType.IMAGE,
-            url="https://example.com/image.png"
+            type=ContentType.IMAGE, url="https://example.com/image.png"
         )
         assert remote.is_local() is False
 
     @pytest.mark.unit
     def test_is_embedded(self):
         """Test embedded media detection"""
-        embedded = MediaContent(
-            type=ContentType.IMAGE,
-            data="base64encodeddata..."
-        )
+        embedded = MediaContent(type=ContentType.IMAGE, data="base64encodeddata...")
         assert embedded.is_embedded() is True
 
         remote = MediaContent(
-            type=ContentType.IMAGE,
-            url="https://example.com/image.png"
+            type=ContentType.IMAGE, url="https://example.com/image.png"
         )
         assert remote.is_embedded() is False
 
@@ -83,15 +72,15 @@ class TestMediaContent:
             url="https://example.com/image.png",
             mime_type="image/png",
             caption="Test",
-            metadata={"size": 1024}
+            metadata={"size": 1024},
         )
 
         data = media.to_dict()
-        assert data['type'] == 'image'
-        assert data['url'] == "https://example.com/image.png"
-        assert data['mime_type'] == "image/png"
-        assert data['caption'] == "Test"
-        assert data['metadata'] == {"size": 1024}
+        assert data["type"] == "image"
+        assert data["url"] == "https://example.com/image.png"
+        assert data["mime_type"] == "image/png"
+        assert data["caption"] == "Test"
+        assert data["metadata"] == {"size": 1024}
 
     @pytest.mark.unit
     def test_media_with_all_fields(self):
@@ -103,14 +92,14 @@ class TestMediaContent:
             data="base64data",
             mime_type="application/pdf",
             caption="Important document",
-            metadata={"pages": 10}
+            metadata={"pages": 10},
         )
 
         data = media.to_dict()
-        assert 'url' in data
-        assert 'path' in data
-        assert 'data' in data
-        assert data['mime_type'] == "application/pdf"
+        assert "url" in data
+        assert "path" in data
+        assert "data" in data
+        assert data["mime_type"] == "application/pdf"
 
 
 class TestToolCall:
@@ -123,7 +112,7 @@ class TestToolCall:
             id="tool_001",
             name="calculator",
             arguments={"expression": "2+2"},
-            status="pending"
+            status="pending",
         )
 
         assert tool.id == "tool_001"
@@ -138,7 +127,7 @@ class TestToolCall:
             name="calculator",
             arguments={"expression": "2+2"},
             result=4,
-            status="completed"
+            status="completed",
         )
 
         assert tool.result == 4
@@ -152,7 +141,7 @@ class TestToolCall:
             name="calculator",
             arguments={"expression": "invalid"},
             status="failed",
-            error="Invalid expression"
+            error="Invalid expression",
         )
 
         assert tool.status == "failed"
@@ -167,32 +156,32 @@ class TestToolCall:
             arguments={"query": "weather"},
             result={"temp": 72},
             status="completed",
-            metadata={"provider": "google"}
+            metadata={"provider": "google"},
         )
 
         data = tool.to_dict()
-        assert data['id'] == "tool_001"
-        assert data['name'] == "search"
-        assert data['arguments'] == {"query": "weather"}
-        assert data['result'] == {"temp": 72}
-        assert data['status'] == "completed"
-        assert data['metadata'] == {"provider": "google"}
+        assert data["id"] == "tool_001"
+        assert data["name"] == "search"
+        assert data["arguments"] == {"query": "weather"}
+        assert data["result"] == {"temp": 72}
+        assert data["status"] == "completed"
+        assert data["metadata"] == {"provider": "google"}
 
     @pytest.mark.unit
     def test_tool_call_from_dict(self):
         """Test creating tool call from dictionary"""
         data = {
-            'id': 'tool_001',
-            'name': 'calculator',
-            'arguments': {'expression': '2+2'},
-            'result': 4,
-            'status': 'completed'
+            "id": "tool_001",
+            "name": "calculator",
+            "arguments": {"expression": "2+2"},
+            "result": 4,
+            "status": "completed",
         }
 
         tool = ToolCall.from_dict(data)
         assert tool.id == "tool_001"
         assert tool.name == "calculator"
-        assert tool.arguments == {'expression': '2+2'}
+        assert tool.arguments == {"expression": "2+2"}
         assert tool.result == 4
         assert tool.status == "completed"
 
@@ -214,7 +203,7 @@ class TestMessageContentAdvanced:
         img = content.add_image(
             url="https://example.com/image.png",
             caption="Test image",
-            mime_type="image/png"
+            mime_type="image/png",
         )
 
         assert len(content.images) == 1
@@ -226,10 +215,7 @@ class TestMessageContentAdvanced:
     def test_add_tool_call(self):
         """Test adding tool calls to content"""
         content = MessageContent(text="Let me calculate that")
-        tool = content.add_tool_call(
-            name="calculator",
-            arguments={"expression": "2+2"}
-        )
+        tool = content.add_tool_call(name="calculator", arguments={"expression": "2+2"})
 
         assert len(content.tool_calls) == 1
         assert content.tool_calls[0].name == "calculator"
@@ -256,9 +242,7 @@ class TestMessageContentAdvanced:
     @pytest.mark.unit
     def test_get_text_from_parts(self):
         """Test extracting text from parts (legacy format)"""
-        content = MessageContent(
-            parts=["Hello", "world", {"text": "from parts"}]
-        )
+        content = MessageContent(parts=["Hello", "world", {"text": "from parts"}])
 
         text = content.get_text()
         assert "Hello" in text
@@ -273,40 +257,40 @@ class TestMessageContentAdvanced:
         content.add_tool_call(name="search", arguments={"q": "test"})
 
         data = content.to_dict()
-        assert data['text'] == "Test message"
-        assert 'images' in data
-        assert len(data['images']) == 1
-        assert 'tool_calls' in data
-        assert len(data['tool_calls']) == 1
+        assert data["text"] == "Test message"
+        assert "images" in data
+        assert len(data["images"]) == 1
+        assert "tool_calls" in data
+        assert len(data["tool_calls"]) == 1
 
     @pytest.mark.unit
     def test_content_from_dict_complete(self):
         """Test creating content from dictionary"""
         data = {
-            'text': 'Test message',
-            'images': [
+            "text": "Test message",
+            "images": [
                 {
-                    'type': 'image',
-                    'url': 'https://example.com/img.png',
-                    'caption': 'Test image'
+                    "type": "image",
+                    "url": "https://example.com/img.png",
+                    "caption": "Test image",
                 }
             ],
-            'tool_calls': [
+            "tool_calls": [
                 {
-                    'id': 'tool_001',
-                    'name': 'search',
-                    'arguments': {'q': 'test'},
-                    'status': 'pending'
+                    "id": "tool_001",
+                    "name": "search",
+                    "arguments": {"q": "test"},
+                    "status": "pending",
                 }
-            ]
+            ],
         }
 
         content = MessageContent.from_dict(data)
         assert content.text == "Test message"
         assert len(content.images) == 1
-        assert content.images[0].url == 'https://example.com/img.png'
+        assert content.images[0].url == "https://example.com/img.png"
         assert len(content.tool_calls) == 1
-        assert content.tool_calls[0].name == 'search'
+        assert content.tool_calls[0].name == "search"
 
 
 class TestMessageSerializationRoundtrip:
@@ -319,7 +303,7 @@ class TestMessageSerializationRoundtrip:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            timestamp=datetime(2024, 1, 1, 12, 0, 0)
+            timestamp=datetime(2024, 1, 1, 12, 0, 0),
         )
 
         # Serialize
@@ -342,7 +326,7 @@ class TestMessageSerializationRoundtrip:
             content=MessageContent(text="Here's the result"),
             timestamp=datetime(2024, 1, 1, 12, 0, 0),
             parent_id="msg_001",
-            metadata={"model": "gpt-4"}
+            metadata={"model": "gpt-4"},
         )
         msg.content.add_image(url="https://example.com/result.png")
         msg.content.add_tool_call(name="calculator", arguments={"expr": "2+2"})
@@ -372,7 +356,7 @@ class TestConversationTreeOperations:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg)
 
@@ -389,7 +373,7 @@ class TestConversationTreeOperations:
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg1)
 
@@ -397,7 +381,7 @@ class TestConversationTreeOperations:
             id="msg_002",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Hi"),
-            parent_id="msg_001"
+            parent_id="msg_001",
         )
         conv.add_message(msg2)
 
@@ -417,7 +401,7 @@ class TestConversationTreeOperations:
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
             parent_id=None,
-            timestamp=datetime(2024, 1, 1, 12, 0, 0)
+            timestamp=datetime(2024, 1, 1, 12, 0, 0),
         )
         conv.add_message(msg1)
 
@@ -427,7 +411,7 @@ class TestConversationTreeOperations:
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Third"),
             parent_id="msg_001",
-            timestamp=datetime(2024, 1, 1, 12, 2, 0)
+            timestamp=datetime(2024, 1, 1, 12, 2, 0),
         )
         conv.add_message(msg3)
 
@@ -436,7 +420,7 @@ class TestConversationTreeOperations:
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Second"),
             parent_id="msg_001",
-            timestamp=datetime(2024, 1, 1, 12, 1, 0)
+            timestamp=datetime(2024, 1, 1, 12, 1, 0),
         )
         conv.add_message(msg2)
 
@@ -451,12 +435,24 @@ class TestConversationTreeOperations:
         conv = ConversationTree(id="conv_001", title="Test")
 
         # Create linear conversation
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="1"), parent_id=None)
-        msg2 = Message(id="msg_002", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="2"), parent_id="msg_001")
-        msg3 = Message(id="msg_003", role=MessageRole.USER,
-                      content=MessageContent(text="3"), parent_id="msg_002")
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="1"),
+            parent_id=None,
+        )
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="2"),
+            parent_id="msg_001",
+        )
+        msg3 = Message(
+            id="msg_003",
+            role=MessageRole.USER,
+            content=MessageContent(text="3"),
+            parent_id="msg_002",
+        )
 
         conv.add_message(msg1)
         conv.add_message(msg2)
@@ -474,12 +470,24 @@ class TestConversationTreeOperations:
         conv = ConversationTree(id="conv_001", title="Test")
 
         # Create branching conversation
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="Question"), parent_id=None)
-        msg2a = Message(id="msg_002a", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Answer A"), parent_id="msg_001")
-        msg2b = Message(id="msg_002b", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Answer B"), parent_id="msg_001")
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Question"),
+            parent_id=None,
+        )
+        msg2a = Message(
+            id="msg_002a",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Answer A"),
+            parent_id="msg_001",
+        )
+        msg2b = Message(
+            id="msg_002b",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Answer B"),
+            parent_id="msg_001",
+        )
 
         conv.add_message(msg1)
         conv.add_message(msg2a)
@@ -495,21 +503,130 @@ class TestConversationTreeOperations:
         assert endings == {"msg_002a", "msg_002b"}
 
     @pytest.mark.unit
+    def test_get_all_paths_cache_hit(self):
+        """Test that get_all_paths uses cache on repeated calls"""
+        conv = ConversationTree(id="conv_cache", title="Cache Test")
+
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="1"),
+            parent_id=None,
+        )
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="2"),
+            parent_id="msg_001",
+        )
+        conv.add_message(msg1)
+        conv.add_message(msg2)
+
+        # First call - cache miss
+        assert conv._paths_cache is None
+        paths1 = conv.get_all_paths()
+        assert conv._paths_cache is not None
+        cache_hash1 = conv._paths_cache_hash
+
+        # Second call - cache hit
+        paths2 = conv.get_all_paths()
+        assert conv._paths_cache_hash == cache_hash1
+        assert paths1 == paths2
+
+    @pytest.mark.unit
+    def test_get_all_paths_cache_invalidation(self):
+        """Test that cache is invalidated when tree structure changes"""
+        conv = ConversationTree(id="conv_cache_inv", title="Cache Invalidation Test")
+
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="1"),
+            parent_id=None,
+        )
+        conv.add_message(msg1)
+
+        # First call - populate cache
+        paths1 = conv.get_all_paths()
+        assert len(paths1) == 1
+        cache_hash1 = conv._paths_cache_hash
+
+        # Add a message - cache should be invalidated
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="2"),
+            parent_id="msg_001",
+        )
+        conv.add_message(msg2)
+        assert conv._paths_cache is None  # Cache was invalidated
+
+        # Next call should recompute
+        paths2 = conv.get_all_paths()
+        assert len(paths2) == 1
+        assert len(paths2[0]) == 2  # Now has 2 messages
+        assert conv._paths_cache_hash != cache_hash1
+
+    @pytest.mark.unit
+    def test_get_all_paths_cache_not_in_to_dict(self):
+        """Test that cache fields are not included in serialization"""
+        conv = ConversationTree(id="conv_serial", title="Serialization Test")
+
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="1"),
+            parent_id=None,
+        )
+        conv.add_message(msg1)
+
+        # Populate cache
+        conv.get_all_paths()
+        assert conv._paths_cache is not None
+
+        # Serialize
+        data = conv.to_dict()
+
+        # Cache fields should not be present
+        assert "_paths_cache" not in data
+        assert "_paths_cache_hash" not in data
+
+    @pytest.mark.unit
     def test_get_longest_path(self):
         """Test getting longest path"""
         conv = ConversationTree(id="conv_001", title="Test")
 
         # Create conversation with branches of different lengths
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="Q"), parent_id=None)
-        msg2a = Message(id="msg_002a", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Short"), parent_id="msg_001")
-        msg2b = Message(id="msg_002b", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Long path start"), parent_id="msg_001")
-        msg3 = Message(id="msg_003", role=MessageRole.USER,
-                      content=MessageContent(text="Continue"), parent_id="msg_002b")
-        msg4 = Message(id="msg_004", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="End"), parent_id="msg_003")
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Q"),
+            parent_id=None,
+        )
+        msg2a = Message(
+            id="msg_002a",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Short"),
+            parent_id="msg_001",
+        )
+        msg2b = Message(
+            id="msg_002b",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Long path start"),
+            parent_id="msg_001",
+        )
+        msg3 = Message(
+            id="msg_003",
+            role=MessageRole.USER,
+            content=MessageContent(text="Continue"),
+            parent_id="msg_002b",
+        )
+        msg4 = Message(
+            id="msg_004",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="End"),
+            parent_id="msg_003",
+        )
 
         conv.add_message(msg1)
         conv.add_message(msg2a)
@@ -527,14 +644,30 @@ class TestConversationTreeOperations:
         conv = ConversationTree(id="conv_001", title="Test")
 
         # Create branching conversation
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="Q"), parent_id=None)
-        msg2 = Message(id="msg_002", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="A"), parent_id="msg_001")
-        msg3a = Message(id="msg_003a", role=MessageRole.USER,
-                       content=MessageContent(text="Branch A"), parent_id="msg_002")
-        msg3b = Message(id="msg_003b", role=MessageRole.USER,
-                       content=MessageContent(text="Branch B"), parent_id="msg_002")
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Q"),
+            parent_id=None,
+        )
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="A"),
+            parent_id="msg_001",
+        )
+        msg3a = Message(
+            id="msg_003a",
+            role=MessageRole.USER,
+            content=MessageContent(text="Branch A"),
+            parent_id="msg_002",
+        )
+        msg3b = Message(
+            id="msg_003b",
+            role=MessageRole.USER,
+            content=MessageContent(text="Branch B"),
+            parent_id="msg_002",
+        )
 
         conv.add_message(msg1)
         conv.add_message(msg2)
@@ -554,20 +687,36 @@ class TestConversationTreeOperations:
         conv = ConversationTree(id="conv_001", title="Test")
 
         # Linear conversation - no branches
-        msg1 = Message(id="msg_001", role=MessageRole.USER,
-                      content=MessageContent(text="Q"), parent_id=None)
-        msg2 = Message(id="msg_002", role=MessageRole.ASSISTANT,
-                      content=MessageContent(text="A"), parent_id="msg_001")
+        msg1 = Message(
+            id="msg_001",
+            role=MessageRole.USER,
+            content=MessageContent(text="Q"),
+            parent_id=None,
+        )
+        msg2 = Message(
+            id="msg_002",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="A"),
+            parent_id="msg_001",
+        )
         conv.add_message(msg1)
         conv.add_message(msg2)
 
         assert conv.count_branches() == 0
 
         # Add a branch
-        msg3a = Message(id="msg_003a", role=MessageRole.USER,
-                       content=MessageContent(text="Branch A"), parent_id="msg_002")
-        msg3b = Message(id="msg_003b", role=MessageRole.USER,
-                       content=MessageContent(text="Branch B"), parent_id="msg_002")
+        msg3a = Message(
+            id="msg_003a",
+            role=MessageRole.USER,
+            content=MessageContent(text="Branch A"),
+            parent_id="msg_002",
+        )
+        msg3b = Message(
+            id="msg_003b",
+            role=MessageRole.USER,
+            content=MessageContent(text="Branch B"),
+            parent_id="msg_002",
+        )
         conv.add_message(msg3a)
         conv.add_message(msg3b)
 
@@ -584,49 +733,43 @@ class TestConversationTreeSerialization:
             id="conv_001",
             title="Test Conversation",
             metadata=ConversationMetadata(
-                source="test",
-                model="gpt-4",
-                tags=["test", "sample"]
-            )
+                source="test", model="gpt-4", tags=["test", "sample"]
+            ),
         )
 
         msg1 = Message(
             id="msg_001",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg1)
 
         data = conv.to_dict()
-        assert data['id'] == "conv_001"
-        assert data['title'] == "Test Conversation"
-        assert 'metadata' in data
-        assert 'messages' in data
-        assert len(data['messages']) == 1
-        assert data['root_message_ids'] == ["msg_001"]
+        assert data["id"] == "conv_001"
+        assert data["title"] == "Test Conversation"
+        assert "metadata" in data
+        assert "messages" in data
+        assert len(data["messages"]) == 1
+        assert data["root_message_ids"] == ["msg_001"]
 
     @pytest.mark.unit
     def test_conversation_from_dict(self):
         """Test creating conversation from dictionary"""
         data = {
-            'id': 'conv_001',
-            'title': 'Test Conversation',
-            'metadata': {
-                'source': 'test',
-                'model': 'gpt-4',
-                'tags': ['test']
-            },
-            'messages': [
+            "id": "conv_001",
+            "title": "Test Conversation",
+            "metadata": {"source": "test", "model": "gpt-4", "tags": ["test"]},
+            "messages": [
                 {
-                    'id': 'msg_001',
-                    'role': 'user',
-                    'content': {'text': 'Hello'},
-                    'timestamp': '2024-01-01T12:00:00',
-                    'parent_id': None
+                    "id": "msg_001",
+                    "role": "user",
+                    "content": {"text": "Hello"},
+                    "timestamp": "2024-01-01T12:00:00",
+                    "parent_id": None,
                 }
             ],
-            'root_message_ids': ['msg_001']
+            "root_message_ids": ["msg_001"],
         }
 
         conv = ConversationTree.from_dict(data)
@@ -649,7 +792,9 @@ class TestConversationTreeSerialization:
         assert restored.id == branching_conversation.id
         assert restored.title == branching_conversation.title
         assert len(restored.message_map) == len(branching_conversation.message_map)
-        assert len(restored.get_all_paths()) == len(branching_conversation.get_all_paths())
+        assert len(restored.get_all_paths()) == len(
+            branching_conversation.get_all_paths()
+        )
 
 
 class TestConversationSummary:
@@ -667,7 +812,7 @@ class TestConversationSummary:
             source="openai",
             model="gpt-4",
             tags=["test"],
-            project="my-project"
+            project="my-project",
         )
 
         assert summary.id == "conv_001"
@@ -687,29 +832,29 @@ class TestConversationSummary:
             created_at=datetime(2024, 1, 1, 12, 0, 0),
             updated_at=datetime(2024, 1, 1, 13, 0, 0),
             message_count=5,
-            starred_at=datetime(2024, 1, 1, 14, 0, 0)
+            starred_at=datetime(2024, 1, 1, 14, 0, 0),
         )
 
         data = summary.to_dict()
-        assert data['id'] == "conv_001"
-        assert data['title'] == "Test"
-        assert data['message_count'] == 5
-        assert 'starred_at' in data
-        assert 'created_at' in data
+        assert data["id"] == "conv_001"
+        assert data["title"] == "Test"
+        assert data["message_count"] == 5
+        assert "starred_at" in data
+        assert "created_at" in data
 
     @pytest.mark.unit
     def test_summary_from_dict(self):
         """Test creating summary from dictionary"""
         data = {
-            'id': 'conv_001',
-            'title': 'Test',
-            'created_at': '2024-01-01T12:00:00',
-            'updated_at': '2024-01-01T13:00:00',
-            'message_count': 5,
-            'source': 'openai',
-            'model': 'gpt-4',
-            'tags': ['test'],
-            'project': 'my-project'
+            "id": "conv_001",
+            "title": "Test",
+            "created_at": "2024-01-01T12:00:00",
+            "updated_at": "2024-01-01T13:00:00",
+            "message_count": 5,
+            "source": "openai",
+            "model": "gpt-4",
+            "tags": ["test"],
+            "project": "my-project",
         }
 
         summary = ConversationSummary.from_dict(data)
@@ -742,7 +887,7 @@ class TestConversationMetadata:
             model="gpt-4",
             tags=["python", "ai"],
             project="my-project",
-            custom_data={"key": "value", "number": 42}
+            custom_data={"key": "value", "number": 42},
         )
 
         assert meta.source == "openai"
@@ -757,7 +902,7 @@ class TestConversationMetadata:
         meta = ConversationMetadata(
             starred_at=datetime(2024, 1, 1, 12, 0, 0),
             pinned_at=datetime(2024, 1, 1, 13, 0, 0),
-            archived_at=datetime(2024, 1, 1, 14, 0, 0)
+            archived_at=datetime(2024, 1, 1, 14, 0, 0),
         )
 
         assert meta.starred_at is not None
@@ -771,7 +916,7 @@ class TestConversationMetadata:
             source="test",
             model="test-model",
             tags=["tag1", "tag2"],
-            custom_data={"key": "value"}
+            custom_data={"key": "value"},
         )
 
         # Serialize

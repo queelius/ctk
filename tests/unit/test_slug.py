@@ -1,6 +1,7 @@
 """Unit tests for slug generation utilities."""
 
 import pytest
+
 from ctk.core.slug import generate_slug, make_unique_slug, slug_matches
 
 
@@ -22,7 +23,10 @@ class TestGenerateSlug:
 
     def test_special_characters_replaced(self):
         """Test special characters are replaced with hyphens."""
-        assert generate_slug("API Integration: OAuth2 & JWT") == "api-integration-oauth2-jwt"
+        assert (
+            generate_slug("API Integration: OAuth2 & JWT")
+            == "api-integration-oauth2-jwt"
+        )
 
     def test_contraction_whats(self):
         """Test 'what's' becomes 'whats'."""

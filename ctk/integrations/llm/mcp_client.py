@@ -5,11 +5,11 @@ Provides MCP server management and tool calling capabilities.
 """
 
 import asyncio
-import threading
-from typing import List, Dict, Optional, Any
-from dataclasses import dataclass
 import json
+import threading
 from concurrent.futures import Future
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -18,6 +18,7 @@ from mcp.client.stdio import stdio_client
 @dataclass
 class MCPServer:
     """Configuration for an MCP server"""
+
     name: str
     command: str
     args: List[str]
@@ -28,6 +29,7 @@ class MCPServer:
 @dataclass
 class MCPTool:
     """Represents an MCP tool"""
+
     name: str
     description: Optional[str]
     input_schema: Dict[str, Any]
@@ -43,6 +45,7 @@ class MCPToolResult:
     This provides both raw access to the result and formatted versions
     for different consumers (humans vs LLMs).
     """
+
     raw_result: Any  # The CallToolResult object
     is_error: bool
     error_message: Optional[str] = None
@@ -59,6 +62,7 @@ class MCPToolResult:
 
         if self.structured_content:
             import json
+
             return json.dumps(self.structured_content, indent=2)
 
         if self.text_content:
@@ -173,9 +177,7 @@ class MCPClient:
         try:
             # Create server parameters
             server_params = StdioServerParameters(
-                command=server.command,
-                args=server.args,
-                env=server.env
+                command=server.command, args=server.args, env=server.env
             )
 
             # Establish connection - keep context manager
@@ -244,18 +246,21 @@ class MCPClient:
             tools = []
 
             for tool in tools_response.tools:
-                tools.append(MCPTool(
-                    name=tool.name,
-                    description=tool.description,
-                    input_schema=tool.inputSchema,
-                    output_schema=getattr(tool, 'outputSchema', None),
-                    server_name=server_name
-                ))
+                tools.append(
+                    MCPTool(
+                        name=tool.name,
+                        description=tool.description,
+                        input_schema=tool.inputSchema,
+                        output_schema=getattr(tool, "outputSchema", None),
+                        server_name=server_name,
+                    )
+                )
 
             self.tools_cache[server_name] = tools
 
         except Exception as e:
             import traceback
+
             print(f"Warning: Failed to list tools from '{server_name}': {e}")
             print("Traceback:")
             traceback.print_exc()
@@ -272,7 +277,9 @@ class MCPClient:
         """Get tools from a specific server"""
         return self.tools_cache.get(server_name, [])
 
-    def call_tool(self, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> MCPToolResult:
+    def call_tool(
+        self, tool_name: str, arguments: Optional[Dict[str, Any]] = None
+    ) -> MCPToolResult:
         """
         Call an MCP tool (synchronous wrapper).
 
@@ -285,7 +292,9 @@ class MCPClient:
         """
         return self._submit_async(self._call_tool(tool_name, arguments))
 
-    async def _call_tool(self, tool_name: str, arguments: Optional[Dict[str, Any]] = None) -> MCPToolResult:
+    async def _call_tool(
+        self, tool_name: str, arguments: Optional[Dict[str, Any]] = None
+    ) -> MCPToolResult:
         """
         Call an MCP tool.
 
@@ -324,12 +333,10 @@ class MCPClient:
             if result.isError:
                 error_text = ""
                 for item in result.content:
-                    if hasattr(item, 'text'):
+                    if hasattr(item, "text"):
                         error_text += item.text
                 return MCPToolResult(
-                    raw_result=result,
-                    is_error=True,
-                    error_message=error_text
+                    raw_result=result, is_error=True, error_message=error_text
                 )
 
             # Extract content based on what's available
@@ -337,24 +344,19 @@ class MCPClient:
             content_items = []
 
             for item in result.content:
-                if hasattr(item, 'text'):
+                if hasattr(item, "text"):
                     # TextContent
                     text_parts.append(item.text)
                     content_items.append({"type": "text", "text": item.text})
-                elif hasattr(item, 'data'):
+                elif hasattr(item, "data"):
                     # ImageContent, AudioContent
-                    mime = getattr(item, 'mimeType', 'unknown')
-                    content_items.append({
-                        "type": item.type,
-                        "mimeType": mime,
-                        "data": "(base64 data)"
-                    })
-                elif hasattr(item, 'uri'):
+                    mime = getattr(item, "mimeType", "unknown")
+                    content_items.append(
+                        {"type": item.type, "mimeType": mime, "data": "(base64 data)"}
+                    )
+                elif hasattr(item, "uri"):
                     # ResourceLink, EmbeddedResource
-                    content_items.append({
-                        "type": "resource",
-                        "uri": str(item.uri)
-                    })
+                    content_items.append({"type": "resource", "uri": str(item.uri)})
 
             # Combine text parts
             text_content = "\n".join(text_parts) if text_parts else None
@@ -364,15 +366,11 @@ class MCPClient:
                 is_error=False,
                 text_content=text_content,
                 structured_content=result.structuredContent,
-                content_items=content_items if content_items else None
+                content_items=content_items if content_items else None,
             )
 
         except Exception as e:
-            return MCPToolResult(
-                raw_result=None,
-                is_error=True,
-                error_message=str(e)
-            )
+            return MCPToolResult(raw_result=None, is_error=True, error_message=str(e))
 
     async def list_resources(self, server_name: str) -> List[Any]:
         """List resources from a specific server"""
@@ -431,17 +429,20 @@ class MCPClient:
         tool_dicts = []
 
         for tool in all_tools:
-            tool_dicts.append({
-                'name': tool.name,
-                'description': tool.description or f"Tool: {tool.name}",
-                'input_schema': tool.input_schema,
-                'output_schema': tool.output_schema
-            })
+            tool_dicts.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description or f"Tool: {tool.name}",
+                    "input_schema": tool.input_schema,
+                    "output_schema": tool.output_schema,
+                }
+            )
 
         return tool_dicts
 
 
 # Synchronous wrapper functions for use in non-async contexts
+
 
 def run_async(coro):
     """

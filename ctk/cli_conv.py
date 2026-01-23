@@ -97,17 +97,17 @@ def cmd_show(args):
 
         # Display messages
         for msg in messages:
-            role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             role_style = {
-                'USER': 'green',
-                'ASSISTANT': 'blue',
-                'SYSTEM': 'yellow',
-                'TOOL': 'magenta'
-            }.get(role, 'white')
+                "USER": "green",
+                "ASSISTANT": "blue",
+                "SYSTEM": "yellow",
+                "TOOL": "magenta",
+            }.get(role, "white")
 
             content = msg.content.text if msg.content else ""
             if args.truncate and len(content) > args.truncate:
-                content = content[:args.truncate] + "..."
+                content = content[: args.truncate] + "..."
 
             console.print(f"[bold {role_style}]{role}[/bold {role_style}]")
             console.print(content)
@@ -138,16 +138,24 @@ def cmd_tree(args):
         tree = Tree(f"[bold cyan]{title}[/bold cyan]")
 
         def add_message_node(parent_tree, message, depth=0):
-            role = message.role.value if hasattr(message.role, 'value') else str(message.role)
+            role = (
+                message.role.value
+                if hasattr(message.role, "value")
+                else str(message.role)
+            )
             role_style = {
-                'USER': 'green',
-                'ASSISTANT': 'blue',
-                'SYSTEM': 'yellow',
-                'TOOL': 'magenta'
-            }.get(role, 'white')
+                "USER": "green",
+                "ASSISTANT": "blue",
+                "SYSTEM": "yellow",
+                "TOOL": "magenta",
+            }.get(role, "white")
 
             content = message.content.text if message.content else ""
-            preview = content[:50].replace('\n', ' ') + "..." if len(content) > 50 else content.replace('\n', ' ')
+            preview = (
+                content[:50].replace("\n", " ") + "..."
+                if len(content) > 50
+                else content.replace("\n", " ")
+            )
 
             node = parent_tree.add(f"[{role_style}]{role}[/{role_style}]: {preview}")
 
@@ -203,7 +211,7 @@ def cmd_paths(args):
             last_msg = path[-1] if path else None
             preview = ""
             if last_msg and last_msg.content:
-                preview = last_msg.content.text[:60].replace('\n', ' ')
+                preview = last_msg.content.text[:60].replace("\n", " ")
                 if len(last_msg.content.text) > 60:
                     preview += "..."
 
@@ -293,7 +301,7 @@ def cmd_delete(args):
         if not args.force:
             print(f"About to delete: {conv.title or 'Untitled'} ({conv_id[:8]}...)")
             confirm = input("Type 'yes' to confirm: ")
-            if confirm.lower() != 'yes':
+            if confirm.lower() != "yes":
                 print("Cancelled")
                 return 1
 
@@ -329,7 +337,7 @@ def cmd_tag(args):
         if not conv_id:
             return 1
 
-        tags = [t.strip() for t in args.tags.split(',') if t.strip()]
+        tags = [t.strip() for t in args.tags.split(",") if t.strip()]
         if not tags:
             print("Error: No valid tags provided")
             return 1
@@ -353,7 +361,7 @@ def cmd_untag(args):
 
 def cmd_say(args):
     """Send a message to an existing conversation"""
-    from ctk.core.models import Message, MessageRole, MessageContent
+    from ctk.core.models import Message, MessageContent, MessageRole
 
     with ConversationDB(args.db) as db:
         conv_id = resolve_conversation_id(db, args.id)
@@ -366,7 +374,7 @@ def cmd_say(args):
             return 1
 
         # Join message words
-        message_text = ' '.join(args.message)
+        message_text = " ".join(args.message)
         if not message_text.strip():
             print("Error: Message cannot be empty")
             return 1
@@ -380,9 +388,7 @@ def cmd_say(args):
 
         # Create the message
         new_message = Message(
-            role=role,
-            content=MessageContent(text=message_text),
-            parent_id=parent_id
+            role=role, content=MessageContent(text=message_text), parent_id=parent_id
         )
 
         # Add to conversation
@@ -401,7 +407,7 @@ def cmd_say(args):
 
 def cmd_fork(args):
     """Create a branch from a specific message in a conversation"""
-    from ctk.core.models import Message, MessageRole, MessageContent
+    from ctk.core.models import Message, MessageContent, MessageRole
 
     with ConversationDB(args.db) as db:
         conv_id = resolve_conversation_id(db, args.id)
@@ -419,7 +425,9 @@ def cmd_fork(args):
             parent_id = args.message_id
             if parent_id not in conv.message_map:
                 # Try prefix match
-                matches = [mid for mid in conv.message_map.keys() if mid.startswith(parent_id)]
+                matches = [
+                    mid for mid in conv.message_map.keys() if mid.startswith(parent_id)
+                ]
                 if len(matches) == 1:
                     parent_id = matches[0]
                 elif len(matches) > 1:
@@ -437,7 +445,7 @@ def cmd_fork(args):
             parent_id = longest_path[-1].id
 
         # Create fork message
-        message_text = ' '.join(args.message)
+        message_text = " ".join(args.message)
         if not message_text.strip():
             print("Error: Fork message cannot be empty")
             return 1
@@ -445,7 +453,7 @@ def cmd_fork(args):
         new_message = Message(
             role=MessageRole.USER,
             content=MessageContent(text=message_text),
-            parent_id=parent_id
+            parent_id=parent_id,
         )
 
         conv.add_message(new_message)
@@ -460,8 +468,8 @@ def cmd_fork(args):
 
 def cmd_reply(args):
     """Get an LLM response and append it to a conversation"""
-    from ctk.core.models import Message, MessageRole, MessageContent
     from ctk.core.config import get_config
+    from ctk.core.models import Message, MessageContent, MessageRole
     from ctk.integrations.llm.ollama import OllamaProvider
 
     with ConversationDB(args.db) as db:
@@ -483,19 +491,19 @@ def cmd_reply(args):
         # Build message history for LLM
         history = []
         for msg in messages:
-            role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             content = msg.content.text if msg.content else ""
             history.append({"role": role, "content": content})
 
         # Initialize provider
         cfg = get_config()
-        provider_name = args.provider or 'ollama'
+        provider_name = args.provider or "ollama"
         provider_config = cfg.get_provider_config(provider_name)
 
         config = {
-            'model': args.model or provider_config.get('default_model', 'llama2'),
-            'base_url': provider_config.get('base_url', 'http://localhost:11434'),
-            'timeout': provider_config.get('timeout', 120),
+            "model": args.model or provider_config.get("default_model", "llama2"),
+            "base_url": provider_config.get("base_url", "http://localhost:11434"),
+            "timeout": provider_config.get("timeout", 120),
         }
 
         try:
@@ -514,7 +522,7 @@ def cmd_reply(args):
             response_text = ""
             for chunk in provider.chat(history, stream=True):
                 if chunk:
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                     response_text += chunk
             print()  # Newline after response
         except Exception as e:
@@ -531,7 +539,7 @@ def cmd_reply(args):
             role=MessageRole.ASSISTANT,
             content=MessageContent(text=response_text),
             parent_id=parent_id,
-            metadata={'model': config['model']}
+            metadata={"model": config["model"]},
         )
 
         conv.add_message(response_message)
@@ -543,11 +551,12 @@ def cmd_reply(args):
 
 def cmd_info(args):
     """Show detailed information about a conversation"""
+    import json
+    from datetime import datetime
+
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    import json
-    from datetime import datetime
 
     console = Console()
 
@@ -570,7 +579,7 @@ def cmd_info(args):
         role_counts = {}
         total_chars = 0
         for msg in all_messages:
-            role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             role_counts[role] = role_counts.get(role, 0) + 1
             if msg.content and msg.content.text:
                 total_chars += len(msg.content.text)
@@ -587,8 +596,12 @@ def cmd_info(args):
                 "slug": conv.metadata.slug,
                 "source": conv.metadata.source,
                 "model": conv.metadata.model,
-                "created_at": str(conv.metadata.created_at) if conv.metadata.created_at else None,
-                "updated_at": str(conv.metadata.updated_at) if conv.metadata.updated_at else None,
+                "created_at": (
+                    str(conv.metadata.created_at) if conv.metadata.created_at else None
+                ),
+                "updated_at": (
+                    str(conv.metadata.updated_at) if conv.metadata.updated_at else None
+                ),
                 "first_message": str(first_ts) if first_ts else None,
                 "last_message": str(last_ts) if last_ts else None,
                 "message_count": len(all_messages),
@@ -665,6 +678,7 @@ def cmd_info(args):
 def cmd_summarize(args):
     """Generate an LLM summary for a conversation"""
     from rich.console import Console
+
     from ctk.core.config import get_config
     from ctk.integrations.llm.ollama import OllamaProvider
 
@@ -709,7 +723,7 @@ def cmd_summarize(args):
         # Build conversation text for summarization
         conv_text = []
         for msg in messages:
-            role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
             content = msg.content.text if msg.content else ""
             conv_text.append(f"{role}: {content}")
 
@@ -722,13 +736,13 @@ def cmd_summarize(args):
 
         # Initialize LLM provider
         cfg = get_config()
-        provider_name = args.provider or 'ollama'
+        provider_name = args.provider or "ollama"
         provider_config = cfg.get_provider_config(provider_name)
 
         config = {
-            'model': args.model or provider_config.get('default_model', 'llama2'),
-            'base_url': provider_config.get('base_url', 'http://localhost:11434'),
-            'timeout': provider_config.get('timeout', 120),
+            "model": args.model or provider_config.get("default_model", "llama2"),
+            "base_url": provider_config.get("base_url", "http://localhost:11434"),
+            "timeout": provider_config.get("timeout", 120),
         }
 
         try:
@@ -754,9 +768,11 @@ Summary:"""
 
         try:
             summary_text = ""
-            for chunk in provider.chat([{"role": "user", "content": prompt}], stream=True):
+            for chunk in provider.chat(
+                [{"role": "user", "content": prompt}], stream=True
+            ):
                 if chunk:
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                     summary_text += chunk
             print()  # Newline after response
         except Exception as e:
@@ -775,7 +791,9 @@ Summary:"""
             db.save_conversation(conv)
             console.print(f"\n[green]✓ Summary saved to conversation metadata[/green]")
         else:
-            console.print(f"\n[dim](Use --save to store this summary in the conversation)[/dim]")
+            console.print(
+                f"\n[dim](Use --save to store this summary in the conversation)[/dim]"
+            )
 
         return 0
 
@@ -803,29 +821,29 @@ def cmd_export_conv(args):
             # Infer format from extension
             ext = output_path.suffix.lower()
             fmt = {
-                '.json': 'json',
-                '.jsonl': 'jsonl',
-                '.md': 'markdown',
-                '.html': 'html',
-            }.get(ext, 'json')
+                ".json": "json",
+                ".jsonl": "jsonl",
+                ".md": "markdown",
+                ".html": "html",
+            }.get(ext, "json")
 
-        fmt = fmt or 'json'
+        fmt = fmt or "json"
 
         # Export based on format
-        if fmt == 'json':
+        if fmt == "json":
             data = conv.to_dict()
             output = json.dumps(data, indent=2, default=str)
 
-        elif fmt == 'jsonl':
+        elif fmt == "jsonl":
             # Export as JSONL (one message per line)
             lines = []
             for msg in conv.get_longest_path():
-                role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                 content = msg.content.text if msg.content else ""
                 lines.append(json.dumps({"role": role, "content": content}))
-            output = '\n'.join(lines)
+            output = "\n".join(lines)
 
-        elif fmt == 'markdown':
+        elif fmt == "markdown":
             # Export as markdown
             lines = [f"# {conv.title or 'Untitled'}\n"]
             lines.append(f"**ID:** {conv.id}\n")
@@ -836,11 +854,11 @@ def cmd_export_conv(args):
             lines.append("\n---\n")
 
             for msg in conv.get_longest_path():
-                role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
                 content = msg.content.text if msg.content else ""
                 lines.append(f"\n## {role.upper()}\n\n{content}\n")
 
-            output = '\n'.join(lines)
+            output = "\n".join(lines)
 
         else:
             print(f"Error: Unsupported format '{fmt}'")
@@ -858,121 +876,188 @@ def cmd_export_conv(args):
 
 def add_conv_commands(subparsers):
     """Add conversation command group to parser"""
-    conv_parser = subparsers.add_parser('conv', help='Conversation operations')
-    conv_subparsers = conv_parser.add_subparsers(dest='conv_command', help='Conversation commands')
+    conv_parser = subparsers.add_parser("conv", help="Conversation operations")
+    conv_subparsers = conv_parser.add_subparsers(
+        dest="conv_command", help="Conversation commands"
+    )
 
     # show
-    show_parser = conv_subparsers.add_parser('show', help='Show conversation content')
-    show_parser.add_argument('id', help='Conversation ID (full or partial)')
-    show_parser.add_argument('--db', '-d', required=True, help='Database path')
-    show_parser.add_argument('--path', '-p', type=int, help='Path index for branching conversations')
-    show_parser.add_argument('--truncate', '-t', type=int, help='Truncate messages to N characters')
+    show_parser = conv_subparsers.add_parser("show", help="Show conversation content")
+    show_parser.add_argument("id", help="Conversation ID (full or partial)")
+    show_parser.add_argument("--db", "-d", required=True, help="Database path")
+    show_parser.add_argument(
+        "--path", "-p", type=int, help="Path index for branching conversations"
+    )
+    show_parser.add_argument(
+        "--truncate", "-t", type=int, help="Truncate messages to N characters"
+    )
 
     # tree
-    tree_parser = conv_subparsers.add_parser('tree', help='Show conversation tree structure')
-    tree_parser.add_argument('id', help='Conversation ID (full or partial)')
-    tree_parser.add_argument('--db', '-d', required=True, help='Database path')
+    tree_parser = conv_subparsers.add_parser(
+        "tree", help="Show conversation tree structure"
+    )
+    tree_parser.add_argument("id", help="Conversation ID (full or partial)")
+    tree_parser.add_argument("--db", "-d", required=True, help="Database path")
 
     # paths
-    paths_parser = conv_subparsers.add_parser('paths', help='List all paths in conversation')
-    paths_parser.add_argument('id', help='Conversation ID (full or partial)')
-    paths_parser.add_argument('--db', '-d', required=True, help='Database path')
+    paths_parser = conv_subparsers.add_parser(
+        "paths", help="List all paths in conversation"
+    )
+    paths_parser.add_argument("id", help="Conversation ID (full or partial)")
+    paths_parser.add_argument("--db", "-d", required=True, help="Database path")
 
     # star
-    star_parser = conv_subparsers.add_parser('star', help='Star/unstar conversation')
-    star_parser.add_argument('id', help='Conversation ID (full or partial)')
-    star_parser.add_argument('--db', '-d', required=True, help='Database path')
-    star_parser.add_argument('--unstar', action='store_true', help='Unstar instead of star')
+    star_parser = conv_subparsers.add_parser("star", help="Star/unstar conversation")
+    star_parser.add_argument("id", help="Conversation ID (full or partial)")
+    star_parser.add_argument("--db", "-d", required=True, help="Database path")
+    star_parser.add_argument(
+        "--unstar", action="store_true", help="Unstar instead of star"
+    )
 
     # pin
-    pin_parser = conv_subparsers.add_parser('pin', help='Pin/unpin conversation')
-    pin_parser.add_argument('id', help='Conversation ID (full or partial)')
-    pin_parser.add_argument('--db', '-d', required=True, help='Database path')
-    pin_parser.add_argument('--unpin', action='store_true', help='Unpin instead of pin')
+    pin_parser = conv_subparsers.add_parser("pin", help="Pin/unpin conversation")
+    pin_parser.add_argument("id", help="Conversation ID (full or partial)")
+    pin_parser.add_argument("--db", "-d", required=True, help="Database path")
+    pin_parser.add_argument("--unpin", action="store_true", help="Unpin instead of pin")
 
     # archive
-    archive_parser = conv_subparsers.add_parser('archive', help='Archive/unarchive conversation')
-    archive_parser.add_argument('id', help='Conversation ID (full or partial)')
-    archive_parser.add_argument('--db', '-d', required=True, help='Database path')
-    archive_parser.add_argument('--unarchive', action='store_true', help='Unarchive instead of archive')
+    archive_parser = conv_subparsers.add_parser(
+        "archive", help="Archive/unarchive conversation"
+    )
+    archive_parser.add_argument("id", help="Conversation ID (full or partial)")
+    archive_parser.add_argument("--db", "-d", required=True, help="Database path")
+    archive_parser.add_argument(
+        "--unarchive", action="store_true", help="Unarchive instead of archive"
+    )
 
     # title
-    title_parser = conv_subparsers.add_parser('title', help='Rename conversation')
-    title_parser.add_argument('id', help='Conversation ID (full or partial)')
-    title_parser.add_argument('title', help='New title')
-    title_parser.add_argument('--db', '-d', required=True, help='Database path')
+    title_parser = conv_subparsers.add_parser("title", help="Rename conversation")
+    title_parser.add_argument("id", help="Conversation ID (full or partial)")
+    title_parser.add_argument("title", help="New title")
+    title_parser.add_argument("--db", "-d", required=True, help="Database path")
 
     # delete
-    delete_parser = conv_subparsers.add_parser('delete', help='Delete conversation')
-    delete_parser.add_argument('id', help='Conversation ID (full or partial)')
-    delete_parser.add_argument('--db', '-d', required=True, help='Database path')
-    delete_parser.add_argument('--force', '-f', action='store_true', help='Skip confirmation')
+    delete_parser = conv_subparsers.add_parser("delete", help="Delete conversation")
+    delete_parser.add_argument("id", help="Conversation ID (full or partial)")
+    delete_parser.add_argument("--db", "-d", required=True, help="Database path")
+    delete_parser.add_argument(
+        "--force", "-f", action="store_true", help="Skip confirmation"
+    )
 
     # duplicate
-    duplicate_parser = conv_subparsers.add_parser('duplicate', help='Duplicate conversation')
-    duplicate_parser.add_argument('id', help='Conversation ID (full or partial)')
-    duplicate_parser.add_argument('--db', '-d', required=True, help='Database path')
-    duplicate_parser.add_argument('--title', help='Title for duplicated conversation')
+    duplicate_parser = conv_subparsers.add_parser(
+        "duplicate", help="Duplicate conversation"
+    )
+    duplicate_parser.add_argument("id", help="Conversation ID (full or partial)")
+    duplicate_parser.add_argument("--db", "-d", required=True, help="Database path")
+    duplicate_parser.add_argument("--title", help="Title for duplicated conversation")
 
     # tag
-    tag_parser = conv_subparsers.add_parser('tag', help='Add tags to conversation')
-    tag_parser.add_argument('id', help='Conversation ID (full or partial)')
-    tag_parser.add_argument('tags', help='Comma-separated tags to add')
-    tag_parser.add_argument('--db', '-d', required=True, help='Database path')
+    tag_parser = conv_subparsers.add_parser("tag", help="Add tags to conversation")
+    tag_parser.add_argument("id", help="Conversation ID (full or partial)")
+    tag_parser.add_argument("tags", help="Comma-separated tags to add")
+    tag_parser.add_argument("--db", "-d", required=True, help="Database path")
 
     # untag
-    untag_parser = conv_subparsers.add_parser('untag', help='Remove tag from conversation')
-    untag_parser.add_argument('id', help='Conversation ID (full or partial)')
-    untag_parser.add_argument('tag', help='Tag to remove')
-    untag_parser.add_argument('--db', '-d', required=True, help='Database path')
+    untag_parser = conv_subparsers.add_parser(
+        "untag", help="Remove tag from conversation"
+    )
+    untag_parser.add_argument("id", help="Conversation ID (full or partial)")
+    untag_parser.add_argument("tag", help="Tag to remove")
+    untag_parser.add_argument("--db", "-d", required=True, help="Database path")
 
     # say
-    say_parser = conv_subparsers.add_parser('say', help='Send a message to a conversation')
-    say_parser.add_argument('id', help='Conversation ID (full or partial)')
-    say_parser.add_argument('message', nargs='+', help='Message to send')
-    say_parser.add_argument('--db', '-d', required=True, help='Database path')
-    say_parser.add_argument('--role', '-r', choices=['user', 'assistant', 'system'],
-                           default='user', help='Message role (default: user)')
-    say_parser.add_argument('--show', '-s', action='store_true', help='Show the message after adding')
+    say_parser = conv_subparsers.add_parser(
+        "say", help="Send a message to a conversation"
+    )
+    say_parser.add_argument("id", help="Conversation ID (full or partial)")
+    say_parser.add_argument("message", nargs="+", help="Message to send")
+    say_parser.add_argument("--db", "-d", required=True, help="Database path")
+    say_parser.add_argument(
+        "--role",
+        "-r",
+        choices=["user", "assistant", "system"],
+        default="user",
+        help="Message role (default: user)",
+    )
+    say_parser.add_argument(
+        "--show", "-s", action="store_true", help="Show the message after adding"
+    )
 
     # fork
-    fork_parser = conv_subparsers.add_parser('fork', help='Create a branch from a message')
-    fork_parser.add_argument('id', help='Conversation ID (full or partial)')
-    fork_parser.add_argument('message', nargs='+', help='Fork message to send')
-    fork_parser.add_argument('--db', '-d', required=True, help='Database path')
-    fork_parser.add_argument('--message-id', '-m', help='Message ID to fork from (default: last message)')
+    fork_parser = conv_subparsers.add_parser(
+        "fork", help="Create a branch from a message"
+    )
+    fork_parser.add_argument("id", help="Conversation ID (full or partial)")
+    fork_parser.add_argument("message", nargs="+", help="Fork message to send")
+    fork_parser.add_argument("--db", "-d", required=True, help="Database path")
+    fork_parser.add_argument(
+        "--message-id", "-m", help="Message ID to fork from (default: last message)"
+    )
 
     # reply
-    reply_parser = conv_subparsers.add_parser('reply', help='Get LLM response and append to conversation')
-    reply_parser.add_argument('id', help='Conversation ID (full or partial)')
-    reply_parser.add_argument('--db', '-d', required=True, help='Database path')
-    reply_parser.add_argument('--provider', '-p', default='ollama', help='LLM provider (default: ollama)')
-    reply_parser.add_argument('--model', '-m', help='Model to use')
+    reply_parser = conv_subparsers.add_parser(
+        "reply", help="Get LLM response and append to conversation"
+    )
+    reply_parser.add_argument("id", help="Conversation ID (full or partial)")
+    reply_parser.add_argument("--db", "-d", required=True, help="Database path")
+    reply_parser.add_argument(
+        "--provider", "-p", default="ollama", help="LLM provider (default: ollama)"
+    )
+    reply_parser.add_argument("--model", "-m", help="Model to use")
 
     # export (single conversation)
-    export_conv_parser = conv_subparsers.add_parser('export', help='Export conversation to file')
-    export_conv_parser.add_argument('id', help='Conversation ID (full or partial)')
-    export_conv_parser.add_argument('--db', '-d', required=True, help='Database path')
-    export_conv_parser.add_argument('--output', '-o', help='Output file path (default: stdout)')
-    export_conv_parser.add_argument('--format', '-f', choices=['json', 'jsonl', 'markdown'],
-                                    help='Output format (default: inferred from extension or json)')
+    export_conv_parser = conv_subparsers.add_parser(
+        "export", help="Export conversation to file"
+    )
+    export_conv_parser.add_argument("id", help="Conversation ID (full or partial)")
+    export_conv_parser.add_argument("--db", "-d", required=True, help="Database path")
+    export_conv_parser.add_argument(
+        "--output", "-o", help="Output file path (default: stdout)"
+    )
+    export_conv_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["json", "jsonl", "markdown"],
+        help="Output format (default: inferred from extension or json)",
+    )
 
     # info (detailed conversation info)
-    info_parser = conv_subparsers.add_parser('info', help='Show detailed conversation information')
-    info_parser.add_argument('id', help='Conversation ID (full or partial)')
-    info_parser.add_argument('--db', '-d', required=True, help='Database path')
-    info_parser.add_argument('--json', action='store_true', help='Output as JSON')
+    info_parser = conv_subparsers.add_parser(
+        "info", help="Show detailed conversation information"
+    )
+    info_parser.add_argument("id", help="Conversation ID (full or partial)")
+    info_parser.add_argument("--db", "-d", required=True, help="Database path")
+    info_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # summarize (LLM summary)
-    summarize_parser = conv_subparsers.add_parser('summarize', help='Generate LLM summary for conversation')
-    summarize_parser.add_argument('id', help='Conversation ID (full or partial)')
-    summarize_parser.add_argument('--db', '-d', required=True, help='Database path')
-    summarize_parser.add_argument('--provider', '-p', default='ollama', help='LLM provider (default: ollama)')
-    summarize_parser.add_argument('--model', '-m', help='Model to use')
-    summarize_parser.add_argument('--path', type=int, help='Specific path index to summarize')
-    summarize_parser.add_argument('--all-paths', action='store_true', help='Summarize all paths')
-    summarize_parser.add_argument('--max-chars', type=int, default=10000, help='Max chars to send to LLM (default: 10000)')
-    summarize_parser.add_argument('--save', '-s', action='store_true', help='Save summary to conversation metadata')
+    summarize_parser = conv_subparsers.add_parser(
+        "summarize", help="Generate LLM summary for conversation"
+    )
+    summarize_parser.add_argument("id", help="Conversation ID (full or partial)")
+    summarize_parser.add_argument("--db", "-d", required=True, help="Database path")
+    summarize_parser.add_argument(
+        "--provider", "-p", default="ollama", help="LLM provider (default: ollama)"
+    )
+    summarize_parser.add_argument("--model", "-m", help="Model to use")
+    summarize_parser.add_argument(
+        "--path", type=int, help="Specific path index to summarize"
+    )
+    summarize_parser.add_argument(
+        "--all-paths", action="store_true", help="Summarize all paths"
+    )
+    summarize_parser.add_argument(
+        "--max-chars",
+        type=int,
+        default=10000,
+        help="Max chars to send to LLM (default: 10000)",
+    )
+    summarize_parser.add_argument(
+        "--save",
+        "-s",
+        action="store_true",
+        help="Save summary to conversation metadata",
+    )
 
     return conv_parser
 
@@ -980,31 +1065,33 @@ def add_conv_commands(subparsers):
 def dispatch_conv_command(args):
     """Dispatch to appropriate conv subcommand"""
     commands = {
-        'show': cmd_show,
-        'tree': cmd_tree,
-        'paths': cmd_paths,
-        'star': cmd_star,
-        'pin': cmd_pin,
-        'archive': cmd_archive,
-        'title': cmd_title,
-        'delete': cmd_delete,
-        'duplicate': cmd_duplicate,
-        'tag': cmd_tag,
-        'untag': cmd_untag,
-        'say': cmd_say,
-        'fork': cmd_fork,
-        'reply': cmd_reply,
-        'export': cmd_export_conv,
-        'info': cmd_info,
-        'summarize': cmd_summarize,
+        "show": cmd_show,
+        "tree": cmd_tree,
+        "paths": cmd_paths,
+        "star": cmd_star,
+        "pin": cmd_pin,
+        "archive": cmd_archive,
+        "title": cmd_title,
+        "delete": cmd_delete,
+        "duplicate": cmd_duplicate,
+        "tag": cmd_tag,
+        "untag": cmd_untag,
+        "say": cmd_say,
+        "fork": cmd_fork,
+        "reply": cmd_reply,
+        "export": cmd_export_conv,
+        "info": cmd_info,
+        "summarize": cmd_summarize,
     }
 
-    if hasattr(args, 'conv_command') and args.conv_command:
+    if hasattr(args, "conv_command") and args.conv_command:
         if args.conv_command in commands:
             return commands[args.conv_command](args)
         else:
             print(f"Unknown conv command: {args.conv_command}")
             return 1
     else:
-        print("Error: No conv command specified. Use 'ctk conv --help' for available commands.")
+        print(
+            "Error: No conv command specified. Use 'ctk conv --help' for available commands."
+        )
         return 1

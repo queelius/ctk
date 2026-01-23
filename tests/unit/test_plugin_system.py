@@ -8,43 +8,43 @@ Tests focus on behavior:
 - Import/export workflows
 """
 
-import pytest
-import tempfile
 import json
+import tempfile
 from pathlib import Path
-from typing import List, Any
-from unittest.mock import Mock, patch, MagicMock
+from typing import Any, List
+from unittest.mock import MagicMock, Mock, patch
 
-from ctk.core.plugin import (
-    BasePlugin,
-    ImporterPlugin,
-    ExporterPlugin,
-    PluginRegistry
-)
-from ctk.core.models import ConversationTree, Message, MessageRole, MessageContent
+import pytest
 
+from ctk.core.models import (ConversationTree, Message, MessageContent,
+                             MessageRole)
+from ctk.core.plugin import (BasePlugin, ExporterPlugin, ImporterPlugin,
+                             PluginRegistry)
 
 # ==================== Mock Plugins for Testing ====================
 
+
 class MockImporter(ImporterPlugin):
     """Mock importer for testing"""
+
     name = "mock_importer"
     description = "Test importer"
     version = "1.0.0"
     supported_formats = ["mock"]
 
     def validate(self, data: Any) -> bool:
-        return isinstance(data, dict) and data.get('format') == 'mock'
+        return isinstance(data, dict) and data.get("format") == "mock"
 
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         tree = ConversationTree()
-        tree.id = data.get('id', 'test-id')
-        tree.title = data.get('title', 'Test')
+        tree.id = data.get("id", "test-id")
+        tree.title = data.get("title", "Test")
         return [tree]
 
 
 class MockExporter(ExporterPlugin):
     """Mock exporter for testing"""
+
     name = "mock_exporter"
     description = "Test exporter"
     version = "1.0.0"
@@ -54,10 +54,13 @@ class MockExporter(ExporterPlugin):
         return True
 
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
-        return {'conversations': [{'id': c.id, 'title': c.title} for c in conversations]}
+        return {
+            "conversations": [{"id": c.id, "title": c.title} for c in conversations]
+        }
 
 
 # ==================== Fixtures ====================
+
 
 @pytest.fixture
 def plugin_registry():
@@ -83,6 +86,7 @@ def temp_plugin_dir():
 
 # ==================== Plugin Registry Initialization Tests ====================
 
+
 class TestPluginRegistryInitialization:
     """Test plugin registry initialization"""
 
@@ -95,17 +99,18 @@ class TestPluginRegistryInitialization:
         """Given new registry, should have integrations dir as trusted"""
         assert len(plugin_registry.allowed_plugin_dirs) > 0
         # Should contain path to integrations directory
-        dirs_str = ' '.join(plugin_registry.allowed_plugin_dirs)
-        assert 'integrations' in dirs_str
+        dirs_str = " ".join(plugin_registry.allowed_plugin_dirs)
+        assert "integrations" in dirs_str
 
     def test_registry_accepts_custom_allowed_dirs(self):
         """Given custom allowed dirs, registry should store them"""
-        custom_dirs = ['/custom/path1', '/custom/path2']
+        custom_dirs = ["/custom/path1", "/custom/path2"]
         registry = PluginRegistry(allowed_plugin_dirs=custom_dirs)
         assert len(registry.allowed_plugin_dirs) >= 2
 
 
 # ==================== Plugin Registration Tests ====================
+
 
 class TestPluginRegistration:
     """Test manual plugin registration"""
@@ -113,47 +118,48 @@ class TestPluginRegistration:
     def test_register_importer(self, plugin_registry):
         """Given importer plugin, should be registered by name"""
         importer = MockImporter()
-        plugin_registry.register_importer('test', importer)
+        plugin_registry.register_importer("test", importer)
 
-        assert 'test' in plugin_registry.importers
-        assert plugin_registry.importers['test'] == importer
+        assert "test" in plugin_registry.importers
+        assert plugin_registry.importers["test"] == importer
 
     def test_register_exporter(self, plugin_registry):
         """Given exporter plugin, should be registered by name"""
         exporter = MockExporter()
-        plugin_registry.register_exporter('test', exporter)
+        plugin_registry.register_exporter("test", exporter)
 
-        assert 'test' in plugin_registry.exporters
-        assert plugin_registry.exporters['test'] == exporter
+        assert "test" in plugin_registry.exporters
+        assert plugin_registry.exporters["test"] == exporter
 
     def test_get_registered_importer(self, plugin_registry):
         """Given registered importer, get_importer should return it"""
         importer = MockImporter()
-        plugin_registry.register_importer('mock', importer)
+        plugin_registry.register_importer("mock", importer)
 
-        result = plugin_registry.get_importer('mock')
+        result = plugin_registry.get_importer("mock")
         assert result == importer
 
     def test_get_nonexistent_importer(self, plugin_registry):
         """Given nonexistent importer name, should return None"""
-        result = plugin_registry.get_importer('nonexistent')
+        result = plugin_registry.get_importer("nonexistent")
         assert result is None
 
     def test_get_registered_exporter(self, plugin_registry):
         """Given registered exporter, get_exporter should return it"""
         exporter = MockExporter()
-        plugin_registry.register_exporter('mock', exporter)
+        plugin_registry.register_exporter("mock", exporter)
 
-        result = plugin_registry.get_exporter('mock')
+        result = plugin_registry.get_exporter("mock")
         assert result == exporter
 
     def test_get_nonexistent_exporter(self, plugin_registry):
         """Given nonexistent exporter name, should return None"""
-        result = plugin_registry.get_exporter('nonexistent')
+        result = plugin_registry.get_exporter("nonexistent")
         assert result is None
 
 
 # ==================== Plugin Listing Tests ====================
+
 
 class TestPluginListing:
     """Test plugin listing functionality"""
@@ -173,25 +179,26 @@ class TestPluginListing:
     def test_list_importers_after_registration(self, plugin_registry):
         """Given registered importers, list should include them"""
         plugin_registry._discovered = True  # Prevent auto-discovery
-        plugin_registry.register_importer('test1', MockImporter())
-        plugin_registry.register_importer('test2', MockImporter())
+        plugin_registry.register_importer("test1", MockImporter())
+        plugin_registry.register_importer("test2", MockImporter())
 
         names = plugin_registry.list_importers()
-        assert 'test1' in names
-        assert 'test2' in names
+        assert "test1" in names
+        assert "test2" in names
 
     def test_list_exporters_after_registration(self, plugin_registry):
         """Given registered exporters, list should include them"""
         plugin_registry._discovered = True  # Prevent auto-discovery
-        plugin_registry.register_exporter('test1', MockExporter())
-        plugin_registry.register_exporter('test2', MockExporter())
+        plugin_registry.register_exporter("test1", MockExporter())
+        plugin_registry.register_exporter("test2", MockExporter())
 
         names = plugin_registry.list_exporters()
-        assert 'test1' in names
-        assert 'test2' in names
+        assert "test1" in names
+        assert "test2" in names
 
 
 # ==================== Auto-Detection Tests ====================
+
 
 class TestAutoDetection:
     """Test auto-detection of appropriate importers"""
@@ -200,9 +207,9 @@ class TestAutoDetection:
         """Given data matching an importer, should return that importer"""
         plugin_registry._discovered = True
         importer = MockImporter()
-        plugin_registry.register_importer('mock', importer)
+        plugin_registry.register_importer("mock", importer)
 
-        data = {'format': 'mock', 'content': 'test'}
+        data = {"format": "mock", "content": "test"}
         result = plugin_registry.auto_detect_importer(data)
 
         assert result == importer
@@ -210,9 +217,9 @@ class TestAutoDetection:
     def test_auto_detect_no_match(self, plugin_registry):
         """Given data not matching any importer, should return None"""
         plugin_registry._discovered = True
-        plugin_registry.register_importer('mock', MockImporter())
+        plugin_registry.register_importer("mock", MockImporter())
 
-        data = {'format': 'different', 'content': 'test'}
+        data = {"format": "different", "content": "test"}
         result = plugin_registry.auto_detect_importer(data)
 
         assert result is None
@@ -228,12 +235,9 @@ class TestAutoDetection:
         # Second will match
         importer2 = MockImporter()
 
-        plugin_registry.importers = {
-            'first': importer1,
-            'second': importer2
-        }
+        plugin_registry.importers = {"first": importer1, "second": importer2}
 
-        data = {'format': 'mock'}
+        data = {"format": "mock"}
         result = plugin_registry.auto_detect_importer(data)
 
         assert result == importer2
@@ -241,40 +245,47 @@ class TestAutoDetection:
 
 # ==================== Import/Export Workflow Tests ====================
 
+
 class TestImportExportWorkflows:
     """Test complete import/export workflows"""
 
-    def test_import_file_with_explicit_format(self, plugin_registry, temp_plugin_dir, mock_conversation):
+    def test_import_file_with_explicit_format(
+        self, plugin_registry, temp_plugin_dir, mock_conversation
+    ):
         """Given file with explicit format, should use specified importer"""
         plugin_registry._discovered = True
-        plugin_registry.register_importer('mock', MockImporter())
+        plugin_registry.register_importer("mock", MockImporter())
 
         # Create test file
         test_file = temp_plugin_dir / "test.json"
-        test_file.write_text(json.dumps({'format': 'mock', 'id': 'test-123', 'title': 'Test'}))
+        test_file.write_text(
+            json.dumps({"format": "mock", "id": "test-123", "title": "Test"})
+        )
 
         # Import
-        conversations = plugin_registry.import_file(str(test_file), format='mock')
+        conversations = plugin_registry.import_file(str(test_file), format="mock")
 
         assert len(conversations) == 1
-        assert conversations[0].id == 'test-123'
+        assert conversations[0].id == "test-123"
 
     def test_import_file_with_auto_detection(self, plugin_registry, temp_plugin_dir):
         """Given file without format, should auto-detect importer"""
         plugin_registry._discovered = True
-        plugin_registry.register_importer('mock', MockImporter())
+        plugin_registry.register_importer("mock", MockImporter())
 
         # Create test file
         test_file = temp_plugin_dir / "test.json"
-        test_file.write_text(json.dumps({'format': 'mock', 'id': 'auto-123'}))
+        test_file.write_text(json.dumps({"format": "mock", "id": "auto-123"}))
 
         # Import without specifying format
         conversations = plugin_registry.import_file(str(test_file))
 
         assert len(conversations) == 1
-        assert conversations[0].id == 'auto-123'
+        assert conversations[0].id == "auto-123"
 
-    def test_import_file_unknown_format_raises_error(self, plugin_registry, temp_plugin_dir):
+    def test_import_file_unknown_format_raises_error(
+        self, plugin_registry, temp_plugin_dir
+    ):
         """Given unknown format, should raise ValueError"""
         plugin_registry._discovered = True
 
@@ -282,12 +293,14 @@ class TestImportExportWorkflows:
         test_file.write_text('{"data": "test"}')
 
         with pytest.raises(ValueError, match="Unknown import format"):
-            plugin_registry.import_file(str(test_file), format='nonexistent')
+            plugin_registry.import_file(str(test_file), format="nonexistent")
 
-    def test_import_file_no_auto_detect_match_raises_error(self, plugin_registry, temp_plugin_dir):
+    def test_import_file_no_auto_detect_match_raises_error(
+        self, plugin_registry, temp_plugin_dir
+    ):
         """Given file that doesn't match any importer, should raise ValueError"""
         plugin_registry._discovered = True
-        plugin_registry.register_importer('mock', MockImporter())
+        plugin_registry.register_importer("mock", MockImporter())
 
         test_file = temp_plugin_dir / "test.json"
         test_file.write_text('{"format": "unknown"}')
@@ -298,29 +311,36 @@ class TestImportExportWorkflows:
     def test_export_file(self, plugin_registry, temp_plugin_dir, mock_conversation):
         """Given conversations and format, should export to file"""
         plugin_registry._discovered = True
-        plugin_registry.register_exporter('mock', MockExporter())
+        plugin_registry.register_exporter("mock", MockExporter())
 
         output_file = temp_plugin_dir / "output.json"
 
         # Export
-        plugin_registry.export_file([mock_conversation], str(output_file), format='mock')
+        plugin_registry.export_file(
+            [mock_conversation], str(output_file), format="mock"
+        )
 
         # Verify file was created
         assert output_file.exists()
         content = json.loads(output_file.read_text())
-        assert 'conversations' in content
+        assert "conversations" in content
 
-    def test_export_file_unknown_format_raises_error(self, plugin_registry, temp_plugin_dir, mock_conversation):
+    def test_export_file_unknown_format_raises_error(
+        self, plugin_registry, temp_plugin_dir, mock_conversation
+    ):
         """Given unknown export format, should raise ValueError"""
         plugin_registry._discovered = True
 
         output_file = temp_plugin_dir / "output.json"
 
         with pytest.raises(ValueError, match="Unknown export format"):
-            plugin_registry.export_file([mock_conversation], str(output_file), format='nonexistent')
+            plugin_registry.export_file(
+                [mock_conversation], str(output_file), format="nonexistent"
+            )
 
 
 # ==================== Plugin Validation Tests ====================
+
 
 class TestPluginValidation:
     """Test plugin validation logic"""
@@ -354,6 +374,7 @@ class TestPluginValidation:
 
 # ==================== Security Tests ====================
 
+
 class TestPluginSecurity:
     """Test plugin security features"""
 
@@ -375,19 +396,23 @@ class TestPluginSecurity:
         test_dir = "/new/trusted/dir"
         plugin_registry.add_trusted_plugin_dir(test_dir)
 
-        assert any(test_dir in allowed for allowed in plugin_registry.allowed_plugin_dirs)
+        assert any(
+            test_dir in allowed for allowed in plugin_registry.allowed_plugin_dirs
+        )
 
     def test_validate_plugin_file_size_limit(self, plugin_registry, temp_plugin_dir):
         """Given oversized plugin file, validation should fail"""
         large_file = temp_plugin_dir / "large_plugin.py"
 
         # Create file > 1MB
-        with open(large_file, 'w') as f:
+        with open(large_file, "w") as f:
             f.write("x" * (1024 * 1024 + 1))
 
         assert plugin_registry._validate_plugin_file(large_file) is False
 
-    def test_validate_plugin_file_normal_size_passes(self, plugin_registry, temp_plugin_dir):
+    def test_validate_plugin_file_normal_size_passes(
+        self, plugin_registry, temp_plugin_dir
+    ):
         """Given normal-sized plugin file, validation should pass"""
         normal_file = temp_plugin_dir / "normal_plugin.py"
         normal_file.write_text("class TestPlugin: pass")
@@ -397,6 +422,7 @@ class TestPluginSecurity:
 
 # ==================== Plugin Discovery Tests ====================
 
+
 class TestPluginDiscovery:
     """Test plugin discovery mechanism"""
 
@@ -404,26 +430,31 @@ class TestPluginDiscovery:
         """Given discovery already ran, should not run again"""
         plugin_registry._discovered = True
 
-        with patch.object(plugin_registry, '_load_plugins_from_dir') as mock_load:
+        with patch.object(plugin_registry, "_load_plugins_from_dir") as mock_load:
             plugin_registry.discover_plugins()
             mock_load.assert_not_called()
 
     def test_discover_plugins_sets_discovered_flag(self, plugin_registry):
         """Given successful discovery, should set _discovered flag"""
-        with patch.object(plugin_registry, '_load_plugins_from_dir'):
-            with patch.object(plugin_registry, '_is_plugin_dir_allowed', return_value=True):
+        with patch.object(plugin_registry, "_load_plugins_from_dir"):
+            with patch.object(
+                plugin_registry, "_is_plugin_dir_allowed", return_value=True
+            ):
                 plugin_registry.discover_plugins()
                 assert plugin_registry._discovered is True
 
     def test_discover_plugins_skips_disallowed_dirs(self, plugin_registry):
         """Given disallowed plugin dir, discovery should skip it"""
-        with patch.object(plugin_registry, '_is_plugin_dir_allowed', return_value=False):
-            with patch.object(plugin_registry, '_load_plugins_from_dir') as mock_load:
-                plugin_registry.discover_plugins('/untrusted/path')
+        with patch.object(
+            plugin_registry, "_is_plugin_dir_allowed", return_value=False
+        ):
+            with patch.object(plugin_registry, "_load_plugins_from_dir") as mock_load:
+                plugin_registry.discover_plugins("/untrusted/path")
                 mock_load.assert_not_called()
 
 
 # ==================== Exporter Plugin Base Tests ====================
+
 
 class TestExporterPluginBase:
     """Test ExporterPlugin base class functionality"""
@@ -454,17 +485,18 @@ class TestExporterPluginBase:
     def test_export_to_file_with_dict_data(self, temp_plugin_dir):
         """Given dict export data, should JSON serialize it"""
         exporter = Mock(spec=ExporterPlugin)
-        exporter.export_data = Mock(return_value={'key': 'value'})
+        exporter.export_data = Mock(return_value={"key": "value"})
 
         output_file = temp_plugin_dir / "output.json"
         ExporterPlugin.export_to_file(exporter, [], str(output_file))
 
         assert output_file.exists()
         content = json.loads(output_file.read_text())
-        assert content == {'key': 'value'}
+        assert content == {"key": "value"}
 
 
 # ==================== Importer Plugin Base Tests ====================
+
 
 class TestImporterPluginBase:
     """Test ImporterPlugin base class functionality"""
@@ -474,7 +506,7 @@ class TestImporterPluginBase:
         importer = MockImporter()
 
         # Should return True for mock format
-        assert importer.detect_format({'format': 'mock'}) is True
+        assert importer.detect_format({"format": "mock"}) is True
 
         # Should return False for other format
-        assert importer.detect_format({'format': 'other'}) is False
+        assert importer.detect_format({"format": "other"}) is False

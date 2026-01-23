@@ -4,30 +4,26 @@ Comprehensive test suite for CTK database layer
 Tests ConversationDB, session handling, transactions, and edge cases
 """
 
-import unittest
-import tempfile
 import shutil
 import sqlite3
+import tempfile
 import threading
 import time
-from pathlib import Path
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock, PropertyMock
+import unittest
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.orm import Session
 
 from ctk.core.database import ConversationDB
-from ctk.core.db_models import ConversationModel, MessageModel, TagModel, PathModel
-from ctk.core.models import (
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-    ConversationMetadata
-)
+from ctk.core.db_models import (ConversationModel, MessageModel, PathModel,
+                                TagModel)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 
 
 class TestConversationDB(unittest.TestCase):
@@ -43,15 +39,14 @@ class TestConversationDB(unittest.TestCase):
         """Clean up test environment"""
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
-    def _create_sample_conversation(self, conv_id: str = "test_conv") -> ConversationTree:
+    def _create_sample_conversation(
+        self, conv_id: str = "test_conv"
+    ) -> ConversationTree:
         """Helper to create sample conversation"""
         conv = ConversationTree(
             id=conv_id,
             title="Test Conversation",
-            metadata=ConversationMetadata(
-                source="test",
-                tags=["sample", "test"]
-            )
+            metadata=ConversationMetadata(source="test", tags=["sample", "test"]),
         )
 
         # Add messages
@@ -59,7 +54,7 @@ class TestConversationDB(unittest.TestCase):
             id="msg1",
             role=MessageRole.USER,
             content=MessageContent(text="Hello"),
-            parent_id=None
+            parent_id=None,
         )
         conv.add_message(msg1)
 
@@ -67,7 +62,7 @@ class TestConversationDB(unittest.TestCase):
             id="msg2",
             role=MessageRole.ASSISTANT,
             content=MessageContent(text="Hi there!"),
-            parent_id="msg1"
+            parent_id="msg1",
         )
         conv.add_message(msg2)
 
@@ -126,7 +121,9 @@ class TestConversationDB(unittest.TestCase):
 
         # Engine should be disposed - verify close was called by checking engine was disposed
         # Note: SQLAlchemy may still allow operations after dispose, so we test the state
-        self.assertTrue(db.engine is not None)  # Engine object still exists but is disposed
+        self.assertTrue(
+            db.engine is not None
+        )  # Engine object still exists but is disposed
 
     # =============================================================================
     # CONVERSATION OPERATIONS
@@ -189,7 +186,7 @@ class TestConversationDB(unittest.TestCase):
             id="msg3",
             role=MessageRole.USER,
             content=MessageContent(text="New message"),
-            parent_id="msg2"
+            parent_id="msg2",
         )
         conv.add_message(msg3)
 
@@ -293,7 +290,7 @@ class TestConversationDB(unittest.TestCase):
             conv = ConversationTree(
                 id=f"chatgpt_{i}",
                 title=f"ChatGPT {i}",
-                metadata=ConversationMetadata(source="chatgpt")
+                metadata=ConversationMetadata(source="chatgpt"),
             )
             db.save_conversation(conv)
 
@@ -301,7 +298,7 @@ class TestConversationDB(unittest.TestCase):
             conv = ConversationTree(
                 id=f"claude_{i}",
                 title=f"Claude {i}",
-                metadata=ConversationMetadata(source="claude")
+                metadata=ConversationMetadata(source="claude"),
             )
             db.save_conversation(conv)
 
@@ -340,9 +337,7 @@ class TestConversationDB(unittest.TestCase):
         conv = ConversationTree(
             id="tagged",
             title="Tagged Conversation",
-            metadata=ConversationMetadata(
-                tags=["python", "coding", "test"]
-            )
+            metadata=ConversationMetadata(tags=["python", "coding", "test"]),
         )
         db.save_conversation(conv)
 
@@ -359,9 +354,7 @@ class TestConversationDB(unittest.TestCase):
         db = ConversationDB(str(self.db_path))
 
         conv = ConversationTree(
-            id="tagged",
-            title="Tagged",
-            metadata=ConversationMetadata(tags=["initial"])
+            id="tagged", title="Tagged", metadata=ConversationMetadata(tags=["initial"])
         )
         db.save_conversation(conv)
 
@@ -385,21 +378,21 @@ class TestConversationDB(unittest.TestCase):
         conv1 = ConversationTree(
             id="conv1",
             title="Python Project",
-            metadata=ConversationMetadata(tags=["python", "project"])
+            metadata=ConversationMetadata(tags=["python", "project"]),
         )
         db.save_conversation(conv1)
 
         conv2 = ConversationTree(
             id="conv2",
             title="JavaScript Code",
-            metadata=ConversationMetadata(tags=["javascript", "coding"])
+            metadata=ConversationMetadata(tags=["javascript", "coding"]),
         )
         db.save_conversation(conv2)
 
         conv3 = ConversationTree(
             id="conv3",
             title="Python Tutorial",
-            metadata=ConversationMetadata(tags=["python", "tutorial"])
+            metadata=ConversationMetadata(tags=["python", "tutorial"]),
         )
         db.save_conversation(conv3)
 
@@ -421,10 +414,7 @@ class TestConversationDB(unittest.TestCase):
             self.assertIsInstance(session, Session)
 
             # Create a model
-            conv_model = ConversationModel(
-                id="test",
-                title="Test"
-            )
+            conv_model = ConversationModel(id="test", title="Test")
             session.add(conv_model)
 
         # Session should be committed after context
@@ -441,10 +431,7 @@ class TestConversationDB(unittest.TestCase):
         try:
             with db.session_scope() as session:
                 # Add a conversation
-                conv_model = ConversationModel(
-                    id="test",
-                    title="Test"
-                )
+                conv_model = ConversationModel(id="test", title="Test")
                 session.add(conv_model)
 
                 # Force an error
@@ -510,28 +497,41 @@ class TestConversationDB(unittest.TestCase):
         conv = ConversationTree(id="branched", title="Branched Conversation")
 
         # Create branching structure
-        msg1 = Message(id="msg1", role=MessageRole.USER,
-                      content=MessageContent(text="Question"))
+        msg1 = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="Question")
+        )
         conv.add_message(msg1)
 
-        msg2a = Message(id="msg2a", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Answer A"),
-                       parent_id="msg1")
+        msg2a = Message(
+            id="msg2a",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Answer A"),
+            parent_id="msg1",
+        )
         conv.add_message(msg2a)
 
-        msg2b = Message(id="msg2b", role=MessageRole.ASSISTANT,
-                       content=MessageContent(text="Answer B"),
-                       parent_id="msg1")
+        msg2b = Message(
+            id="msg2b",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="Answer B"),
+            parent_id="msg1",
+        )
         conv.add_message(msg2b)
 
-        msg3a = Message(id="msg3a", role=MessageRole.USER,
-                       content=MessageContent(text="Follow-up A"),
-                       parent_id="msg2a")
+        msg3a = Message(
+            id="msg3a",
+            role=MessageRole.USER,
+            content=MessageContent(text="Follow-up A"),
+            parent_id="msg2a",
+        )
         conv.add_message(msg3a)
 
-        msg3b = Message(id="msg3b", role=MessageRole.USER,
-                       content=MessageContent(text="Follow-up B"),
-                       parent_id="msg2b")
+        msg3b = Message(
+            id="msg3b",
+            role=MessageRole.USER,
+            content=MessageContent(text="Follow-up B"),
+            parent_id="msg2b",
+        )
         conv.add_message(msg3b)
 
         db.save_conversation(conv)
@@ -558,13 +558,11 @@ class TestConversationDB(unittest.TestCase):
             model="gpt-4",
             project="test_project",
             tags=["test"],
-            custom_data={"custom": "value", "number": 42}
+            custom_data={"custom": "value", "number": 42},
         )
 
         conv = ConversationTree(
-            id="metadata_test",
-            title="Metadata Test",
-            metadata=metadata
+            id="metadata_test", title="Metadata Test", metadata=metadata
         )
 
         db.save_conversation(conv)
@@ -591,15 +589,19 @@ class TestConversationDB(unittest.TestCase):
         for i in range(5):
             conv = ConversationTree(
                 id=f"conv_{i}",
-                title=f"Python Tutorial Part {i}" if i < 3 else f"JavaScript Guide {i}"
+                title=f"Python Tutorial Part {i}" if i < 3 else f"JavaScript Guide {i}",
             )
 
             msg = Message(
                 id="msg1",
                 role=MessageRole.USER,
                 content=MessageContent(
-                    text=f"Python code example {i}" if i < 3 else f"JavaScript example {i}"
-                )
+                    text=(
+                        f"Python code example {i}"
+                        if i < 3
+                        else f"JavaScript example {i}"
+                    )
+                ),
             )
             conv.add_message(msg)
 
@@ -623,20 +625,14 @@ class TestConversationDB(unittest.TestCase):
 
         # Save conversations with different dates
         for i in range(5):
-            metadata = ConversationMetadata(
-                created_at=now - timedelta(days=i)
-            )
+            metadata = ConversationMetadata(created_at=now - timedelta(days=i))
             conv = ConversationTree(
-                id=f"conv_{i}",
-                title=f"Conversation {i}",
-                metadata=metadata
+                id=f"conv_{i}", title=f"Conversation {i}", metadata=metadata
             )
             db.save_conversation(conv)
 
         # Query recent conversations using search_conversations with date_from
-        recent = db.search_conversations(
-            date_from=now - timedelta(days=2)
-        )
+        recent = db.search_conversations(date_from=now - timedelta(days=2))
 
         # Should get conversations from last 2 days
         # Note: due to updated_at being set to now on save,
@@ -652,7 +648,7 @@ class TestConversationDB(unittest.TestCase):
     def test_database_corruption_handling(self):
         """Test handling corrupted database"""
         # Create corrupted file
-        with open(self.db_path, 'wb') as f:
+        with open(self.db_path, "wb") as f:
             f.write(b"This is not a valid SQLite database")
 
         with self.assertRaises(Exception):
@@ -663,12 +659,8 @@ class TestConversationDB(unittest.TestCase):
         db = ConversationDB(str(self.db_path))
 
         # Mock the session to raise OperationalError
-        with patch.object(db, 'Session') as mock_session:
-            mock_session.side_effect = OperationalError(
-                "disk I/O error",
-                None,
-                None
-            )
+        with patch.object(db, "Session") as mock_session:
+            mock_session.side_effect = OperationalError("disk I/O error", None, None)
 
             conv = self._create_sample_conversation()
 
@@ -731,7 +723,7 @@ class TestConversationDB(unittest.TestCase):
                 title=f"Conversation {i}",
                 metadata=ConversationMetadata(
                     source="chatgpt" if i % 2 == 0 else "claude"
-                )
+                ),
             )
             db.save_conversation(conv)
 
@@ -839,6 +831,7 @@ class TestDatabaseUtilities(unittest.TestCase):
 
         # Create backup - copy the directory
         import shutil
+
         shutil.copytree(db_path, backup_path)
 
         # Verify backup
@@ -863,9 +856,8 @@ class TestDatabaseUtilities(unittest.TestCase):
                 id=f"conv_{i}",
                 title=f"Conversation {i}",
                 metadata=ConversationMetadata(
-                    source="chatgpt" if i < 5 else "claude",
-                    tags=[f"tag{i % 3}"]
-                )
+                    source="chatgpt" if i < 5 else "claude", tags=[f"tag{i % 3}"]
+                ),
             )
 
             # Add varying numbers of messages
@@ -874,7 +866,7 @@ class TestDatabaseUtilities(unittest.TestCase):
                     id=f"msg_{j}",
                     role=MessageRole.USER if j % 2 == 0 else MessageRole.ASSISTANT,
                     content=MessageContent(text=f"Message {j}"),
-                    parent_id=f"msg_{j-1}" if j > 0 else None
+                    parent_id=f"msg_{j-1}" if j > 0 else None,
                 )
                 conv.add_message(msg)
 
@@ -893,5 +885,5 @@ class TestDatabaseUtilities(unittest.TestCase):
         db.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -4,18 +4,18 @@ Settings command handlers
 Implements: set, get
 """
 
-from typing import List, Dict, Callable, Any
-from ctk.core.command_dispatcher import CommandResult
+from typing import Any, Callable, Dict, List
 
+from ctk.core.command_dispatcher import CommandResult
 
 # Define available settings with their defaults and validators
 SHELL_SETTINGS = {
-    'uuid_prefix_len': {
-        'default': 8,
-        'type': int,
-        'min': 4,
-        'max': 36,
-        'description': 'Number of UUID characters to display (4-36)'
+    "uuid_prefix_len": {
+        "default": 8,
+        "type": int,
+        "min": 4,
+        "max": 36,
+        "description": "Number of UUID characters to display (4-36)",
     },
 }
 
@@ -37,7 +37,7 @@ class SettingsCommands:
         if self.tui and hasattr(self.tui, name):
             return getattr(self.tui, name)
         if name in SHELL_SETTINGS:
-            return SHELL_SETTINGS[name]['default']
+            return SHELL_SETTINGS[name]["default"]
         return None
 
     def _set_setting(self, name: str, value: Any) -> tuple[bool, str]:
@@ -54,22 +54,25 @@ class SettingsCommands:
 
         # Type conversion
         try:
-            if spec['type'] == int:
+            if spec["type"] == int:
                 value = int(value)
-            elif spec['type'] == float:
+            elif spec["type"] == float:
                 value = float(value)
-            elif spec['type'] == bool:
-                value = value.lower() in ('true', '1', 'yes', 'on')
-            elif spec['type'] == str:
+            elif spec["type"] == bool:
+                value = value.lower() in ("true", "1", "yes", "on")
+            elif spec["type"] == str:
                 value = str(value)
         except ValueError:
-            return (False, f"Invalid value type for {name}: expected {spec['type'].__name__}")
+            return (
+                False,
+                f"Invalid value type for {name}: expected {spec['type'].__name__}",
+            )
 
         # Range validation for numeric types
-        if spec['type'] in (int, float):
-            if 'min' in spec and value < spec['min']:
+        if spec["type"] in (int, float):
+            if "min" in spec and value < spec["min"]:
                 return (False, f"{name} must be >= {spec['min']}")
-            if 'max' in spec and value > spec['max']:
+            if "max" in spec and value > spec["max"]:
                 return (False, f"{name} must be <= {spec['max']}")
 
         # Apply to TUI
@@ -79,7 +82,7 @@ class SettingsCommands:
         else:
             return (False, "No TUI instance available")
 
-    def cmd_set(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_set(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Set a shell setting
 
@@ -106,7 +109,7 @@ class SettingsCommands:
                 lines.append(f"  {name} = {current}")
                 lines.append(f"    {spec['description']}")
                 lines.append("")
-            return CommandResult(success=True, output='\n'.join(lines) + '\n')
+            return CommandResult(success=True, output="\n".join(lines) + "\n")
 
         name = args[0]
 
@@ -116,13 +119,12 @@ class SettingsCommands:
                 return CommandResult(
                     success=False,
                     output="",
-                    error=f"set: Unknown setting '{name}'. Use 'set' to list available settings."
+                    error=f"set: Unknown setting '{name}'. Use 'set' to list available settings.",
                 )
             current = self._get_setting(name)
             spec = SHELL_SETTINGS[name]
             return CommandResult(
-                success=True,
-                output=f"{name} = {current}\n  {spec['description']}\n"
+                success=True, output=f"{name} = {current}\n  {spec['description']}\n"
             )
 
         # Set value
@@ -130,14 +132,11 @@ class SettingsCommands:
         success, error = self._set_setting(name, value)
 
         if success:
-            return CommandResult(
-                success=True,
-                output=f"Set {name} = {value}\n"
-            )
+            return CommandResult(success=True, output=f"Set {name} = {value}\n")
         else:
             return CommandResult(success=False, output="", error=f"set: {error}")
 
-    def cmd_get(self, args: List[str], stdin: str = '') -> CommandResult:
+    def cmd_get(self, args: List[str], stdin: str = "") -> CommandResult:
         """
         Get a shell setting value
 
@@ -155,16 +154,14 @@ class SettingsCommands:
             return CommandResult(
                 success=False,
                 output="",
-                error="get: Specify a setting name. Use 'set' to list available settings."
+                error="get: Specify a setting name. Use 'set' to list available settings.",
             )
 
         name = args[0]
 
         if name not in SHELL_SETTINGS:
             return CommandResult(
-                success=False,
-                output="",
-                error=f"get: Unknown setting '{name}'"
+                success=False, output="", error=f"get: Unknown setting '{name}'"
             )
 
         value = self._get_setting(name)
@@ -184,6 +181,6 @@ def create_settings_commands(tui_instance=None) -> Dict[str, Callable]:
     settings = SettingsCommands(tui_instance)
 
     return {
-        'set': settings.cmd_set,
-        'get': settings.cmd_get,
+        "set": settings.cmd_set,
+        "get": settings.cmd_get,
     }

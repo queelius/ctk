@@ -6,20 +6,20 @@ Following Unix philosophy: do one thing well, composable, pipeable
 import hashlib
 import json
 import logging
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Set, Tuple, Iterator, Union
+import sqlite3
+from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
-from collections import defaultdict
-import sqlite3
-from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from sqlalchemy import create_engine, select, and_, or_, func, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import and_, create_engine, func, or_, select, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from .database import ConversationDB
-from .db_models import ConversationModel, MessageModel, TagModel, PathModel
+from .db_models import ConversationModel, MessageModel, PathModel, TagModel
 from .models import ConversationTree
 
 logger = logging.getLogger(__name__)
@@ -27,19 +27,21 @@ logger = logging.getLogger(__name__)
 
 class DuplicateStrategy(Enum):
     """Strategies for handling duplicates"""
-    EXACT = "exact"           # Exact ID match
-    HASH = "hash"             # Content hash match
+
+    EXACT = "exact"  # Exact ID match
+    HASH = "hash"  # Content hash match
     SIMILARITY = "similarity"  # Fuzzy content matching
-    SMART = "smart"           # Combination of strategies
+    SMART = "smart"  # Combination of strategies
 
 
 class MergeStrategy(Enum):
     """Strategies for resolving conflicts during merge"""
-    NEWEST = "newest"         # Keep newest version
-    OLDEST = "oldest"         # Keep oldest version
-    LONGEST = "longest"       # Keep version with most messages
-    MANUAL = "manual"         # Interactive resolution
-    SKIP = "skip"            # Skip conflicts
+
+    NEWEST = "newest"  # Keep newest version
+    OLDEST = "oldest"  # Keep oldest version
+    LONGEST = "longest"  # Keep version with most messages
+    MANUAL = "manual"  # Interactive resolution
+    SKIP = "skip"  # Skip conflicts
 
 
 class DatabaseOperations:
@@ -64,7 +66,7 @@ class DatabaseOperations:
         output_db: str,
         strategy: MergeStrategy = MergeStrategy.NEWEST,
         dedupe: DuplicateStrategy = DuplicateStrategy.EXACT,
-        progress_callback: Optional[callable] = None
+        progress_callback: Optional[callable] = None,
     ) -> Dict[str, Any]:
         """
         Merge multiple databases into one.
@@ -80,17 +82,21 @@ class DatabaseOperations:
             Statistics about the merge operation
         """
         stats = {
-            'total_input': 0,
-            'total_output': 0,
-            'duplicates_found': 0,
-            'conflicts_resolved': 0,
-            'databases_merged': len(input_dbs)
+            "total_input": 0,
+            "total_output": 0,
+            "duplicates_found": 0,
+            "conflicts_resolved": 0,
+            "databases_merged": len(input_dbs),
         }
 
         # Create output database
         output = ConversationDB(output_db)
         seen_ids = set()
-        seen_hashes = set() if dedupe in [DuplicateStrategy.HASH, DuplicateStrategy.SMART] else None
+        seen_hashes = (
+            set()
+            if dedupe in [DuplicateStrategy.HASH, DuplicateStrategy.SMART]
+            else None
+        )
 
         for db_path in input_dbs:
             logger.info(f"Merging database: {db_path}")
@@ -99,7 +105,7 @@ class DatabaseOperations:
                 # Stream conversations in batches
                 for batch in self._stream_conversations(input_db):
                     for conv in batch:
-                        stats['total_input'] += 1
+                        stats["total_input"] += 1
 
                         # Check for duplicates
                         is_duplicate, duplicate_type = self._check_duplicate(
@@ -107,7 +113,7 @@ class DatabaseOperations:
                         )
 
                         if is_duplicate:
-                            stats['duplicates_found'] += 1
+                            stats["duplicates_found"] += 1
 
                             if strategy == MergeStrategy.SKIP:
                                 continue
@@ -119,7 +125,7 @@ class DatabaseOperations:
                             if conv is None:
                                 continue
 
-                            stats['conflicts_resolved'] += 1
+                            stats["conflicts_resolved"] += 1
 
                         # Save conversation
                         output.save_conversation(conv)
@@ -129,7 +135,7 @@ class DatabaseOperations:
                             conv_hash = self.comparator.compute_hash(conv)
                             seen_hashes.add(conv_hash)
 
-                        stats['total_output'] += 1
+                        stats["total_output"] += 1
 
                         if progress_callback:
                             progress_callback(stats)
@@ -143,7 +149,7 @@ class DatabaseOperations:
         right_db: str,
         output_db: Optional[str] = None,
         symmetric: bool = False,
-        comparison: DuplicateStrategy = DuplicateStrategy.EXACT
+        comparison: DuplicateStrategy = DuplicateStrategy.EXACT,
     ) -> Dict[str, Any]:
         """
         Find conversations that exist in one database but not another.
@@ -159,30 +165,30 @@ class DatabaseOperations:
             Statistics about differences
         """
         stats = {
-            'left_total': 0,
-            'right_total': 0,
-            'left_unique': 0,
-            'right_unique': 0,
-            'common': 0
+            "left_total": 0,
+            "right_total": 0,
+            "left_unique": 0,
+            "right_unique": 0,
+            "common": 0,
         }
 
         # Build index of right database
         right_index = self._build_index(right_db, comparison)
-        stats['right_total'] = len(right_index)
+        stats["right_total"] = len(right_index)
 
         left_unique = []
 
         with ConversationDB(left_db) as left:
             for batch in self._stream_conversations(left):
                 for conv in batch:
-                    stats['left_total'] += 1
+                    stats["left_total"] += 1
 
                     # Check if conversation exists in right
                     key = self._get_comparison_key(conv, comparison)
                     if key in right_index:
-                        stats['common'] += 1
+                        stats["common"] += 1
                     else:
-                        stats['left_unique'] += 1
+                        stats["left_unique"] += 1
                         left_unique.append(conv)
 
         # Save unique conversations if output specified
@@ -194,7 +200,7 @@ class DatabaseOperations:
 
         # If symmetric, also find right-unique
         if symmetric:
-            stats['right_unique'] = stats['right_total'] - stats['common']
+            stats["right_unique"] = stats["right_total"] - stats["common"]
 
         return stats
 
@@ -203,7 +209,7 @@ class DatabaseOperations:
         input_dbs: List[str],
         output_db: str,
         min_count: Optional[int] = None,
-        comparison: DuplicateStrategy = DuplicateStrategy.EXACT
+        comparison: DuplicateStrategy = DuplicateStrategy.EXACT,
     ) -> Dict[str, Any]:
         """
         Find conversations common to multiple databases.
@@ -221,10 +227,10 @@ class DatabaseOperations:
             min_count = len(input_dbs)  # Must be in all databases
 
         stats = {
-            'total_unique': 0,
-            'common_to_all': 0,
-            'common_to_min': 0,
-            'databases_checked': len(input_dbs)
+            "total_unique": 0,
+            "common_to_all": 0,
+            "common_to_min": 0,
+            "databases_checked": len(input_dbs),
         }
 
         # Build occurrence map
@@ -237,7 +243,7 @@ class DatabaseOperations:
                         key = self._get_comparison_key(conv, comparison)
                         occurrence_map[key].add(idx)
 
-        stats['total_unique'] = len(occurrence_map)
+        stats["total_unique"] = len(occurrence_map)
 
         # Find common conversations
         output = ConversationDB(output_db)
@@ -261,8 +267,8 @@ class DatabaseOperations:
                             saved_keys.add(key)
 
                             if occurrences == len(input_dbs):
-                                stats['common_to_all'] += 1
-                            stats['common_to_min'] += 1
+                                stats["common_to_all"] += 1
+                            stats["common_to_min"] += 1
 
         output.close()
         return stats
@@ -277,7 +283,7 @@ class DatabaseOperations:
         tags: Optional[List[str]] = None,
         min_messages: Optional[int] = None,
         max_messages: Optional[int] = None,
-        query: Optional[str] = None
+        query: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Filter conversations based on criteria.
@@ -296,11 +302,7 @@ class DatabaseOperations:
         Returns:
             Statistics about filtering
         """
-        stats = {
-            'total_input': 0,
-            'total_output': 0,
-            'filtered_out': 0
-        }
+        stats = {"total_input": 0, "total_output": 0, "filtered_out": 0}
 
         output = ConversationDB(output_db)
 
@@ -330,17 +332,17 @@ class DatabaseOperations:
                 conv_ids_to_save = []
 
                 for conv_model in q.yield_per(self.batch_size):
-                    stats['total_input'] += 1
+                    stats["total_input"] += 1
 
                     # Additional filtering that's easier to do in Python
                     # Count messages via relationship
                     msg_count = len(conv_model.messages) if conv_model.messages else 0
                     if min_messages and msg_count < min_messages:
-                        stats['filtered_out'] += 1
+                        stats["filtered_out"] += 1
                         continue
 
                     if max_messages and msg_count > max_messages:
-                        stats['filtered_out'] += 1
+                        stats["filtered_out"] += 1
                         continue
 
                     conv_ids_to_save.append(conv_model.id)
@@ -350,7 +352,7 @@ class DatabaseOperations:
                 conv = input.load_conversation(conv_id)
                 if conv:
                     output.save_conversation(conv)
-                    stats['total_output'] += 1
+                    stats["total_output"] += 1
 
         output.close()
         return stats
@@ -362,7 +364,7 @@ class DatabaseOperations:
         strategy: DuplicateStrategy = DuplicateStrategy.EXACT,
         similarity_threshold: float = 0.95,
         keep: str = "newest",
-        dry_run: bool = False
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
         Remove duplicate conversations from a database.
@@ -379,11 +381,11 @@ class DatabaseOperations:
             Statistics about deduplication
         """
         stats = {
-            'total_conversations': 0,
-            'duplicates_found': 0,
-            'groups_found': 0,
-            'conversations_kept': 0,
-            'conversations_removed': 0
+            "total_conversations": 0,
+            "duplicates_found": 0,
+            "groups_found": 0,
+            "conversations_kept": 0,
+            "conversations_removed": 0,
         }
 
         # Find duplicate groups
@@ -391,17 +393,21 @@ class DatabaseOperations:
             input_db, strategy, similarity_threshold
         )
 
-        stats['groups_found'] = len(duplicate_groups)
+        stats["groups_found"] = len(duplicate_groups)
 
         if dry_run:
             # Just report statistics
             for group in duplicate_groups:
-                stats['duplicates_found'] += len(group) - 1
+                stats["duplicates_found"] += len(group) - 1
 
             with ConversationDB(input_db) as db:
-                stats['total_conversations'] = db.get_statistics()['total_conversations']
+                stats["total_conversations"] = db.get_statistics()[
+                    "total_conversations"
+                ]
 
-            stats['conversations_kept'] = stats['total_conversations'] - stats['duplicates_found']
+            stats["conversations_kept"] = (
+                stats["total_conversations"] - stats["duplicates_found"]
+            )
             return stats
 
         # Perform deduplication
@@ -419,7 +425,7 @@ class DatabaseOperations:
         input_db: str,
         output_dir: str,
         by: str = "source",
-        chunks: Optional[int] = None
+        chunks: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Split a database into multiple databases based on criteria.
@@ -434,9 +440,9 @@ class DatabaseOperations:
             Statistics about the split
         """
         stats = {
-            'total_conversations': 0,
-            'databases_created': 0,
-            'split_by': by if not chunks else f'{chunks} chunks'
+            "total_conversations": 0,
+            "databases_created": 0,
+            "split_by": by if not chunks else f"{chunks} chunks",
         }
 
         output_path = Path(output_dir)
@@ -452,7 +458,7 @@ class DatabaseOperations:
         with ConversationDB(input_db) as input:
             for batch in self._stream_conversations(input):
                 for conv in batch:
-                    stats['total_conversations'] += 1
+                    stats["total_conversations"] += 1
 
                     # Determine split key
                     split_key = self._get_split_key(conv, by)
@@ -467,17 +473,17 @@ class DatabaseOperations:
                 for conv in conversations:
                     output.save_conversation(conv)
 
-            stats['databases_created'] += 1
-            logger.info(f"Created {output_file} with {len(conversations)} conversations")
+            stats["databases_created"] += 1
+            logger.info(
+                f"Created {output_file} with {len(conversations)} conversations"
+            )
 
         return stats
 
     # Helper methods
 
     def _stream_conversations(
-        self,
-        db: ConversationDB,
-        batch_size: Optional[int] = None
+        self, db: ConversationDB, batch_size: Optional[int] = None
     ) -> Iterator[List[ConversationTree]]:
         """Stream conversations in batches for memory efficiency"""
         if batch_size is None:
@@ -489,10 +495,12 @@ class DatabaseOperations:
 
             # Get conversation IDs in this batch
             with db.session_scope() as session:
-                conv_models = session.query(ConversationModel.id)\
-                    .offset(offset)\
-                    .limit(batch_size)\
+                conv_models = (
+                    session.query(ConversationModel.id)
+                    .offset(offset)
+                    .limit(batch_size)
                     .all()
+                )
 
                 if not conv_models:
                     break
@@ -508,11 +516,7 @@ class DatabaseOperations:
             yield batch
             offset += batch_size
 
-    def _build_index(
-        self,
-        db_path: str,
-        comparison: DuplicateStrategy
-    ) -> Set[str]:
+    def _build_index(self, db_path: str, comparison: DuplicateStrategy) -> Set[str]:
         """Build an index of conversation keys for comparison"""
         index = set()
 
@@ -525,9 +529,7 @@ class DatabaseOperations:
         return index
 
     def _get_comparison_key(
-        self,
-        conv: ConversationTree,
-        strategy: DuplicateStrategy
+        self, conv: ConversationTree, strategy: DuplicateStrategy
     ) -> str:
         """Get comparison key based on strategy"""
         if strategy == DuplicateStrategy.EXACT:
@@ -547,7 +549,7 @@ class DatabaseOperations:
         conv: ConversationTree,
         seen_ids: Set[str],
         seen_hashes: Optional[Set[str]],
-        strategy: DuplicateStrategy
+        strategy: DuplicateStrategy,
     ) -> Tuple[bool, Optional[str]]:
         """Check if conversation is a duplicate"""
         if strategy == DuplicateStrategy.EXACT:
@@ -574,7 +576,7 @@ class DatabaseOperations:
         new_conv: ConversationTree,
         output_db: ConversationDB,
         conflict_type: str,
-        strategy: MergeStrategy
+        strategy: MergeStrategy,
     ) -> Optional[ConversationTree]:
         """Resolve a merge conflict"""
         if strategy == MergeStrategy.SKIP:
@@ -619,6 +621,7 @@ class DatabaseOperations:
         elif by.startswith("tags["):
             # Extract tag index
             import re
+
             match = re.match(r"tags\[(\d+)\]", by)
             if match and conv.metadata.tags:
                 idx = int(match.group(1))
@@ -630,10 +633,7 @@ class DatabaseOperations:
             return str(getattr(conv.metadata, by, "unknown"))
 
     def _find_duplicate_groups(
-        self,
-        db_path: str,
-        strategy: DuplicateStrategy,
-        threshold: float
+        self, db_path: str, strategy: DuplicateStrategy, threshold: float
     ) -> List[List[str]]:
         """Find groups of duplicate conversations"""
         groups = []
@@ -665,7 +665,7 @@ class DatabaseOperations:
         output_db: str,
         duplicate_groups: List[List[str]],
         keep: str,
-        stats: Dict[str, Any]
+        stats: Dict[str, Any],
     ):
         """Create new database with deduplicated data"""
         # Build set of IDs to skip
@@ -687,13 +687,13 @@ class DatabaseOperations:
         with ConversationDB(input_db) as input:
             for batch in self._stream_conversations(input):
                 for conv in batch:
-                    stats['total_conversations'] += 1
+                    stats["total_conversations"] += 1
 
                     if conv.id not in skip_ids:
                         output.save_conversation(conv)
-                        stats['conversations_kept'] += 1
+                        stats["conversations_kept"] += 1
                     else:
-                        stats['conversations_removed'] += 1
+                        stats["conversations_removed"] += 1
 
         output.close()
 
@@ -702,7 +702,7 @@ class DatabaseOperations:
         db_path: str,
         duplicate_groups: List[List[str]],
         keep: str,
-        stats: Dict[str, Any]
+        stats: Dict[str, Any],
     ):
         """Remove duplicates from database in place"""
         with ConversationDB(db_path) as db:
@@ -714,17 +714,12 @@ class DatabaseOperations:
                 with db.session_scope() as session:
                     for conv_id in group:
                         if conv_id != keeper:
-                            session.query(ConversationModel)\
-                                .filter_by(id=conv_id)\
-                                .delete()
-                            stats['conversations_removed'] += 1
+                            session.query(ConversationModel).filter_by(
+                                id=conv_id
+                            ).delete()
+                            stats["conversations_removed"] += 1
 
-    def _select_keeper(
-        self,
-        db: ConversationDB,
-        group: List[str],
-        keep: str
-    ) -> str:
+    def _select_keeper(self, db: ConversationDB, group: List[str], keep: str) -> str:
         """Select which conversation to keep from a duplicate group"""
         candidates = []
 
@@ -737,25 +732,25 @@ class DatabaseOperations:
             return group[0]
 
         if keep == "newest":
-            return max(candidates, key=lambda c: c.metadata.updated_at or datetime.min).id
+            return max(
+                candidates, key=lambda c: c.metadata.updated_at or datetime.min
+            ).id
         elif keep == "oldest":
-            return min(candidates, key=lambda c: c.metadata.updated_at or datetime.max).id
+            return min(
+                candidates, key=lambda c: c.metadata.updated_at or datetime.max
+            ).id
         elif keep == "longest":
             return max(candidates, key=lambda c: len(c.message_map)).id
         else:
             return candidates[0].id
 
     def _split_into_chunks(
-        self,
-        input_db: str,
-        output_dir: Path,
-        chunks: int,
-        stats: Dict[str, Any]
+        self, input_db: str, output_dir: Path, chunks: int, stats: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Split database into equal-sized chunks"""
         # First count total conversations
         with ConversationDB(input_db) as db:
-            total = db.get_statistics()['total_conversations']
+            total = db.get_statistics()["total_conversations"]
 
         chunk_size = (total + chunks - 1) // chunks  # Ceiling division
 
@@ -770,7 +765,7 @@ class DatabaseOperations:
         with ConversationDB(input_db) as input:
             for batch in self._stream_conversations(input):
                 for conv in batch:
-                    stats['total_conversations'] += 1
+                    stats["total_conversations"] += 1
 
                     chunk_dbs[current_chunk].save_conversation(conv)
                     count_in_chunk += 1
@@ -783,7 +778,7 @@ class DatabaseOperations:
         for db in chunk_dbs:
             db.close()
 
-        stats['databases_created'] = chunks
+        stats["databases_created"] = chunks
         return stats
 
 
@@ -800,10 +795,7 @@ class ConversationComparator:
         hasher = hashlib.sha256()
 
         # Sort messages by ID for consistency
-        sorted_messages = sorted(
-            conv.message_map.values(),
-            key=lambda m: m.id
-        )
+        sorted_messages = sorted(conv.message_map.values(), key=lambda m: m.id)
 
         for msg in sorted_messages:
             # Hash role and content
@@ -813,9 +805,7 @@ class ConversationComparator:
         return hasher.hexdigest()
 
     def compute_similarity(
-        self,
-        conv1: ConversationTree,
-        conv2: ConversationTree
+        self, conv1: ConversationTree, conv2: ConversationTree
     ) -> float:
         """
         Compute similarity between two conversations (0-1).
@@ -839,9 +829,7 @@ class ConversationComparator:
         return intersection / union
 
     def find_similar_groups(
-        self,
-        db_path: str,
-        threshold: float = 0.95
+        self, db_path: str, threshold: float = 0.95
     ) -> List[List[str]]:
         """
         Find groups of similar conversations using clustering.
@@ -865,7 +853,7 @@ class ConversationComparator:
             group = [conv1.id]
             processed.add(conv1.id)
 
-            for j, conv2 in enumerate(conversations[i+1:], i+1):
+            for j, conv2 in enumerate(conversations[i + 1 :], i + 1):
                 if conv2.id not in processed:
                     similarity = self.compute_similarity(conv1, conv2)
                     if similarity >= threshold:
@@ -882,13 +870,13 @@ class ConversationComparator:
         texts = []
 
         for msg in conv.message_map.values():
-            if hasattr(msg.content, 'text') and msg.content.text:
+            if hasattr(msg.content, "text") and msg.content.text:
                 texts.append(msg.content.text)
-            elif hasattr(msg.content, 'parts') and msg.content.parts:
+            elif hasattr(msg.content, "parts") and msg.content.parts:
                 for part in msg.content.parts:
                     if isinstance(part, str):
                         texts.append(part)
-                    elif hasattr(part, 'text'):
+                    elif hasattr(part, "text"):
                         texts.append(part.text)
 
         return " ".join(texts)

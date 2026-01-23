@@ -1,35 +1,90 @@
 """
 SQLAlchemy database backend for conversation storage
+
+Security note: Schema migrations use file locking to prevent race conditions
+when multiple connections attempt to migrate simultaneously.
 """
 
+import fcntl
 import json
-from pathlib import Path
-from typing import List, Optional, Dict, Any, Union, Tuple
-from datetime import datetime
-from contextlib import contextmanager
 import logging
+import time
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-from sqlalchemy import create_engine, select, and_, or_, func, text
-from sqlalchemy.orm import Session, sessionmaker, scoped_session
+from sqlalchemy import and_, create_engine, func, or_, select, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
+from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError
 
-from .db_models import (
-    Base, ConversationModel, MessageModel, TagModel, PathModel,
-    EmbeddingModel, SimilarityModel, RoleEnum, conversation_tags,
-    EmbeddingSessionModel, CurrentGraphModel, CurrentCommunityModel, CurrentNodeMetricsModel
-)
-from .models import (
-    ConversationTree,
-    ConversationSummary,
-    Message,
-    MessageContent,
-    MessageRole,
-    ConversationMetadata
-)
+from .db_models import (Base, ConversationModel, CurrentCommunityModel,
+                        CurrentGraphModel, CurrentNodeMetricsModel,
+                        EmbeddingModel, EmbeddingSessionModel, MessageModel,
+                        PathModel, RoleEnum, SimilarityModel, TagModel,
+                        conversation_tags)
+from .models import (ConversationMetadata, ConversationSummary,
+                     ConversationTree, Message, MessageContent, MessageRole)
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def migration_lock(lock_path: Path, timeout: float = 30.0):
+    """
+    Acquire an exclusive file lock for database migrations.
+
+    This prevents race conditions when multiple processes try to migrate
+    the schema simultaneously.
+
+    Args:
+        lock_path: Path to the lock file
+        timeout: Maximum time to wait for the lock (seconds)
+
+    Yields:
+        True if lock was acquired, False if timeout
+
+    Raises:
+        TimeoutError: If lock cannot be acquired within timeout
+    """
+    lock_file = None
+    start_time = time.time()
+
+    try:
+        # Create lock file
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = open(lock_path, "w")
+
+        # Try to acquire lock with timeout
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                logger.debug(f"Migration lock acquired: {lock_path}")
+                yield True
+                return
+            except (IOError, OSError) as e:
+                if time.time() - start_time > timeout:
+                    logger.warning(f"Migration lock timeout after {timeout}s")
+                    raise TimeoutError(
+                        f"Could not acquire migration lock within {timeout}s"
+                    )
+                time.sleep(0.1)  # Wait and retry
+
+    finally:
+        if lock_file:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                lock_file.close()
+                # Clean up lock file
+                try:
+                    lock_path.unlink()
+                except (IOError, OSError):
+                    pass
+                logger.debug(f"Migration lock released: {lock_path}")
+            except Exception as e:
+                logger.warning(f"Error releasing migration lock: {e}")
 
 
 class ConversationDB:
@@ -69,7 +124,7 @@ class ConversationDB:
                 connection_string,
                 echo=echo,
                 connect_args={"check_same_thread": False},
-                poolclass=StaticPool
+                poolclass=StaticPool,
             )
 
         # Create session factory
@@ -77,7 +132,7 @@ class ConversationDB:
 
         # Create tables if they don't exist
         self._init_schema()
-    
+
     def _init_schema(self):
         """Initialize database schema"""
         Base.metadata.create_all(self.engine)
@@ -86,48 +141,86 @@ class ConversationDB:
         logger.info(f"Database schema initialized at {self.db_path}")
 
     def _migrate_schema(self):
-        """Apply any necessary schema migrations for existing databases"""
+        """
+        Apply any necessary schema migrations for existing databases.
+
+        Uses file locking to prevent race conditions when multiple processes
+        try to migrate the schema simultaneously.
+        """
+        # Skip locking for non-SQLite databases
+        if self.db_dir is None:
+            self._apply_migrations()
+            return
+
+        # Use file-based locking for SQLite to prevent concurrent migrations
+        lock_path = self.db_dir / ".migration.lock"
+
+        try:
+            with migration_lock(lock_path, timeout=30.0):
+                self._apply_migrations()
+        except TimeoutError:
+            logger.warning("Migration lock timeout - another process may be migrating")
+            # Still try to run migrations, they should be idempotent
+            self._apply_migrations()
+        except Exception as e:
+            logger.warning(f"Migration lock error: {e}, proceeding without lock")
+            self._apply_migrations()
+
+    def _apply_migrations(self):
+        """Apply schema migrations (internal method, assumes lock is held if needed)."""
         with self.engine.connect() as conn:
             # Check if we need to add new columns to conversations table
             try:
                 # Try to detect if slug column exists
-                result = conn.execute(text(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'"
-                ))
+                result = conn.execute(
+                    text(
+                        "SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'"
+                    )
+                )
                 row = result.fetchone()
                 if row:
                     table_sql = row[0] or ""
 
                     # Add slug column if missing
-                    if 'slug' not in table_sql.lower():
+                    if "slug" not in table_sql.lower():
                         try:
-                            conn.execute(text(
-                                "ALTER TABLE conversations ADD COLUMN slug VARCHAR"
-                            ))
+                            conn.execute(
+                                text(
+                                    "ALTER TABLE conversations ADD COLUMN slug VARCHAR"
+                                )
+                            )
                             logger.info("Added 'slug' column to conversations table")
-                        except Exception as e:
+                        except OperationalError as e:
                             # Column might already exist (race condition or detection failed)
                             if "duplicate column" not in str(e).lower():
                                 logger.debug(f"Could not add slug column: {e}")
+                        except IntegrityError as e:
+                            logger.debug(f"Slug column already exists: {e}")
 
                     # Add summary column if missing
-                    if 'summary' not in table_sql.lower():
+                    if "summary" not in table_sql.lower():
                         try:
-                            conn.execute(text(
-                                "ALTER TABLE conversations ADD COLUMN summary TEXT"
-                            ))
+                            conn.execute(
+                                text(
+                                    "ALTER TABLE conversations ADD COLUMN summary TEXT"
+                                )
+                            )
                             logger.info("Added 'summary' column to conversations table")
-                        except Exception as e:
+                        except OperationalError as e:
                             if "duplicate column" not in str(e).lower():
                                 logger.debug(f"Could not add summary column: {e}")
+                        except IntegrityError as e:
+                            logger.debug(f"Summary column already exists: {e}")
 
                     conn.commit()
 
                     # Generate slugs for conversations that don't have them
                     self._generate_missing_slugs()
-            except Exception as e:
+            except OperationalError as e:
                 # Not SQLite or other issue - skip migration
-                logger.debug(f"Schema migration skipped: {e}")
+                logger.debug(f"Schema migration skipped (OperationalError): {e}")
+            except SQLAlchemyError as e:
+                logger.debug(f"Schema migration skipped (SQLAlchemyError): {e}")
 
     def _generate_missing_slugs(self):
         """Generate slugs for conversations that don't have them"""
@@ -136,18 +229,21 @@ class ConversationDB:
         try:
             with self.session_scope() as session:
                 # Get conversations without slugs
-                convs_without_slugs = session.query(ConversationModel).filter(
-                    ConversationModel.slug.is_(None)
-                ).all()
+                convs_without_slugs = (
+                    session.query(ConversationModel)
+                    .filter(ConversationModel.slug.is_(None))
+                    .all()
+                )
 
                 if not convs_without_slugs:
                     return
 
                 # Get all existing slugs
                 existing_slugs = set(
-                    row[0] for row in session.query(ConversationModel.slug).filter(
-                        ConversationModel.slug.isnot(None)
-                    ).all()
+                    row[0]
+                    for row in session.query(ConversationModel.slug)
+                    .filter(ConversationModel.slug.isnot(None))
+                    .all()
                 )
 
                 # Generate slugs
@@ -175,25 +271,33 @@ class ConversationDB:
         try:
             with self.engine.connect() as conn:
                 # Check if FTS5 tables already exist
-                result = conn.execute(text(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
-                ))
+                result = conn.execute(
+                    text(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                    )
+                )
                 if result.fetchone():
                     logger.debug("FTS5 tables already exist")
                     return True
 
                 # Create FTS5 virtual table for conversations (title + summary)
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
                         conversation_id UNINDEXED,
                         title,
                         summary,
                         tokenize = 'porter unicode61'
                     )
-                """))
+                """
+                    )
+                )
 
                 # Create FTS5 virtual table for messages (content)
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
                         message_id UNINDEXED,
                         conversation_id UNINDEXED,
@@ -201,35 +305,51 @@ class ConversationDB:
                         content,
                         tokenize = 'porter unicode61'
                     )
-                """))
+                """
+                    )
+                )
 
                 # Populate FTS tables with existing data
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO conversations_fts (conversation_id, title, summary)
                     SELECT id, COALESCE(title, ''), COALESCE(summary, '')
                     FROM conversations
-                """))
+                """
+                    )
+                )
 
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO messages_fts (message_id, conversation_id, role, content)
                     SELECT id, conversation_id, COALESCE(role, ''),
                            COALESCE(json_extract(content_json, '$.text'), '')
                     FROM messages
-                """))
+                """
+                    )
+                )
 
                 # Create triggers to keep FTS in sync
                 # Conversations insert trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS conversations_fts_insert
                     AFTER INSERT ON conversations
                     BEGIN
                         INSERT INTO conversations_fts (conversation_id, title, summary)
                         VALUES (NEW.id, COALESCE(NEW.title, ''), COALESCE(NEW.summary, ''));
                     END
-                """))
+                """
+                    )
+                )
 
                 # Conversations update trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS conversations_fts_update
                     AFTER UPDATE ON conversations
                     BEGIN
@@ -238,19 +358,27 @@ class ConversationDB:
                             summary = COALESCE(NEW.summary, '')
                         WHERE conversation_id = NEW.id;
                     END
-                """))
+                """
+                    )
+                )
 
                 # Conversations delete trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS conversations_fts_delete
                     AFTER DELETE ON conversations
                     BEGIN
                         DELETE FROM conversations_fts WHERE conversation_id = OLD.id;
                     END
-                """))
+                """
+                    )
+                )
 
                 # Messages insert trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS messages_fts_insert
                     AFTER INSERT ON messages
                     BEGIN
@@ -258,10 +386,14 @@ class ConversationDB:
                         VALUES (NEW.id, NEW.conversation_id, COALESCE(NEW.role, ''),
                                 COALESCE(json_extract(NEW.content_json, '$.text'), ''));
                     END
-                """))
+                """
+                    )
+                )
 
                 # Messages update trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS messages_fts_update
                     AFTER UPDATE ON messages
                     BEGIN
@@ -270,16 +402,22 @@ class ConversationDB:
                             content = COALESCE(json_extract(NEW.content_json, '$.text'), '')
                         WHERE message_id = NEW.id;
                     END
-                """))
+                """
+                    )
+                )
 
                 # Messages delete trigger
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     CREATE TRIGGER IF NOT EXISTS messages_fts_delete
                     AFTER DELETE ON messages
                     BEGIN
                         DELETE FROM messages_fts WHERE message_id = OLD.id;
                     END
-                """))
+                """
+                    )
+                )
 
                 conn.commit()
                 logger.info("FTS5 full-text search tables and triggers created")
@@ -295,9 +433,11 @@ class ConversationDB:
             return False
         try:
             with self.engine.connect() as conn:
-                result = conn.execute(text(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
-                ))
+                result = conn.execute(
+                    text(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                    )
+                )
                 return result.fetchone() is not None
         except Exception:
             return False
@@ -316,7 +456,7 @@ class ConversationDB:
             return ""
 
         # If already contains FTS operators, use as-is
-        if any(op in query_text.upper() for op in [' AND ', ' OR ', ' NOT ', ' NEAR']):
+        if any(op in query_text.upper() for op in [" AND ", " OR ", " NOT ", " NEAR"]):
             return query_text
 
         # If contains quotes, preserve phrase matching
@@ -327,12 +467,17 @@ class ConversationDB:
         words = query_text.split()
         if len(words) > 1:
             # Use OR for multiple words (more inclusive)
-            return ' OR '.join(words)
+            return " OR ".join(words)
 
         return query_text
 
-    def _search_fts5(self, query_text: str, title_only: bool = False,
-                     content_only: bool = False, limit: int = 1000) -> List[str]:
+    def _search_fts5(
+        self,
+        query_text: str,
+        title_only: bool = False,
+        content_only: bool = False,
+        limit: int = 1000,
+    ) -> List[str]:
         """
         Search using FTS5 and return matching conversation IDs with relevance ranking.
 
@@ -350,37 +495,51 @@ class ConversationDB:
                 if not content_only:
                     # Search conversation titles (higher weight)
                     try:
-                        result = conn.execute(text("""
+                        result = conn.execute(
+                            text(
+                                """
                             SELECT conversation_id, bm25(conversations_fts) as rank
                             FROM conversations_fts
                             WHERE conversations_fts MATCH :query
                             ORDER BY rank
                             LIMIT :limit
-                        """), {"query": fts_query, "limit": limit})
+                        """
+                            ),
+                            {"query": fts_query, "limit": limit},
+                        )
 
                         for row in result:
                             conv_id = row[0]
                             if conv_id not in matching_ids:
                                 matching_ids.add(conv_id)
-                                ranked_ids.append((conv_id, row[1] - 10))  # Boost title matches
+                                ranked_ids.append(
+                                    (conv_id, row[1] - 10)
+                                )  # Boost title matches
                     except Exception as e:
                         logger.debug(f"FTS5 title search failed: {e}")
 
                 if not title_only:
                     # Search message content - use subquery since bm25 can't be used with GROUP BY
                     try:
-                        result = conn.execute(text("""
+                        result = conn.execute(
+                            text(
+                                """
                             SELECT DISTINCT conversation_id
                             FROM messages_fts
                             WHERE messages_fts MATCH :query
                             LIMIT :limit
-                        """), {"query": fts_query, "limit": limit})
+                        """
+                            ),
+                            {"query": fts_query, "limit": limit},
+                        )
 
                         for row in result:
                             conv_id = row[0]
                             if conv_id not in matching_ids:
                                 matching_ids.add(conv_id)
-                                ranked_ids.append((conv_id, 0))  # No rank for content matches
+                                ranked_ids.append(
+                                    (conv_id, 0)
+                                )  # No rank for content matches
                     except Exception as e:
                         logger.debug(f"FTS5 content search failed: {e}")
 
@@ -417,32 +576,36 @@ class ConversationDB:
             raise
         finally:
             session.close()
-    
+
     def save_conversation(self, conversation: ConversationTree) -> str:
         """
         Save a conversation to the database
-        
+
         Args:
             conversation: ConversationTree object to save
-            
+
         Returns:
             The conversation ID
         """
         with self.session_scope() as session:
             # Check if conversation exists
             existing = session.get(ConversationModel, conversation.id)
-            
+
             if existing:
                 # Update existing conversation
                 conv_model = existing
                 # Clear existing messages and paths for full refresh
-                session.query(MessageModel).filter_by(conversation_id=conversation.id).delete()
-                session.query(PathModel).filter_by(conversation_id=conversation.id).delete()
+                session.query(MessageModel).filter_by(
+                    conversation_id=conversation.id
+                ).delete()
+                session.query(PathModel).filter_by(
+                    conversation_id=conversation.id
+                ).delete()
             else:
                 # Create new conversation
                 conv_model = ConversationModel(id=conversation.id)
                 session.add(conv_model)
-            
+
             # Update conversation fields
             conv_model.title = conversation.title
             conv_model.created_at = conversation.metadata.created_at
@@ -457,39 +620,48 @@ class ConversationDB:
             # Auto-generate slug from title if not present
             if not conversation.metadata.slug and conversation.title:
                 from ctk.core.slug import generate_slug, make_unique_slug
+
                 base_slug = generate_slug(conversation.title)
                 if base_slug:
                     # Check for existing slugs to make unique
                     existing_slugs = set(
-                        s[0] for s in session.query(ConversationModel.slug)
+                        s[0]
+                        for s in session.query(ConversationModel.slug)
                         .filter(ConversationModel.slug.isnot(None))
                         .filter(ConversationModel.id != conversation.id)
                         .all()
                     )
-                    conversation.metadata.slug = make_unique_slug(base_slug, existing_slugs)
+                    conversation.metadata.slug = make_unique_slug(
+                        base_slug, existing_slugs
+                    )
             conv_model.slug = conversation.metadata.slug
 
             # Store full metadata as JSON
             conv_model.metadata_json = conversation.metadata.to_dict()
-            
+
             # Handle tags
             self._update_tags(session, conv_model, conversation.metadata.tags)
-            
+
             # Save messages with unique IDs
             # Create a mapping of old IDs to new IDs
+            # Note: Using '::' as delimiter instead of '_' to avoid ambiguity
+            # since both conversation IDs and message IDs may contain underscores
             id_mapping = {}
             for msg_id, message in conversation.message_map.items():
                 # Create unique ID by combining conversation ID and message ID
-                unique_id = f"{conversation.id}_{message.id}"
+                # Use '::' delimiter which is safer than '_' for ID parsing
+                unique_id = f"{conversation.id}::{message.id}"
                 id_mapping[message.id] = unique_id
 
                 # Map parent_id to new unique ID
                 unique_parent_id = None
                 if message.parent_id:
-                    unique_parent_id = f"{conversation.id}_{message.parent_id}"
+                    unique_parent_id = f"{conversation.id}::{message.parent_id}"
 
                 # Check if this message already exists
-                existing_msg = session.query(MessageModel).filter_by(id=unique_id).first()
+                existing_msg = (
+                    session.query(MessageModel).filter_by(id=unique_id).first()
+                )
                 if not existing_msg:
                     msg_model = MessageModel(
                         id=unique_id,
@@ -498,31 +670,37 @@ class ConversationDB:
                         content_json=message.content.to_dict(),
                         parent_id=unique_parent_id,
                         timestamp=message.timestamp,
-                        metadata_json=message.metadata
+                        metadata_json=message.metadata,
                     )
                     session.add(msg_model)
-            
+
             # Save paths with updated message IDs
             paths = conversation.get_all_paths()
             for idx, path in enumerate(paths):
-                # Map message IDs to their unique database IDs
-                unique_message_ids = [f"{conversation.id}_{msg.id}" for msg in path]
+                # Map message IDs to their unique database IDs (using '::' delimiter)
+                unique_message_ids = [f"{conversation.id}::{msg.id}" for msg in path]
                 path_model = PathModel(
                     conversation_id=conversation.id,
                     name=f"path_{idx}",
                     message_ids_json=unique_message_ids,
                     is_primary=(idx == 0),  # First path is primary
                     length=len(path),
-                    leaf_message_id=f"{conversation.id}_{path[-1].id}" if path else None
+                    leaf_message_id=(
+                        f"{conversation.id}::{path[-1].id}" if path else None
+                    ),
                 )
                 session.add(path_model)
-            
+
             session.commit()
-            logger.info(f"Saved conversation {conversation.id} with {len(conversation.message_map)} messages")
+            logger.info(
+                f"Saved conversation {conversation.id} with {len(conversation.message_map)} messages"
+            )
 
         return conversation.id
 
-    def resolve_identifier(self, identifier: str) -> Optional[Tuple[str, Optional[str]]]:
+    def resolve_identifier(
+        self, identifier: str
+    ) -> Optional[Tuple[str, Optional[str]]]:
         """
         Resolve a slug, ID, or prefix to (conversation_id, slug) using database indexes.
 
@@ -543,30 +721,40 @@ class ConversationDB:
         """
         with self.session_scope() as session:
             # 1. Exact slug match (uses index)
-            conv = session.query(ConversationModel.id, ConversationModel.slug).filter(
-                ConversationModel.slug == identifier
-            ).first()
+            conv = (
+                session.query(ConversationModel.id, ConversationModel.slug)
+                .filter(ConversationModel.slug == identifier)
+                .first()
+            )
             if conv:
                 return (conv[0], conv[1])
 
             # 2. Exact ID match (uses primary key)
-            conv = session.query(ConversationModel.id, ConversationModel.slug).filter(
-                ConversationModel.id == identifier
-            ).first()
+            conv = (
+                session.query(ConversationModel.id, ConversationModel.slug)
+                .filter(ConversationModel.id == identifier)
+                .first()
+            )
             if conv:
                 return (conv[0], conv[1])
 
             # 3. Slug prefix match - LIMIT 2 to detect ambiguity
-            matches = session.query(ConversationModel.id, ConversationModel.slug).filter(
-                ConversationModel.slug.startswith(identifier)
-            ).limit(2).all()
+            matches = (
+                session.query(ConversationModel.id, ConversationModel.slug)
+                .filter(ConversationModel.slug.startswith(identifier))
+                .limit(2)
+                .all()
+            )
             if len(matches) == 1:
                 return (matches[0][0], matches[0][1])
 
             # 4. ID prefix match - LIMIT 2 to detect ambiguity
-            matches = session.query(ConversationModel.id, ConversationModel.slug).filter(
-                ConversationModel.id.startswith(identifier)
-            ).limit(2).all()
+            matches = (
+                session.query(ConversationModel.id, ConversationModel.slug)
+                .filter(ConversationModel.id.startswith(identifier))
+                .limit(2)
+                .all()
+            )
             if len(matches) == 1:
                 return (matches[0][0], matches[0][1])
 
@@ -575,10 +763,10 @@ class ConversationDB:
     def load_conversation(self, conversation_id: str) -> Optional[ConversationTree]:
         """
         Load a conversation from the database
-        
+
         Args:
             conversation_id: ID of the conversation to load
-            
+
         Returns:
             ConversationTree object or None if not found
         """
@@ -587,7 +775,7 @@ class ConversationDB:
             conv_model = session.get(ConversationModel, conversation_id)
             if not conv_model:
                 return None
-            
+
             # Create ConversationTree
             metadata = ConversationMetadata.from_dict(conv_model.metadata_json or {})
 
@@ -605,25 +793,32 @@ class ConversationDB:
 
             # Load tags
             metadata.tags = [tag.name for tag in conv_model.tags]
-            
+
             conversation = ConversationTree(
-                id=conv_model.id,
-                title=conv_model.title,
-                metadata=metadata
+                id=conv_model.id, title=conv_model.title, metadata=metadata
             )
-            
+
             # Load messages and strip conversation ID prefix
-            messages = session.query(MessageModel).filter_by(
-                conversation_id=conversation_id
-            ).all()
+            messages = (
+                session.query(MessageModel)
+                .filter_by(conversation_id=conversation_id)
+                .all()
+            )
 
             # Create mapping from unique IDs to original IDs
+            # Support both old format (conv_id_msg_id) and new format (conv_id::msg_id)
             id_mapping = {}
             for msg_model in messages:
                 # Strip conversation ID prefix to get original message ID
                 original_id = msg_model.id
-                if original_id.startswith(f"{conversation_id}_"):
-                    original_id = original_id[len(conversation_id) + 1:]
+                # Try new format first (::)
+                new_prefix = f"{conversation_id}::"
+                old_prefix = f"{conversation_id}_"
+                if original_id.startswith(new_prefix):
+                    original_id = original_id[len(new_prefix) :]
+                elif original_id.startswith(old_prefix):
+                    # Backwards compatibility with old format
+                    original_id = original_id[len(old_prefix) :]
                 id_mapping[msg_model.id] = original_id
 
             for msg_model in messages:
@@ -633,7 +828,9 @@ class ConversationDB:
                 original_id = id_mapping.get(msg_model.id, msg_model.id)
                 original_parent_id = None
                 if msg_model.parent_id:
-                    original_parent_id = id_mapping.get(msg_model.parent_id, msg_model.parent_id)
+                    original_parent_id = id_mapping.get(
+                        msg_model.parent_id, msg_model.parent_id
+                    )
 
                 message = Message(
                     id=original_id,
@@ -641,11 +838,13 @@ class ConversationDB:
                     content=content,
                     timestamp=msg_model.timestamp,
                     parent_id=original_parent_id,
-                    metadata=msg_model.metadata_json or {}
+                    metadata=msg_model.metadata_json or {},
                 )
                 conversation.add_message(message)
-            
-            logger.info(f"Loaded conversation {conversation_id} with {len(messages)} messages")
+
+            logger.info(
+                f"Loaded conversation {conversation_id} with {len(messages)} messages"
+            )
             return conversation
 
     def resolve_conversation(self, id_or_slug: str) -> Optional[str]:
@@ -665,35 +864,50 @@ class ConversationDB:
                 return conv.id
 
             # Try exact slug match
-            conv = session.query(ConversationModel).filter(
-                ConversationModel.slug == id_or_slug
-            ).first()
+            conv = (
+                session.query(ConversationModel)
+                .filter(ConversationModel.slug == id_or_slug)
+                .first()
+            )
             if conv:
                 return conv.id
 
             # Try ID prefix match
-            matches = session.query(ConversationModel).filter(
-                ConversationModel.id.startswith(id_or_slug)
-            ).limit(10).all()
+            matches = (
+                session.query(ConversationModel)
+                .filter(ConversationModel.id.startswith(id_or_slug))
+                .limit(10)
+                .all()
+            )
             if len(matches) == 1:
                 return matches[0].id
             if len(matches) > 1:
                 return None  # Ambiguous
 
             # Try slug prefix match
-            matches = session.query(ConversationModel).filter(
-                ConversationModel.slug.isnot(None),
-                ConversationModel.slug.startswith(id_or_slug)
-            ).limit(10).all()
+            matches = (
+                session.query(ConversationModel)
+                .filter(
+                    ConversationModel.slug.isnot(None),
+                    ConversationModel.slug.startswith(id_or_slug),
+                )
+                .limit(10)
+                .all()
+            )
             if len(matches) == 1:
                 return matches[0].id
 
             # Try partial slug match (word-based)
             from ctk.core.slug import slug_matches
-            all_with_slugs = session.query(ConversationModel).filter(
-                ConversationModel.slug.isnot(None)
-            ).all()
-            slug_match_results = [c for c in all_with_slugs if slug_matches(c.slug, id_or_slug)]
+
+            all_with_slugs = (
+                session.query(ConversationModel)
+                .filter(ConversationModel.slug.isnot(None))
+                .all()
+            )
+            slug_match_results = [
+                c for c in all_with_slugs if slug_matches(c.slug, id_or_slug)
+            ]
             if len(slug_match_results) == 1:
                 return slug_match_results[0].id
 
@@ -710,23 +924,27 @@ class ConversationDB:
             Conversation ID if found, None otherwise
         """
         with self.session_scope() as session:
-            conv = session.query(ConversationModel).filter(
-                ConversationModel.slug == slug
-            ).first()
+            conv = (
+                session.query(ConversationModel)
+                .filter(ConversationModel.slug == slug)
+                .first()
+            )
             return conv.id if conv else None
 
-    def list_conversations(self,
-                         limit: Optional[int] = None,
-                         offset: int = 0,
-                         source: Optional[str] = None,
-                         project: Optional[str] = None,
-                         tag: Optional[str] = None,
-                         tags: Optional[List[str]] = None,
-                         model: Optional[str] = None,
-                         archived: Optional[bool] = None,
-                         starred: Optional[bool] = None,
-                         pinned: Optional[bool] = None,
-                         include_archived: bool = False) -> List[ConversationSummary]:
+    def list_conversations(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+    ) -> List[ConversationSummary]:
         """
         List conversations with optional filtering
 
@@ -760,7 +978,9 @@ class ConversationDB:
                 query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
             if tags:
                 # Match any of the tags
-                query = query.join(ConversationModel.tags).filter(TagModel.name.in_(tags))
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
+                )
 
             # Archive filtering
             if not include_archived and archived is None:
@@ -788,7 +1008,7 @@ class ConversationDB:
             # Order by: pinned first, then updated_at descending
             query = query.order_by(
                 ConversationModel.pinned_at.desc().nullslast(),
-                ConversationModel.updated_at.desc()
+                ConversationModel.updated_at.desc(),
             )
 
             # Apply pagination
@@ -796,29 +1016,33 @@ class ConversationDB:
                 query = query.limit(limit)
             conversations = query.offset(offset).all()
 
-            return [ConversationSummary.from_dict(conv.to_dict()) for conv in conversations]
-    
-    def search_conversations(self,
-                           query_text: str = None,
-                           limit: int = 100,
-                           offset: int = 0,
-                           title_only: bool = False,
-                           content_only: bool = False,
-                           date_from: datetime = None,
-                           date_to: datetime = None,
-                           source: str = None,
-                           project: str = None,
-                           model: str = None,
-                           tags: List[str] = None,
-                           min_messages: int = None,
-                           max_messages: int = None,
-                           has_branches: bool = None,
-                           archived: Optional[bool] = None,
-                           starred: Optional[bool] = None,
-                           pinned: Optional[bool] = None,
-                           include_archived: bool = False,
-                           order_by: str = 'updated_at',
-                           ascending: bool = False) -> List[ConversationSummary]:
+            return [
+                ConversationSummary.from_dict(conv.to_dict()) for conv in conversations
+            ]
+
+    def search_conversations(
+        self,
+        query_text: str = None,
+        limit: int = 100,
+        offset: int = 0,
+        title_only: bool = False,
+        content_only: bool = False,
+        date_from: datetime = None,
+        date_to: datetime = None,
+        source: str = None,
+        project: str = None,
+        model: str = None,
+        tags: List[str] = None,
+        min_messages: int = None,
+        max_messages: int = None,
+        has_branches: bool = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+        order_by: str = "updated_at",
+        ascending: bool = False,
+    ) -> List[ConversationSummary]:
         """
         Advanced search with multiple filters
 
@@ -851,8 +1075,12 @@ class ConversationDB:
         fts_ids = None
         if query_text and self._has_fts5():
             try:
-                fts_ids = self._search_fts5(query_text, title_only=title_only,
-                                           content_only=content_only, limit=limit + offset + 100)
+                fts_ids = self._search_fts5(
+                    query_text,
+                    title_only=title_only,
+                    content_only=content_only,
+                    limit=limit + offset + 100,
+                )
                 if not fts_ids:
                     # No FTS5 matches - return empty rather than falling back to LIKE
                     # This is intentional: FTS5 should be authoritative when available
@@ -864,8 +1092,7 @@ class ConversationDB:
         with self.session_scope() as session:
             # Base query with message count
             query = session.query(
-                ConversationModel,
-                func.count(MessageModel.id).label('message_count')
+                ConversationModel, func.count(MessageModel.id).label("message_count")
             ).outerjoin(MessageModel)
 
             # Text search - use FTS5 results or fall back to LIKE
@@ -880,11 +1107,15 @@ class ConversationDB:
                 elif content_only:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
-                            text("json_extract(messages.content_json, '$.text') LIKE :query")
+                            text(
+                                "json_extract(messages.content_json, '$.text') LIKE :query"
+                            )
                         ).params(query=f"%{query_text}%")
                     else:
                         query = query.filter(
-                            MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
+                            MessageModel.content_json["text"].astext.ilike(
+                                f"%{query_text}%"
+                            )
                         )
                 else:
                     # Search both title and content (LIKE fallback)
@@ -892,14 +1123,18 @@ class ConversationDB:
                         query = query.filter(
                             or_(
                                 ConversationModel.title.ilike(f"%{query_text}%"),
-                                text("json_extract(messages.content_json, '$.text') LIKE :query")
+                                text(
+                                    "json_extract(messages.content_json, '$.text') LIKE :query"
+                                ),
                             )
                         ).params(query=f"%{query_text}%")
                     else:
                         query = query.filter(
                             or_(
                                 ConversationModel.title.ilike(f"%{query_text}%"),
-                                MessageModel.content_json['text'].astext.ilike(f"%{query_text}%")
+                                MessageModel.content_json["text"].astext.ilike(
+                                    f"%{query_text}%"
+                                ),
                             )
                         )
 
@@ -957,36 +1192,42 @@ class ConversationDB:
 
             # Branching filter (requires subquery)
             if has_branches is not None:
-                branch_subquery = session.query(
-                    PathModel.conversation_id,
-                    func.count(PathModel.id).label('path_count')
-                ).group_by(PathModel.conversation_id).subquery()
+                branch_subquery = (
+                    session.query(
+                        PathModel.conversation_id,
+                        func.count(PathModel.id).label("path_count"),
+                    )
+                    .group_by(PathModel.conversation_id)
+                    .subquery()
+                )
 
                 query = query.outerjoin(
                     branch_subquery,
-                    ConversationModel.id == branch_subquery.c.conversation_id
+                    ConversationModel.id == branch_subquery.c.conversation_id,
                 )
 
                 if has_branches:
                     query = query.filter(branch_subquery.c.path_count > 1)
                 else:
                     query = query.filter(
-                        or_(branch_subquery.c.path_count == 1,
-                            branch_subquery.c.path_count.is_(None))
+                        or_(
+                            branch_subquery.c.path_count == 1,
+                            branch_subquery.c.path_count.is_(None),
+                        )
                     )
 
             # Ordering
-            if order_by == 'message_count':
+            if order_by == "message_count":
                 # Special case for message count ordering
                 if ascending:
-                    query = query.order_by(text('message_count ASC'))
+                    query = query.order_by(text("message_count ASC"))
                 else:
-                    query = query.order_by(text('message_count DESC'))
+                    query = query.order_by(text("message_count DESC"))
             else:
                 order_field = {
-                    'created_at': ConversationModel.created_at,
-                    'updated_at': ConversationModel.updated_at,
-                    'title': ConversationModel.title,
+                    "created_at": ConversationModel.created_at,
+                    "updated_at": ConversationModel.updated_at,
+                    "title": ConversationModel.title,
                 }.get(order_by, ConversationModel.updated_at)
 
                 if ascending:
@@ -1001,18 +1242,18 @@ class ConversationDB:
             output = []
             for conv, msg_count in results:
                 conv_dict = conv.to_dict()
-                conv_dict['message_count'] = msg_count
+                conv_dict["message_count"] = msg_count
                 output.append(ConversationSummary.from_dict(conv_dict))
 
             return output
-    
+
     def delete_conversation(self, conversation_id: str) -> bool:
         """
         Delete a conversation and all related data
-        
+
         Args:
             conversation_id: ID of conversation to delete
-            
+
         Returns:
             True if deleted, False if not found
         """
@@ -1020,7 +1261,7 @@ class ConversationDB:
             conv_model = session.get(ConversationModel, conversation_id)
             if not conv_model:
                 return False
-            
+
             # Cascading delete will handle messages and paths
             session.delete(conv_model)
             session.commit()
@@ -1105,7 +1346,9 @@ class ConversationDB:
             session.commit()
             return True
 
-    def duplicate_conversation(self, conversation_id: str, new_title: Optional[str] = None) -> Optional[str]:
+    def duplicate_conversation(
+        self, conversation_id: str, new_title: Optional[str] = None
+    ) -> Optional[str]:
         """
         Duplicate a conversation
 
@@ -1123,6 +1366,7 @@ class ConversationDB:
 
         # Create new conversation with new ID
         import uuid
+
         new_id = str(uuid.uuid4())
 
         # Update title
@@ -1157,62 +1401,70 @@ class ConversationDB:
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get database statistics
-        
+
         Returns:
             Dictionary with statistics
         """
         with self.session_scope() as session:
-            total_conversations = session.query(func.count(ConversationModel.id)).scalar()
+            total_conversations = session.query(
+                func.count(ConversationModel.id)
+            ).scalar()
             total_messages = session.query(func.count(MessageModel.id)).scalar()
             total_tags = session.query(func.count(TagModel.id)).scalar()
-            
+
             # Messages by role
             messages_by_role = {}
-            role_counts = session.query(
-                MessageModel.role,
-                func.count(MessageModel.id)
-            ).group_by(MessageModel.role).all()
-            
+            role_counts = (
+                session.query(MessageModel.role, func.count(MessageModel.id))
+                .group_by(MessageModel.role)
+                .all()
+            )
+
             for role, count in role_counts:
                 messages_by_role[role.value] = count
-            
+
             # Conversations by source
             conversations_by_source = {}
-            source_counts = session.query(
-                ConversationModel.source,
-                func.count(ConversationModel.id)
-            ).group_by(ConversationModel.source).all()
-            
+            source_counts = (
+                session.query(
+                    ConversationModel.source, func.count(ConversationModel.id)
+                )
+                .group_by(ConversationModel.source)
+                .all()
+            )
+
             for source, count in source_counts:
                 if source:
                     conversations_by_source[source] = count
-            
+
             # Most used tags
-            top_tags = session.query(
-                TagModel.name,
-                func.count(ConversationModel.id).label('usage_count')
-            ).select_from(
-                TagModel
-            ).join(
-                conversation_tags
-            ).join(
-                ConversationModel
-            ).group_by(
-                TagModel.name
-            ).order_by(
-                text('usage_count DESC')
-            ).limit(10).all()
-            
+            top_tags = (
+                session.query(
+                    TagModel.name, func.count(ConversationModel.id).label("usage_count")
+                )
+                .select_from(TagModel)
+                .join(conversation_tags)
+                .join(ConversationModel)
+                .group_by(TagModel.name)
+                .order_by(text("usage_count DESC"))
+                .limit(10)
+                .all()
+            )
+
             return {
-                'total_conversations': total_conversations,
-                'total_messages': total_messages,
-                'total_tags': total_tags,
-                'messages_by_role': messages_by_role,
-                'conversations_by_source': conversations_by_source,
-                'top_tags': [{'name': name, 'count': count} for name, count in top_tags]
+                "total_conversations": total_conversations,
+                "total_messages": total_messages,
+                "total_tags": total_tags,
+                "messages_by_role": messages_by_role,
+                "conversations_by_source": conversations_by_source,
+                "top_tags": [
+                    {"name": name, "count": count} for name, count in top_tags
+                ],
             }
-    
-    def _update_tags(self, session: Session, conv_model: ConversationModel, tag_names: List[str]):
+
+    def _update_tags(
+        self, session: Session, conv_model: ConversationModel, tag_names: List[str]
+    ):
         """Update tags for a conversation"""
         # Clear existing tags
         conv_model.tags = []
@@ -1227,8 +1479,8 @@ class ConversationDB:
             if not tag:
                 # Determine category from tag format
                 category = None
-                if ':' in tag_name:
-                    category = tag_name.split(':')[0]
+                if ":" in tag_name:
+                    category = tag_name.split(":")[0]
 
                 tag = TagModel(name=tag_name, category=category)
                 session.add(tag)
@@ -1264,8 +1516,8 @@ class ConversationDB:
                     if not tag:
                         # Determine category from tag format
                         category = None
-                        if ':' in tag_name:
-                            category = tag_name.split(':')[0]
+                        if ":" in tag_name:
+                            category = tag_name.split(":")[0]
 
                         tag = TagModel(name=tag_name, category=category)
                         session.add(tag)
@@ -1324,6 +1576,7 @@ class ConversationDB:
 
             # Generate new UUID
             import uuid
+
             new_id = str(uuid.uuid4())
 
             # Create new conversation model
@@ -1336,11 +1589,11 @@ class ConversationDB:
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
                 starred=False,  # Don't copy starred status
-                pinned=False,   # Don't copy pinned status
-                archived=False, # Don't copy archived status
+                pinned=False,  # Don't copy pinned status
+                archived=False,  # Don't copy archived status
                 starred_at=None,
                 pinned_at=None,
-                archived_at=None
+                archived_at=None,
             )
 
             # Copy all messages
@@ -1353,7 +1606,7 @@ class ConversationDB:
                     parent_id=msg.parent_id,
                     timestamp=msg.timestamp,
                     model=msg.model,
-                    metadata_=msg.metadata_
+                    metadata_=msg.metadata_,
                 )
                 new_conv.messages.append(new_msg)
 
@@ -1372,7 +1625,7 @@ class ConversationDB:
         title: Optional[str] = None,
         project: Optional[str] = None,
         source: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ) -> bool:
         """
         Update conversation metadata fields
@@ -1410,21 +1663,26 @@ class ConversationDB:
         with self.session_scope() as session:
             if with_counts:
                 # Get tags with usage counts - proper join sequence
-                results = session.query(
-                    TagModel,
-                    func.count(ConversationModel.id).label('usage_count')
-                ).select_from(TagModel).outerjoin(
-                    conversation_tags,
-                    TagModel.id == conversation_tags.c.tag_id
-                ).outerjoin(
-                    ConversationModel,
-                    conversation_tags.c.conversation_id == ConversationModel.id
-                ).group_by(TagModel.id).all()
+                results = (
+                    session.query(
+                        TagModel, func.count(ConversationModel.id).label("usage_count")
+                    )
+                    .select_from(TagModel)
+                    .outerjoin(
+                        conversation_tags, TagModel.id == conversation_tags.c.tag_id
+                    )
+                    .outerjoin(
+                        ConversationModel,
+                        conversation_tags.c.conversation_id == ConversationModel.id,
+                    )
+                    .group_by(TagModel.id)
+                    .all()
+                )
 
                 tags = []
                 for tag, count in results:
                     tag_dict = tag.to_dict()
-                    tag_dict['usage_count'] = count
+                    tag_dict["usage_count"] = count
                     tags.append(tag_dict)
                 return tags
             else:
@@ -1434,86 +1692,92 @@ class ConversationDB:
     def get_models(self) -> List[Dict[str, int]]:
         """Get all unique models with conversation counts"""
         with self.session_scope() as session:
-            results = session.query(
-                ConversationModel.model,
-                func.count(ConversationModel.id).label('count')
-            ).filter(
-                ConversationModel.model.isnot(None)
-            ).group_by(
-                ConversationModel.model
-            ).order_by(
-                text('count DESC')
-            ).all()
+            results = (
+                session.query(
+                    ConversationModel.model,
+                    func.count(ConversationModel.id).label("count"),
+                )
+                .filter(ConversationModel.model.isnot(None))
+                .group_by(ConversationModel.model)
+                .order_by(text("count DESC"))
+                .all()
+            )
 
-            return [{'model': model, 'count': count} for model, count in results]
+            return [{"model": model, "count": count} for model, count in results]
 
     def get_sources(self) -> List[Dict[str, int]]:
         """Get all unique sources with conversation counts"""
         with self.session_scope() as session:
-            results = session.query(
-                ConversationModel.source,
-                func.count(ConversationModel.id).label('count')
-            ).filter(
-                ConversationModel.source.isnot(None)
-            ).group_by(
-                ConversationModel.source
-            ).order_by(
-                text('count DESC')
-            ).all()
+            results = (
+                session.query(
+                    ConversationModel.source,
+                    func.count(ConversationModel.id).label("count"),
+                )
+                .filter(ConversationModel.source.isnot(None))
+                .group_by(ConversationModel.source)
+                .order_by(text("count DESC"))
+                .all()
+            )
 
-            return [{'source': source, 'count': count} for source, count in results]
+            return [{"source": source, "count": count} for source, count in results]
 
-    def get_conversation_timeline(self,
-                                  granularity: str = 'day',
-                                  limit: int = 30) -> List[Dict[str, Any]]:
+    def get_conversation_timeline(
+        self, granularity: str = "day", limit: int = 30
+    ) -> List[Dict[str, Any]]:
         """Get conversation counts over time"""
         with self.session_scope() as session:
             # SQLite-specific date formatting
             if "sqlite" in str(self.engine.url):
-                if granularity == 'day':
+                if granularity == "day":
                     date_format = "date(created_at)"
-                elif granularity == 'week':
+                elif granularity == "week":
                     date_format = "strftime('%Y-%W', created_at)"
-                elif granularity == 'month':
+                elif granularity == "month":
                     date_format = "strftime('%Y-%m', created_at)"
-                elif granularity == 'year':
+                elif granularity == "year":
                     date_format = "strftime('%Y', created_at)"
                 else:
                     date_format = "date(created_at)"
 
                 results = session.execute(
-                    text(f"""
+                    text(
+                        f"""
                         SELECT {date_format} as period, COUNT(id) as count
                         FROM conversations
                         GROUP BY {date_format}
                         ORDER BY {date_format} DESC
                         LIMIT :limit
-                    """),
-                    {"limit": limit}
+                    """
+                    ),
+                    {"limit": limit},
                 ).fetchall()
             else:
                 # PostgreSQL date formatting
-                if granularity == 'day':
-                    date_trunc = func.date_trunc('day', ConversationModel.created_at)
-                elif granularity == 'week':
-                    date_trunc = func.date_trunc('week', ConversationModel.created_at)
-                elif granularity == 'month':
-                    date_trunc = func.date_trunc('month', ConversationModel.created_at)
-                elif granularity == 'year':
-                    date_trunc = func.date_trunc('year', ConversationModel.created_at)
+                if granularity == "day":
+                    date_trunc = func.date_trunc("day", ConversationModel.created_at)
+                elif granularity == "week":
+                    date_trunc = func.date_trunc("week", ConversationModel.created_at)
+                elif granularity == "month":
+                    date_trunc = func.date_trunc("month", ConversationModel.created_at)
+                elif granularity == "year":
+                    date_trunc = func.date_trunc("year", ConversationModel.created_at)
                 else:
-                    date_trunc = func.date_trunc('day', ConversationModel.created_at)
+                    date_trunc = func.date_trunc("day", ConversationModel.created_at)
 
-                results = session.query(
-                    date_trunc.label('period'),
-                    func.count(ConversationModel.id).label('count')
-                ).group_by(
-                    date_trunc
-                ).order_by(
-                    date_trunc.desc()
-                ).limit(limit).all()
+                results = (
+                    session.query(
+                        date_trunc.label("period"),
+                        func.count(ConversationModel.id).label("count"),
+                    )
+                    .group_by(date_trunc)
+                    .order_by(date_trunc.desc())
+                    .limit(limit)
+                    .all()
+                )
 
-            return [{'period': str(period), 'count': count} for period, count in results]
+            return [
+                {"period": str(period), "count": count} for period, count in results
+            ]
 
     # ==================== Embedding Methods ====================
 
@@ -1523,9 +1787,9 @@ class ConversationDB:
         embedding: List[float],
         model: str,
         provider: str,
-        chunking_strategy: str = 'message',
-        aggregation_strategy: str = 'weighted_mean',
-        aggregation_weights: Optional[Dict[str, float]] = None
+        chunking_strategy: str = "message",
+        aggregation_strategy: str = "weighted_mean",
+        aggregation_weights: Optional[Dict[str, float]] = None,
     ) -> int:
         """
         Save or update embedding for a conversation.
@@ -1553,15 +1817,19 @@ class ConversationDB:
                 raise ValueError(f"Conversation {conversation_id} not found")
 
             # Check if embedding already exists
-            existing = session.query(EmbeddingModel).filter(
-                and_(
-                    EmbeddingModel.conversation_id == conversation_id,
-                    EmbeddingModel.model == model,
-                    EmbeddingModel.provider == provider,
-                    EmbeddingModel.chunking_strategy == chunking_strategy,
-                    EmbeddingModel.aggregation_strategy == aggregation_strategy
+            existing = (
+                session.query(EmbeddingModel)
+                .filter(
+                    and_(
+                        EmbeddingModel.conversation_id == conversation_id,
+                        EmbeddingModel.model == model,
+                        EmbeddingModel.provider == provider,
+                        EmbeddingModel.chunking_strategy == chunking_strategy,
+                        EmbeddingModel.aggregation_strategy == aggregation_strategy,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             if existing:
                 # Update existing embedding
@@ -1581,7 +1849,7 @@ class ConversationDB:
                     aggregation_strategy=aggregation_strategy,
                     aggregation_weights=aggregation_weights,
                     embedding=embedding,
-                    dimensions=len(embedding)
+                    dimensions=len(embedding),
                 )
                 session.add(emb)
                 session.flush()
@@ -1593,8 +1861,8 @@ class ConversationDB:
         conversation_id: str,
         model: str,
         provider: str,
-        chunking_strategy: str = 'message',
-        aggregation_strategy: str = 'weighted_mean'
+        chunking_strategy: str = "message",
+        aggregation_strategy: str = "weighted_mean",
     ) -> Optional[List[float]]:
         """
         Get cached embedding for a conversation.
@@ -1610,22 +1878,24 @@ class ConversationDB:
             Embedding vector or None if not found
         """
         with self.session_scope() as session:
-            emb = session.query(EmbeddingModel).filter(
-                and_(
-                    EmbeddingModel.conversation_id == conversation_id,
-                    EmbeddingModel.model == model,
-                    EmbeddingModel.provider == provider,
-                    EmbeddingModel.chunking_strategy == chunking_strategy,
-                    EmbeddingModel.aggregation_strategy == aggregation_strategy
+            emb = (
+                session.query(EmbeddingModel)
+                .filter(
+                    and_(
+                        EmbeddingModel.conversation_id == conversation_id,
+                        EmbeddingModel.model == model,
+                        EmbeddingModel.provider == provider,
+                        EmbeddingModel.chunking_strategy == chunking_strategy,
+                        EmbeddingModel.aggregation_strategy == aggregation_strategy,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             return emb.embedding if emb else None
 
     def get_all_embeddings(
-        self,
-        model: Optional[str] = None,
-        provider: Optional[str] = None
+        self, model: Optional[str] = None, provider: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get all embeddings, optionally filtered by model/provider.
@@ -1647,23 +1917,26 @@ class ConversationDB:
 
             embeddings = query.all()
 
-            return [{
-                'id': emb.id,
-                'conversation_id': emb.conversation_id,
-                'embedding': emb.embedding,
-                'model': emb.model,
-                'provider': emb.provider,
-                'chunking_strategy': emb.chunking_strategy,
-                'aggregation_strategy': emb.aggregation_strategy,
-                'dimensions': emb.dimensions,
-                'created_at': emb.created_at
-            } for emb in embeddings]
+            return [
+                {
+                    "id": emb.id,
+                    "conversation_id": emb.conversation_id,
+                    "embedding": emb.embedding,
+                    "model": emb.model,
+                    "provider": emb.provider,
+                    "chunking_strategy": emb.chunking_strategy,
+                    "aggregation_strategy": emb.aggregation_strategy,
+                    "dimensions": emb.dimensions,
+                    "created_at": emb.created_at,
+                }
+                for emb in embeddings
+            ]
 
     def delete_embeddings(
         self,
         conversation_id: Optional[str] = None,
         model: Optional[str] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
     ) -> int:
         """
         Delete embeddings matching criteria.
@@ -1699,7 +1972,7 @@ class ConversationDB:
         similarity: float,
         metric: str,
         provider: str,
-        model: Optional[str] = None
+        model: Optional[str] = None,
     ):
         """
         Save similarity between two conversations.
@@ -1718,20 +1991,26 @@ class ConversationDB:
 
         with self.session_scope() as session:
             # Check if similarity already exists
-            existing = session.query(SimilarityModel).filter(
-                and_(
-                    SimilarityModel.conversation1_id == conversation1_id,
-                    SimilarityModel.conversation2_id == conversation2_id,
-                    SimilarityModel.metric == metric,
-                    SimilarityModel.provider == provider
+            existing = (
+                session.query(SimilarityModel)
+                .filter(
+                    and_(
+                        SimilarityModel.conversation1_id == conversation1_id,
+                        SimilarityModel.conversation2_id == conversation2_id,
+                        SimilarityModel.metric == metric,
+                        SimilarityModel.provider == provider,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             if existing:
                 # Update existing similarity
                 existing.similarity = similarity
                 existing.model = model
-                logger.debug(f"Updated similarity between {conversation1_id} and {conversation2_id}")
+                logger.debug(
+                    f"Updated similarity between {conversation1_id} and {conversation2_id}"
+                )
             else:
                 # Create new similarity
                 sim_model = SimilarityModel(
@@ -1740,17 +2019,15 @@ class ConversationDB:
                     similarity=similarity,
                     metric=metric,
                     provider=provider,
-                    model=model
+                    model=model,
                 )
                 session.add(sim_model)
-                logger.debug(f"Saved similarity between {conversation1_id} and {conversation2_id}")
+                logger.debug(
+                    f"Saved similarity between {conversation1_id} and {conversation2_id}"
+                )
 
     def get_similarity(
-        self,
-        conversation1_id: str,
-        conversation2_id: str,
-        metric: str,
-        provider: str
+        self, conversation1_id: str, conversation2_id: str, metric: str, provider: str
     ) -> Optional[float]:
         """
         Get cached similarity between two conversations.
@@ -1769,14 +2046,18 @@ class ConversationDB:
             conversation1_id, conversation2_id = conversation2_id, conversation1_id
 
         with self.session_scope() as session:
-            sim = session.query(SimilarityModel).filter(
-                and_(
-                    SimilarityModel.conversation1_id == conversation1_id,
-                    SimilarityModel.conversation2_id == conversation2_id,
-                    SimilarityModel.metric == metric,
-                    SimilarityModel.provider == provider
+            sim = (
+                session.query(SimilarityModel)
+                .filter(
+                    and_(
+                        SimilarityModel.conversation1_id == conversation1_id,
+                        SimilarityModel.conversation2_id == conversation2_id,
+                        SimilarityModel.metric == metric,
+                        SimilarityModel.provider == provider,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             return sim.similarity if sim else None
 
@@ -1786,7 +2067,7 @@ class ConversationDB:
         metric: str = "cosine",
         provider: Optional[str] = None,
         top_k: Optional[int] = None,
-        threshold: Optional[float] = None
+        threshold: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get conversations similar to a given conversation.
@@ -1808,8 +2089,8 @@ class ConversationDB:
                     SimilarityModel.metric == metric,
                     or_(
                         SimilarityModel.conversation1_id == conversation_id,
-                        SimilarityModel.conversation2_id == conversation_id
-                    )
+                        SimilarityModel.conversation2_id == conversation_id,
+                    ),
                 )
             )
 
@@ -1835,13 +2116,15 @@ class ConversationDB:
                     if sim.conversation1_id == conversation_id
                     else sim.conversation1_id
                 )
-                similar.append({
-                    'conversation_id': other_id,
-                    'similarity': sim.similarity,
-                    'metric': sim.metric,
-                    'provider': sim.provider,
-                    'model': sim.model
-                })
+                similar.append(
+                    {
+                        "conversation_id": other_id,
+                        "similarity": sim.similarity,
+                        "metric": sim.metric,
+                        "provider": sim.provider,
+                        "model": sim.model,
+                    }
+                )
 
             return similar
 
@@ -1849,7 +2132,7 @@ class ConversationDB:
         self,
         conversation_id: Optional[str] = None,
         metric: Optional[str] = None,
-        provider: Optional[str] = None
+        provider: Optional[str] = None,
     ) -> int:
         """
         Delete similarities matching criteria.
@@ -1869,7 +2152,7 @@ class ConversationDB:
                 query = query.filter(
                     or_(
                         SimilarityModel.conversation1_id == conversation_id,
-                        SimilarityModel.conversation2_id == conversation_id
+                        SimilarityModel.conversation2_id == conversation_id,
                     )
                 )
             if metric:
@@ -1892,7 +2175,7 @@ class ConversationDB:
         model: Optional[str] = None,
         role_weights: Optional[Dict[str, float]] = None,
         filters: Optional[Dict[str, Any]] = None,
-        mark_current: bool = True
+        mark_current: bool = True,
     ) -> int:
         """
         Save embedding session metadata.
@@ -1913,7 +2196,7 @@ class ConversationDB:
         with self.session_scope() as session:
             # If marking as current, unmark all previous sessions
             if mark_current:
-                session.query(EmbeddingSessionModel).update({'is_current': False})
+                session.query(EmbeddingSessionModel).update({"is_current": False})
 
             # Create new session
             session_model = EmbeddingSessionModel(
@@ -1924,12 +2207,14 @@ class ConversationDB:
                 role_weights_json=role_weights,
                 filters_json=filters,
                 num_conversations=num_conversations,
-                is_current=mark_current
+                is_current=mark_current,
             )
             session.add(session_model)
             session.flush()
 
-            logger.info(f"Created embedding session {session_model.id} with {num_conversations} conversations")
+            logger.info(
+                f"Created embedding session {session_model.id} with {num_conversations} conversations"
+            )
             return session_model.id
 
     def get_current_embedding_session(self) -> Optional[Dict[str, Any]]:
@@ -1940,30 +2225,34 @@ class ConversationDB:
             Dictionary with session metadata or None if no sessions exist
         """
         with self.session_scope() as session:
-            session_model = session.query(EmbeddingSessionModel).filter(
-                EmbeddingSessionModel.is_current == True
-            ).first()
+            session_model = (
+                session.query(EmbeddingSessionModel)
+                .filter(EmbeddingSessionModel.is_current == True)
+                .first()
+            )
 
             if not session_model:
                 # Fallback: get most recent session
-                session_model = session.query(EmbeddingSessionModel).order_by(
-                    EmbeddingSessionModel.created_at.desc()
-                ).first()
+                session_model = (
+                    session.query(EmbeddingSessionModel)
+                    .order_by(EmbeddingSessionModel.created_at.desc())
+                    .first()
+                )
 
             if not session_model:
                 return None
 
             return {
-                'id': session_model.id,
-                'created_at': session_model.created_at,
-                'provider': session_model.provider,
-                'model': session_model.model,
-                'chunking_strategy': session_model.chunking_strategy,
-                'aggregation_strategy': session_model.aggregation_strategy,
-                'role_weights': session_model.role_weights_json,
-                'filters': session_model.filters_json,
-                'num_conversations': session_model.num_conversations,
-                'is_current': session_model.is_current
+                "id": session_model.id,
+                "created_at": session_model.created_at,
+                "provider": session_model.provider,
+                "model": session_model.model,
+                "chunking_strategy": session_model.chunking_strategy,
+                "aggregation_strategy": session_model.aggregation_strategy,
+                "role_weights": session_model.role_weights_json,
+                "filters": session_model.filters_json,
+                "num_conversations": session_model.num_conversations,
+                "is_current": session_model.is_current,
             }
 
     def get_embedding_session(self, session_id: int) -> Optional[Dict[str, Any]]:
@@ -1977,24 +2266,26 @@ class ConversationDB:
             Dictionary with session metadata or None if not found
         """
         with self.session_scope() as session:
-            session_model = session.query(EmbeddingSessionModel).filter(
-                EmbeddingSessionModel.id == session_id
-            ).first()
+            session_model = (
+                session.query(EmbeddingSessionModel)
+                .filter(EmbeddingSessionModel.id == session_id)
+                .first()
+            )
 
             if not session_model:
                 return None
 
             return {
-                'id': session_model.id,
-                'created_at': session_model.created_at,
-                'provider': session_model.provider,
-                'model': session_model.model,
-                'chunking_strategy': session_model.chunking_strategy,
-                'aggregation_strategy': session_model.aggregation_strategy,
-                'role_weights': session_model.role_weights_json,
-                'filters': session_model.filters_json,
-                'num_conversations': session_model.num_conversations,
-                'is_current': session_model.is_current
+                "id": session_model.id,
+                "created_at": session_model.created_at,
+                "provider": session_model.provider,
+                "model": session_model.model,
+                "chunking_strategy": session_model.chunking_strategy,
+                "aggregation_strategy": session_model.aggregation_strategy,
+                "role_weights": session_model.role_weights_json,
+                "filters": session_model.filters_json,
+                "num_conversations": session_model.num_conversations,
+                "is_current": session_model.is_current,
             }
 
     def list_embedding_sessions(self, limit: int = 10) -> List[Dict[str, Any]]:
@@ -2008,22 +2299,28 @@ class ConversationDB:
             List of session dictionaries
         """
         with self.session_scope() as session:
-            sessions = session.query(EmbeddingSessionModel).order_by(
-                EmbeddingSessionModel.created_at.desc()
-            ).limit(limit).all()
+            sessions = (
+                session.query(EmbeddingSessionModel)
+                .order_by(EmbeddingSessionModel.created_at.desc())
+                .limit(limit)
+                .all()
+            )
 
-            return [{
-                'id': s.id,
-                'created_at': s.created_at,
-                'provider': s.provider,
-                'model': s.model,
-                'chunking_strategy': s.chunking_strategy,
-                'aggregation_strategy': s.aggregation_strategy,
-                'role_weights': s.role_weights_json,
-                'filters': s.filters_json,
-                'num_conversations': s.num_conversations,
-                'is_current': s.is_current
-            } for s in sessions]
+            return [
+                {
+                    "id": s.id,
+                    "created_at": s.created_at,
+                    "provider": s.provider,
+                    "model": s.model,
+                    "chunking_strategy": s.chunking_strategy,
+                    "aggregation_strategy": s.aggregation_strategy,
+                    "role_weights": s.role_weights_json,
+                    "filters": s.filters_json,
+                    "num_conversations": s.num_conversations,
+                    "is_current": s.is_current,
+                }
+                for s in sessions
+            ]
 
     # ==================== Graph Management Methods ====================
 
@@ -2035,7 +2332,7 @@ class ConversationDB:
         embedding_session_id: Optional[int] = None,
         num_nodes: Optional[int] = None,
         num_edges: Optional[int] = None,
-        **metrics
+        **metrics,
     ) -> int:
         """
         Save current graph metadata (only one graph exists at a time).
@@ -2054,9 +2351,11 @@ class ConversationDB:
         """
         with self.session_scope() as session:
             # Check if graph exists (id=1)
-            graph = session.query(CurrentGraphModel).filter(
-                CurrentGraphModel.id == 1
-            ).first()
+            graph = (
+                session.query(CurrentGraphModel)
+                .filter(CurrentGraphModel.id == 1)
+                .first()
+            )
 
             if graph:
                 # Update existing graph
@@ -2084,7 +2383,11 @@ class ConversationDB:
                     graph_file_path=graph_file_path,
                     num_nodes=num_nodes,
                     num_edges=num_edges,
-                    **{k: v for k, v in metrics.items() if hasattr(CurrentGraphModel, k)}
+                    **{
+                        k: v
+                        for k, v in metrics.items()
+                        if hasattr(CurrentGraphModel, k)
+                    },
                 )
                 session.add(graph)
                 logger.info(f"Created current graph: {graph_file_path}")
@@ -2100,33 +2403,35 @@ class ConversationDB:
             Dictionary with graph metadata or None if no graph exists
         """
         with self.session_scope() as session:
-            graph = session.query(CurrentGraphModel).filter(
-                CurrentGraphModel.id == 1
-            ).first()
+            graph = (
+                session.query(CurrentGraphModel)
+                .filter(CurrentGraphModel.id == 1)
+                .first()
+            )
 
             if not graph:
                 return None
 
             return {
-                'id': graph.id,
-                'created_at': graph.created_at,
-                'embedding_session_id': graph.embedding_session_id,
-                'threshold': graph.threshold,
-                'max_links_per_node': graph.max_links_per_node,
-                'graph_file_path': graph.graph_file_path,
-                'num_nodes': graph.num_nodes,
-                'num_edges': graph.num_edges,
-                'density': graph.density,
-                'avg_degree': graph.avg_degree,
-                'num_components': graph.num_components,
-                'giant_component_size': graph.giant_component_size,
-                'avg_path_length': graph.avg_path_length,
-                'diameter': graph.diameter,
-                'global_clustering': graph.global_clustering,
-                'avg_local_clustering': graph.avg_local_clustering,
-                'communities_algorithm': graph.communities_algorithm,
-                'num_communities': graph.num_communities,
-                'modularity': graph.modularity
+                "id": graph.id,
+                "created_at": graph.created_at,
+                "embedding_session_id": graph.embedding_session_id,
+                "threshold": graph.threshold,
+                "max_links_per_node": graph.max_links_per_node,
+                "graph_file_path": graph.graph_file_path,
+                "num_nodes": graph.num_nodes,
+                "num_edges": graph.num_edges,
+                "density": graph.density,
+                "avg_degree": graph.avg_degree,
+                "num_components": graph.num_components,
+                "giant_component_size": graph.giant_component_size,
+                "avg_path_length": graph.avg_path_length,
+                "diameter": graph.diameter,
+                "global_clustering": graph.global_clustering,
+                "avg_local_clustering": graph.avg_local_clustering,
+                "communities_algorithm": graph.communities_algorithm,
+                "num_communities": graph.num_communities,
+                "modularity": graph.modularity,
             }
 
     def delete_current_graph(self) -> bool:
@@ -2177,31 +2482,31 @@ class ConversationDB:
                 # Top-level tags (no /)
                 children = set()
                 for tag in tag_names:
-                    if '/' not in tag:
+                    if "/" not in tag:
                         children.add(tag)
                     else:
                         # Add first component
-                        children.add(tag.split('/')[0])
+                        children.add(tag.split("/")[0])
                 return sorted(children)
             else:
                 # Children of specific tag
-                prefix = parent_tag.rstrip('/') + '/'
+                prefix = parent_tag.rstrip("/") + "/"
                 children = set()
 
                 for tag in tag_names:
                     if tag.startswith(prefix):
                         # Get remainder after prefix
-                        remainder = tag[len(prefix):]
+                        remainder = tag[len(prefix) :]
                         # Get first component
-                        if '/' in remainder:
-                            child = remainder.split('/')[0]
+                        if "/" in remainder:
+                            child = remainder.split("/")[0]
                         else:
                             child = remainder
                         children.add(child)
 
                 return sorted(children)
 
-    def list_conversations_by_tag(self, tag_path: str) -> List['ConversationSummary']:
+    def list_conversations_by_tag(self, tag_path: str) -> List["ConversationSummary"]:
         """
         List conversations with a specific hierarchical tag.
 
@@ -2223,6 +2528,7 @@ class ConversationDB:
 
             # Convert to summaries
             from ctk.core.models import ConversationSummary
+
             return [ConversationSummary.from_dict(c.to_dict()) for c in conversations]
 
     def get_all_hierarchical_tags(self) -> List[str]:
@@ -2241,11 +2547,11 @@ class ConversationDB:
         self.Session.remove()
         self.engine.dispose()
         logger.info("Database connection closed")
-    
+
     def __enter__(self):
         """Context manager entry"""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.close()

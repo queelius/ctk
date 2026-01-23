@@ -4,17 +4,16 @@ Based on copikit approach for finding and parsing chat sessions
 """
 
 import json
-import sqlite3
-from pathlib import Path
-from typing import List, Any, Dict, Optional
-from datetime import datetime
-import uuid
 import os
+import sqlite3
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
-from ctk.core.models import (
-    ConversationTree, Message, MessageContent, MessageRole, ConversationMetadata
-)
 
 
 class CopilotImporter(ImporterPlugin):
@@ -27,19 +26,19 @@ class CopilotImporter(ImporterPlugin):
 
     # Copilot storage locations by platform
     STORAGE_PATHS = {
-        'darwin': [
-            '~/Library/Application Support/Code/User/workspaceStorage',
-            '~/Library/Application Support/Code - Insiders/User/workspaceStorage',
+        "darwin": [
+            "~/Library/Application Support/Code/User/workspaceStorage",
+            "~/Library/Application Support/Code - Insiders/User/workspaceStorage",
         ],
-        'linux': [
-            '~/.config/Code/User/workspaceStorage',
-            '~/.config/Code - Insiders/User/workspaceStorage',
-            '~/.vscode-server/data/User/workspaceStorage',
+        "linux": [
+            "~/.config/Code/User/workspaceStorage",
+            "~/.config/Code - Insiders/User/workspaceStorage",
+            "~/.vscode-server/data/User/workspaceStorage",
         ],
-        'win32': [
-            '%APPDATA%/Code/User/workspaceStorage',
-            '%APPDATA%/Code - Insiders/User/workspaceStorage',
-        ]
+        "win32": [
+            "%APPDATA%/Code/User/workspaceStorage",
+            "%APPDATA%/Code - Insiders/User/workspaceStorage",
+        ],
     }
 
     def validate(self, data: Any) -> bool:
@@ -53,18 +52,21 @@ class CopilotImporter(ImporterPlugin):
                         # Check for Copilot-specific directories
                         if path.is_dir():
                             # Check for chatSessions directory (the actual chat data)
-                            if (path / 'chatSessions').exists():
+                            if (path / "chatSessions").exists():
                                 return True
                             # Check if it's a workspace storage root with chat sessions
                             for subdir in path.iterdir():
-                                if subdir.is_dir() and (subdir / 'chatSessions').exists():
+                                if (
+                                    subdir.is_dir()
+                                    and (subdir / "chatSessions").exists()
+                                ):
                                     return True
-                        elif path.suffix == '.json':
+                        elif path.suffix == ".json":
                             # Check if it looks like a chat session file
                             try:
                                 with open(path) as f:
                                     data = json.load(f)
-                                    return 'requests' in data or 'creationDate' in data
+                                    return "requests" in data or "creationDate" in data
                             except:
                                 return False
                 except (OSError, ValueError):
@@ -73,7 +75,7 @@ class CopilotImporter(ImporterPlugin):
 
         # Check JSON structure for chat session
         if isinstance(data, dict):
-            return 'requests' in data or 'sessionId' in data
+            return "requests" in data or "sessionId" in data
 
         return False
 
@@ -124,11 +126,13 @@ class CopilotImporter(ImporterPlugin):
             if chat_dir.is_dir():
                 for session_file in chat_dir.glob("*.json"):
                     try:
-                        with open(session_file, 'r') as f:
+                        with open(session_file, "r") as f:
                             session_data = json.load(f)
-                            conv = self._parse_chat_session(session_data,
-                                                           session_id=session_file.stem,
-                                                           project_path=project_path)
+                            conv = self._parse_chat_session(
+                                session_data,
+                                session_id=session_file.stem,
+                                project_path=project_path,
+                            )
                             if conv:
                                 conversations.append(conv)
                     except Exception as e:
@@ -144,15 +148,15 @@ class CopilotImporter(ImporterPlugin):
 
     def _import_from_file(self, path: Path) -> List[ConversationTree]:
         """Import from specific file"""
-        if path.suffix == '.json':
+        if path.suffix == ".json":
             try:
-                with open(path, 'r') as f:
+                with open(path, "r") as f:
                     data = json.load(f)
                     conv = self._parse_chat_session(data)
                     return [conv] if conv else []
             except Exception:
                 return []
-        elif path.suffix in ['.vscdb', '.db']:
+        elif path.suffix in [".vscdb", ".db"]:
             return self._import_from_vscdb(path)
 
         return []
@@ -167,14 +171,16 @@ class CopilotImporter(ImporterPlugin):
             cursor = conn.cursor()
 
             # VS Code stores extension data in ItemTable
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT key, value FROM ItemTable
                 WHERE key LIKE '%copilot%' OR key LIKE '%github%'
-            """)
+            """
+            )
 
             for row in cursor.fetchall():
                 try:
-                    value = json.loads(row['value'])
+                    value = json.loads(row["value"])
                     if self._is_conversation_data(value):
                         conv = self._parse_chat_session(value)
                         if conv:
@@ -192,37 +198,38 @@ class CopilotImporter(ImporterPlugin):
         """Check if data looks like conversation data"""
         if not isinstance(data, dict):
             return False
-        return 'requests' in data or 'messages' in data or 'sessionId' in data
+        return "requests" in data or "messages" in data or "sessionId" in data
 
-    def _parse_chat_session(self, data: Dict[str, Any], session_id: str = None,
-                            project_path: str = None) -> Optional[ConversationTree]:
+    def _parse_chat_session(
+        self, data: Dict[str, Any], session_id: str = None, project_path: str = None
+    ) -> Optional[ConversationTree]:
         """Parse Copilot chat session data (based on copikit approach)"""
         # Extract session info
-        conv_id = session_id or data.get('sessionId') or str(uuid.uuid4())
+        conv_id = session_id or data.get("sessionId") or str(uuid.uuid4())
 
         # Extract timestamps
         created_at = None
         updated_at = None
-        if 'creationDate' in data:
-            created_at = datetime.fromtimestamp(data['creationDate'] / 1000)
-        if 'lastMessageDate' in data:
-            updated_at = datetime.fromtimestamp(data['lastMessageDate'] / 1000)
+        if "creationDate" in data:
+            created_at = datetime.fromtimestamp(data["creationDate"] / 1000)
+        if "lastMessageDate" in data:
+            updated_at = datetime.fromtimestamp(data["lastMessageDate"] / 1000)
 
         # Build title from first user message or use default
-        title = 'Copilot Chat'
-        requests = data.get('requests', [])
-        if requests and 'message' in requests[0]:
-            first_prompt = requests[0]['message'].get('text', '')
+        title = "Copilot Chat"
+        requests = data.get("requests", [])
+        if requests and "message" in requests[0]:
+            first_prompt = requests[0]["message"].get("text", "")
             if first_prompt:
                 # Use first line or first 50 chars as title
-                title = first_prompt.split('\n')[0][:50]
+                title = first_prompt.split("\n")[0][:50]
                 if len(title) == 50:
-                    title += '...'
+                    title += "..."
 
         # Extract project name from path
         project_name = None
         if project_path:
-            project_name = Path(project_path.replace('file://', '')).name
+            project_name = Path(project_path.replace("file://", "")).name
 
         # Create metadata
         metadata = ConversationMetadata(
@@ -232,48 +239,46 @@ class CopilotImporter(ImporterPlugin):
             model="Copilot",
             created_at=created_at or datetime.now(),
             updated_at=updated_at or datetime.now(),
-            tags=['copilot', 'vscode', 'coding'],
+            tags=["copilot", "vscode", "coding"],
             custom_data={
-                'project_path': project_path,
-                'project_name': project_name,
-                'session_id': conv_id,
-            }
+                "project_path": project_path,
+                "project_name": project_name,
+                "session_id": conv_id,
+            },
         )
 
         # Add project tag if known
         if project_name:
-            metadata.tags.append(f'project:{project_name}')
+            metadata.tags.append(f"project:{project_name}")
 
-        tree = ConversationTree(
-            id=conv_id,
-            title=title,
-            metadata=metadata
-        )
+        tree = ConversationTree(id=conv_id, title=title, metadata=metadata)
 
         # Parse conversation turns (requests)
         parent_id = None
 
         for idx, turn in enumerate(requests):
             # Extract user message
-            user_msg = turn.get('message', {}).get('text', '')
+            user_msg = turn.get("message", {}).get("text", "")
             if user_msg:
                 user_msg_id = f"{conv_id}_user_{idx}"
                 user_content = MessageContent(text=user_msg)
 
                 # Check for file context
-                variables = turn.get('variableData', {}).get('variables', [])
+                variables = turn.get("variableData", {}).get("variables", [])
                 for var in variables:
-                    if var.get('kind') == 'file':
-                        file_uri = var.get('value', {}).get('uri', {}).get('path')
+                    if var.get("kind") == "file":
+                        file_uri = var.get("value", {}).get("uri", {}).get("path")
                         if file_uri:
-                            user_content.metadata['referenced_files'] = user_content.metadata.get('referenced_files', [])
-                            user_content.metadata['referenced_files'].append(file_uri)
+                            user_content.metadata["referenced_files"] = (
+                                user_content.metadata.get("referenced_files", [])
+                            )
+                            user_content.metadata["referenced_files"].append(file_uri)
 
                 user_message = Message(
                     id=user_msg_id,
                     role=MessageRole.USER,
                     content=user_content,
-                    parent_id=parent_id
+                    parent_id=parent_id,
                 )
                 tree.add_message(user_message)
                 parent_id = user_msg_id
@@ -282,18 +287,18 @@ class CopilotImporter(ImporterPlugin):
             response_text = None
 
             # Try different response formats
-            result_meta = turn.get('result', {}).get('metadata', {})
-            if 'response' in result_meta:
-                response_text = result_meta['response']
-            elif 'response' in turn:
+            result_meta = turn.get("result", {}).get("metadata", {})
+            if "response" in result_meta:
+                response_text = result_meta["response"]
+            elif "response" in turn:
                 # Concatenate response parts
                 parts = []
-                for part in turn['response']:
-                    if isinstance(part, dict) and 'value' in part:
-                        parts.append(part['value'])
+                for part in turn["response"]:
+                    if isinstance(part, dict) and "value" in part:
+                        parts.append(part["value"])
                     elif isinstance(part, str):
                         parts.append(part)
-                response_text = ''.join(parts)
+                response_text = "".join(parts)
 
             if response_text:
                 assistant_msg_id = f"{conv_id}_assistant_{idx}"
@@ -303,7 +308,7 @@ class CopilotImporter(ImporterPlugin):
                     id=assistant_msg_id,
                     role=MessageRole.ASSISTANT,
                     content=assistant_content,
-                    parent_id=parent_id
+                    parent_id=parent_id,
                 )
                 tree.add_message(assistant_message)
                 parent_id = assistant_msg_id
@@ -316,15 +321,15 @@ class CopilotImporter(ImporterPlugin):
         import platform
 
         system = platform.system().lower()
-        if system == 'windows':
-            system = 'win32'
+        if system == "windows":
+            system = "win32"
 
-        paths = cls.STORAGE_PATHS.get(system, cls.STORAGE_PATHS['linux'])
+        paths = cls.STORAGE_PATHS.get(system, cls.STORAGE_PATHS["linux"])
         found_paths = []
 
         for path_pattern in paths:
             path = Path(path_pattern).expanduser()
-            if system == 'win32':
+            if system == "win32":
                 path = Path(os.path.expandvars(path_pattern))
 
             if path.exists():
@@ -332,10 +337,10 @@ class CopilotImporter(ImporterPlugin):
                 for workspace_dir in path.iterdir():
                     if workspace_dir.is_dir():
                         # Check for chatSessions directory (the actual chat data)
-                        chat_sessions = workspace_dir / 'chatSessions'
+                        chat_sessions = workspace_dir / "chatSessions"
                         if chat_sessions.exists() and chat_sessions.is_dir():
                             # Check if there are actual session files
-                            if list(chat_sessions.glob('*.json')):
+                            if list(chat_sessions.glob("*.json")):
                                 found_paths.append(workspace_dir)
 
         return found_paths

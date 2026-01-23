@@ -3,33 +3,48 @@ Virtual Filesystem for conversation navigation.
 
 Provides a POSIX-like filesystem interface for navigating conversations
 using hierarchical tags, filters, and metadata views.
+
+Security note: Path normalization ensures all paths stay within the VFS root (/).
+Path traversal attacks via .. are prevented by the normalize_path method.
 """
 
-from typing import Optional, List, Tuple, Dict, Any
-from pathlib import PurePosixPath
+import logging
+import re
 from dataclasses import dataclass
 from enum import Enum
-import re
+from pathlib import PurePosixPath
+from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+class VFSSecurityError(Exception):
+    """Raised when a VFS security violation is detected"""
+
+    pass
 
 
 class PathType(Enum):
     """Type of filesystem path"""
+
     ROOT = "root"
-    CHATS = "chats"              # /chats/ - flat list
-    TAGS = "tags"                # /tags/* - hierarchical tags (mutable)
-    STARRED = "starred"          # /starred/ - starred conversations (read-only)
-    PINNED = "pinned"            # /pinned/ - pinned conversations (read-only)
-    ARCHIVED = "archived"        # /archived/ - archived conversations (read-only)
-    RECENT = "recent"            # /recent/* - time-based views (read-only)
-    SOURCE = "source"            # /source/* - grouped by source (read-only)
-    MODEL = "model"              # /model/* - grouped by model (read-only)
-    VIEWS = "views"              # /views/ - named views
-    VIEW_DIR = "view_dir"        # /views/<name>/ - contents of a view
+    CHATS = "chats"  # /chats/ - flat list
+    TAGS = "tags"  # /tags/* - hierarchical tags (mutable)
+    STARRED = "starred"  # /starred/ - starred conversations (read-only)
+    PINNED = "pinned"  # /pinned/ - pinned conversations (read-only)
+    ARCHIVED = "archived"  # /archived/ - archived conversations (read-only)
+    RECENT = "recent"  # /recent/* - time-based views (read-only)
+    SOURCE = "source"  # /source/* - grouped by source (read-only)
+    MODEL = "model"  # /model/* - grouped by model (read-only)
+    VIEWS = "views"  # /views/ - named views
+    VIEW_DIR = "view_dir"  # /views/<name>/ - contents of a view
     CONVERSATION = "conversation"  # Conversation reference (symlink-like)
-    CONVERSATION_ROOT = "conversation_root"  # Conversation as directory (e.g., /chats/abc123/)
+    CONVERSATION_ROOT = (
+        "conversation_root"  # Conversation as directory (e.g., /chats/abc123/)
+    )
     MESSAGE_NODE = "message_node"  # Message node in tree (e.g., /chats/abc123/m5/)
     MESSAGE_FILE = "message_file"  # Message metadata file (e.g., /chats/abc123/m5/text)
-    TAG_DIR = "tag_dir"          # Tag directory (e.g., /tags/physics/)
+    TAG_DIR = "tag_dir"  # Tag directory (e.g., /tags/physics/)
 
 
 @dataclass
@@ -48,6 +63,7 @@ class VFSPath:
         /views/ -> type=VIEWS, segments=['views']
         /views/my-view/ -> type=VIEW_DIR, segments=['views', 'my-view'], view_name='my-view'
     """
+
     raw_path: str
     normalized_path: str
     segments: List[str]
@@ -56,7 +72,9 @@ class VFSPath:
     tag_path: Optional[str] = None  # For tags: "physics/simulator"
     view_name: Optional[str] = None  # For views: "my-view"
     message_path: Optional[List[str]] = None  # For message nodes: ['m5', 'm10']
-    file_name: Optional[str] = None  # For message files: 'text', 'role', 'timestamp', 'id'
+    file_name: Optional[str] = (
+        None  # For message files: 'text', 'role', 'timestamp', 'id'
+    )
     is_directory: bool = True
 
     def __str__(self):
@@ -67,13 +85,13 @@ class VFSPathParser:
     """Parser for virtual filesystem paths"""
 
     # Metadata file names
-    METADATA_FILES = {'text', 'role', 'timestamp', 'id'}
+    METADATA_FILES = {"text", "role", "timestamp", "id"}
 
     # Valid conversation ID pattern (hash-like strings)
-    CONV_ID_PATTERN = re.compile(r'^[a-f0-9\-_]+$', re.IGNORECASE)
+    CONV_ID_PATTERN = re.compile(r"^[a-f0-9\-_]+$", re.IGNORECASE)
 
     # Message node pattern (m followed by digits)
-    MESSAGE_NODE_PATTERN = re.compile(r'^m\d+$', re.IGNORECASE)
+    MESSAGE_NODE_PATTERN = re.compile(r"^m\d+$", re.IGNORECASE)
 
     @staticmethod
     def is_valid_conversation_id(segment: str) -> bool:
@@ -113,14 +131,18 @@ class VFSPathParser:
             # Verify all message segments are valid message nodes
             for seg in message_segments:
                 if not VFSPathParser.is_message_node(seg):
-                    raise ValueError(f"Invalid message node: {seg} in path {normalized}")
+                    raise ValueError(
+                        f"Invalid message node: {seg} in path {normalized}"
+                    )
 
             return (PathType.MESSAGE_FILE, message_segments, file_name)
         else:
             # All segments are message nodes
             for seg in segments:
                 if not VFSPathParser.is_message_node(seg):
-                    raise ValueError(f"Invalid message node: {seg} in path {normalized}")
+                    raise ValueError(
+                        f"Invalid message node: {seg} in path {normalized}"
+                    )
 
             return (PathType.MESSAGE_NODE, segments, None)
 
@@ -129,16 +151,27 @@ class VFSPathParser:
         """
         Normalize a path (resolve . and .., make absolute).
 
+        Security: This method ensures paths cannot escape the VFS root (/).
+        All .. sequences are resolved and the result always starts with /.
+
         Args:
             path: Path to normalize (absolute or relative)
             current_dir: Current working directory (for relative paths)
 
         Returns:
             Normalized absolute path
+
+        Raises:
+            VFSSecurityError: If path normalization fails security checks
         """
+        # Security: Validate current_dir starts with /
+        if not current_dir.startswith("/"):
+            logger.warning(f"Invalid current_dir '{current_dir}', defaulting to /")
+            current_dir = "/"
+
         # Handle absolute vs relative
-        if path.startswith('/'):
-            base_path = PurePosixPath('/')
+        if path.startswith("/"):
+            base_path = PurePosixPath("/")
             rel_path = path[1:]  # Remove leading /
         else:
             # Relative path - join with current dir
@@ -154,26 +187,35 @@ class VFSPathParser:
         # Resolve . and .. completely
         parts = []
         for part in full_path.parts:
-            if part == '..':
-                if parts and parts[-1] != '/':
+            if part == "..":
+                # Security: Don't allow escaping root
+                if parts and parts[-1] != "/":
                     parts.pop()
-            elif part == '.':
+                # If parts is empty or only contains '/', stay at root
+            elif part == ".":
                 continue
             else:
                 parts.append(part)
 
         # Reconstruct path
-        if not parts or parts == ['/']:
-            return '/'
+        if not parts or parts == ["/"]:
+            return "/"
 
         # Filter out the root '/' from parts if present
-        filtered_parts = [p for p in parts if p != '/']
+        filtered_parts = [p for p in parts if p != "/"]
 
         # Join parts, ensuring leading /
         if filtered_parts:
-            normalized = '/' + '/'.join(filtered_parts)
+            normalized = "/" + "/".join(filtered_parts)
         else:
-            normalized = '/'
+            normalized = "/"
+
+        # Security assertion: normalized path must start with /
+        if not normalized.startswith("/"):
+            logger.error(f"Path normalization security check failed: '{normalized}'")
+            raise VFSSecurityError(
+                f"Normalized path does not start with /: {normalized}"
+            )
 
         return normalized
 
@@ -193,7 +235,7 @@ class VFSPathParser:
         normalized = VFSPathParser.normalize_path(path, current_dir)
 
         # Split into segments (filter empty)
-        segments = [s for s in normalized.split('/') if s]
+        segments = [s for s in normalized.split("/") if s]
 
         # Root directory
         if not segments:
@@ -202,7 +244,7 @@ class VFSPathParser:
                 normalized_path="/",
                 segments=[],
                 path_type=PathType.ROOT,
-                is_directory=True
+                is_directory=True,
             )
 
         # Determine path type based on first segment
@@ -217,7 +259,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.CHATS,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /chats/<id> - always treat as navigable directory
@@ -228,7 +270,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=conv_id,
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /chats/abc123/m5/m10/... - check if these are message nodes or metadata files
@@ -236,8 +278,8 @@ class VFSPathParser:
                 remaining_segments = segments[2:]
 
                 # Parse message segments with metadata file detection
-                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                    remaining_segments, normalized
+                path_type, message_path, file_name = (
+                    VFSPathParser.parse_message_segments(remaining_segments, normalized)
                 )
 
                 return VFSPath(
@@ -248,7 +290,7 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_path,
                     file_name=file_name,
-                    is_directory=(path_type == PathType.MESSAGE_NODE)
+                    is_directory=(path_type == PathType.MESSAGE_NODE),
                 )
 
         # /tags/*
@@ -260,7 +302,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.TAGS,
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # Could be:
@@ -277,19 +319,19 @@ class VFSPathParser:
 
                 if conv_idx is None:
                     # No conversation ID found - this is a tag directory
-                    tag_path = '/'.join(segments[1:])
+                    tag_path = "/".join(segments[1:])
                     return VFSPath(
                         raw_path=path,
                         normalized_path=normalized,
                         segments=segments,
                         path_type=PathType.TAG_DIR,
                         tag_path=tag_path,
-                        is_directory=True
+                        is_directory=True,
                     )
                 else:
                     # Found conversation ID
                     conv_id = segments[conv_idx]
-                    tag_path = '/'.join(segments[1:conv_idx]) if conv_idx > 1 else ""
+                    tag_path = "/".join(segments[1:conv_idx]) if conv_idx > 1 else ""
 
                     # Check if there are message nodes after conv_id
                     if conv_idx == len(segments) - 1:
@@ -301,15 +343,17 @@ class VFSPathParser:
                             path_type=PathType.CONVERSATION_ROOT,
                             conversation_id=conv_id,
                             tag_path=tag_path,
-                            is_directory=True
+                            is_directory=True,
                         )
                     else:
                         # /tags/physics/abc123/m5/... - message nodes or metadata files
-                        remaining_segments = segments[conv_idx + 1:]
+                        remaining_segments = segments[conv_idx + 1 :]
 
                         # Parse message segments with metadata file detection
-                        path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                            remaining_segments, normalized
+                        path_type, message_path, file_name = (
+                            VFSPathParser.parse_message_segments(
+                                remaining_segments, normalized
+                            )
                         )
 
                         return VFSPath(
@@ -321,7 +365,7 @@ class VFSPathParser:
                             tag_path=tag_path,
                             message_path=message_path,
                             file_name=file_name,
-                            is_directory=(path_type == PathType.MESSAGE_NODE)
+                            is_directory=(path_type == PathType.MESSAGE_NODE),
                         )
 
         # /starred/
@@ -332,7 +376,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.STARRED,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /starred/<id> - conversation as directory
@@ -342,7 +386,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=segments[1],
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /starred/<id>/m1/m2/... - message nodes or metadata files
@@ -350,8 +394,8 @@ class VFSPathParser:
                 remaining_segments = segments[2:]
 
                 # Parse message segments with metadata file detection
-                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                    remaining_segments, normalized
+                path_type, message_path, file_name = (
+                    VFSPathParser.parse_message_segments(remaining_segments, normalized)
                 )
 
                 return VFSPath(
@@ -362,7 +406,7 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_path,
                     file_name=file_name,
-                    is_directory=(path_type == PathType.MESSAGE_NODE)
+                    is_directory=(path_type == PathType.MESSAGE_NODE),
                 )
 
         # /pinned/
@@ -373,7 +417,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.PINNED,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /pinned/<id> - conversation as directory
@@ -383,7 +427,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=segments[1],
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /pinned/<id>/m1/m2/... - message nodes or metadata files
@@ -391,8 +435,8 @@ class VFSPathParser:
                 remaining_segments = segments[2:]
 
                 # Parse message segments with metadata file detection
-                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                    remaining_segments, normalized
+                path_type, message_path, file_name = (
+                    VFSPathParser.parse_message_segments(remaining_segments, normalized)
                 )
 
                 return VFSPath(
@@ -403,7 +447,7 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_path,
                     file_name=file_name,
-                    is_directory=(path_type == PathType.MESSAGE_NODE)
+                    is_directory=(path_type == PathType.MESSAGE_NODE),
                 )
 
         # /archived/
@@ -414,7 +458,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.ARCHIVED,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /archived/<id> - conversation as directory
@@ -424,7 +468,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=segments[1],
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /archived/<id>/m1/m2/... - message nodes or metadata files
@@ -432,8 +476,8 @@ class VFSPathParser:
                 remaining_segments = segments[2:]
 
                 # Parse message segments with metadata file detection
-                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                    remaining_segments, normalized
+                path_type, message_path, file_name = (
+                    VFSPathParser.parse_message_segments(remaining_segments, normalized)
                 )
 
                 return VFSPath(
@@ -444,7 +488,7 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_path,
                     file_name=file_name,
-                    is_directory=(path_type == PathType.MESSAGE_NODE)
+                    is_directory=(path_type == PathType.MESSAGE_NODE),
                 )
 
         # /recent/*
@@ -457,7 +501,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.RECENT,
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # Find conversation ID in path (if any)
@@ -474,7 +518,7 @@ class VFSPathParser:
                         normalized_path=normalized,
                         segments=segments,
                         path_type=PathType.RECENT,
-                        is_directory=True
+                        is_directory=True,
                     )
                 elif conv_idx == len(segments) - 1:
                     # Conversation ID is last segment - conversation root
@@ -484,17 +528,19 @@ class VFSPathParser:
                         segments=segments,
                         path_type=PathType.CONVERSATION_ROOT,
                         conversation_id=segments[conv_idx],
-                        is_directory=True
+                        is_directory=True,
                     )
                 else:
                     # Message nodes after conversation ID
                     conv_id = segments[conv_idx]
-                    message_segments = segments[conv_idx + 1:]
+                    message_segments = segments[conv_idx + 1 :]
 
                     # Verify all are message nodes
                     for seg in message_segments:
                         if not VFSPathParser.is_message_node(seg):
-                            raise ValueError(f"Invalid message node: {seg} in path {normalized}")
+                            raise ValueError(
+                                f"Invalid message node: {seg} in path {normalized}"
+                            )
 
                     return VFSPath(
                         raw_path=path,
@@ -503,7 +549,7 @@ class VFSPathParser:
                         path_type=PathType.MESSAGE_NODE,
                         conversation_id=conv_id,
                         message_path=message_segments,
-                        is_directory=True
+                        is_directory=True,
                     )
 
         # /source/*
@@ -514,7 +560,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.SOURCE,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /source/openai/
@@ -523,7 +569,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.SOURCE,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 3:
                 # /source/openai/abc123 - conversation as directory
@@ -533,7 +579,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=segments[2],
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /source/openai/abc123/m1/m2/... - message nodes
@@ -543,7 +589,9 @@ class VFSPathParser:
                 # Verify all are message nodes
                 for seg in message_segments:
                     if not VFSPathParser.is_message_node(seg):
-                        raise ValueError(f"Invalid message node: {seg} in path {normalized}")
+                        raise ValueError(
+                            f"Invalid message node: {seg} in path {normalized}"
+                        )
 
                 return VFSPath(
                     raw_path=path,
@@ -552,7 +600,7 @@ class VFSPathParser:
                     path_type=PathType.MESSAGE_NODE,
                     conversation_id=conv_id,
                     message_path=message_segments,
-                    is_directory=True
+                    is_directory=True,
                 )
 
         # /model/*
@@ -563,7 +611,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.MODEL,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /model/gpt-4/
@@ -572,7 +620,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.MODEL,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 3:
                 # /model/gpt-4/abc123 - conversation as directory
@@ -582,7 +630,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.CONVERSATION_ROOT,
                     conversation_id=segments[2],
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /model/gpt-4/abc123/m1/m2/... - message nodes
@@ -592,7 +640,9 @@ class VFSPathParser:
                 # Verify all are message nodes
                 for seg in message_segments:
                     if not VFSPathParser.is_message_node(seg):
-                        raise ValueError(f"Invalid message node: {seg} in path {normalized}")
+                        raise ValueError(
+                            f"Invalid message node: {seg} in path {normalized}"
+                        )
 
                 return VFSPath(
                     raw_path=path,
@@ -601,7 +651,7 @@ class VFSPathParser:
                     path_type=PathType.MESSAGE_NODE,
                     conversation_id=conv_id,
                     message_path=message_segments,
-                    is_directory=True
+                    is_directory=True,
                 )
 
         # /views/*
@@ -613,7 +663,7 @@ class VFSPathParser:
                     normalized_path=normalized,
                     segments=segments,
                     path_type=PathType.VIEWS,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 2:
                 # /views/<name>/ - view directory listing conversations
@@ -624,7 +674,7 @@ class VFSPathParser:
                     segments=segments,
                     path_type=PathType.VIEW_DIR,
                     view_name=view_name,
-                    is_directory=True
+                    is_directory=True,
                 )
             elif len(segments) == 3:
                 # /views/<name>/<id> - conversation as directory
@@ -637,7 +687,7 @@ class VFSPathParser:
                     path_type=PathType.CONVERSATION_ROOT,
                     view_name=view_name,
                     conversation_id=conv_id,
-                    is_directory=True
+                    is_directory=True,
                 )
             else:
                 # /views/<name>/<id>/m1/m2/... - message nodes or metadata files
@@ -646,8 +696,8 @@ class VFSPathParser:
                 remaining_segments = segments[3:]
 
                 # Parse message segments with metadata file detection
-                path_type, message_path, file_name = VFSPathParser.parse_message_segments(
-                    remaining_segments, normalized
+                path_type, message_path, file_name = (
+                    VFSPathParser.parse_message_segments(remaining_segments, normalized)
                 )
 
                 return VFSPath(
@@ -659,7 +709,7 @@ class VFSPathParser:
                     conversation_id=conv_id,
                     message_path=message_path,
                     file_name=file_name,
-                    is_directory=(path_type == PathType.MESSAGE_NODE)
+                    is_directory=(path_type == PathType.MESSAGE_NODE),
                 )
 
         else:
@@ -675,7 +725,7 @@ class VFSPathParser:
             PathType.ARCHIVED,
             PathType.RECENT,
             PathType.SOURCE,
-            PathType.MODEL
+            PathType.MODEL,
         }
 
         # Check first segment
@@ -695,7 +745,10 @@ class VFSPathParser:
     def can_delete(vfs_path: VFSPath) -> bool:
         """Check if path can be deleted"""
         # Can delete from /chats/ (deletes conversation)
-        if vfs_path.path_type == PathType.CONVERSATION and vfs_path.segments[0] == "chats":
+        if (
+            vfs_path.path_type == PathType.CONVERSATION
+            and vfs_path.segments[0] == "chats"
+        ):
             return True
 
         # Can delete from /tags/* (removes tag)

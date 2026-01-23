@@ -1,0 +1,93 @@
+TODO: Complete ECHO Export Integration
+======================================
+
+Current State
+-------------
+ctk export --format=echo works and produces an ECHO-compliant directory with:
+- README.md (explains archive)
+- index.json (conversation list)
+- conversations/{uuid}/ with conversation.json, conversation.md, metadata.json
+- Optional conversations.db (SQLite copy)
+
+Missing for Full Integration
+----------------------------
+
+1. MANIFEST.JSON
+
+   longecho build uses manifest.json for configuration. Without it, longecho
+   falls back to auto-discovery, but explicit manifests give better control.
+
+   Add to export output:
+
+   {
+     "version": "1.0",
+     "name": "Conversation Archive",
+     "description": "AI conversation history",
+     "type": "database",
+     "browsable": true,
+     "icon": "chat"
+   }
+
+   See: ~/github/beta/longecho/spec/MANIFEST-SCHEMA.md
+
+2. SITE/ GENERATION (OPTIONAL)
+
+   ctk already has HTML export. Consider generating site/ during ECHO export
+   so longecho build can link to it directly instead of generating one.
+
+   If site/ exists, longecho links to it. If not, longecho generates basic UI.
+
+3. FIX README URL
+
+   Current README references: https://github.com/alextowell/longecho
+   Should be: https://github.com/queelius/longecho
+
+   Location: ctk/integrations/exporters/echo.py line ~308
+
+4. CONSIDER --include-site FLAG
+
+   ctk export --format=echo --include-site output/
+
+   This would run HTML export into output/site/ alongside the ECHO structure,
+   giving users a complete browsable archive.
+
+Reference Documentation
+-----------------------
+
+ECHO Philosophy:
+  ~/github/beta/longecho/spec/ECHO.md
+
+longecho Tool Spec (commands, behavior):
+  ~/github/beta/longecho/spec/LONGECHO.md
+
+Manifest Schema (JSON format):
+  ~/github/beta/longecho/spec/MANIFEST-SCHEMA.md
+
+Toolkit Ecosystem (how ctk fits):
+  ~/github/beta/longecho/spec/TOOLKIT-ECOSYSTEM.md
+
+longecho Implementation:
+  ~/github/beta/longecho/src/longecho/
+
+Testing Integration
+-------------------
+
+After changes, verify with:
+
+  # Export from ctk
+  ctk export --format=echo --db ~/.local/share/ctk/ctk.db ./test-echo-export/
+
+  # Check compliance
+  longecho check ./test-echo-export/
+
+  # Build unified site
+  longecho build ./test-echo-export/
+
+  # Preview
+  longecho serve ./test-echo-export/
+
+Priority
+--------
+1. Add manifest.json generation (high - enables longecho build integration)
+2. Fix README URL (low - cosmetic)
+3. Consider --include-site flag (medium - convenience)

@@ -3,11 +3,11 @@ JSON exporter for CTK conversations
 """
 
 import json
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from ctk.core.plugin import ExporterPlugin
 from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.plugin import ExporterPlugin
 
 
 class JSONExporter(ExporterPlugin):
@@ -34,7 +34,7 @@ class JSONExporter(ExporterPlugin):
         path_selection: str = "all",
         include_metadata: bool = True,
         pretty_print: bool = True,
-        **kwargs
+        **kwargs,
     ) -> str:
         """
         Export conversations to JSON format
@@ -54,32 +54,34 @@ class JSONExporter(ExporterPlugin):
         elif format_style == "anthropic":
             data = self._export_anthropic_format(conversations, path_selection)
         else:  # generic
-            data = self._export_generic_format(conversations, path_selection, include_metadata)
+            data = self._export_generic_format(
+                conversations, path_selection, include_metadata
+            )
 
         # Serialize to JSON
         if pretty_print:
-            json_str = json.dumps(data, indent=2, ensure_ascii=False, default=self._json_serial)
+            json_str = json.dumps(
+                data, indent=2, ensure_ascii=False, default=self._json_serial
+            )
         else:
             json_str = json.dumps(data, ensure_ascii=False, default=self._json_serial)
 
         # Write to file if specified
         if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(json_str)
 
         return json_str
 
     def _export_ctk_format(
-        self,
-        conversations: List[ConversationTree],
-        include_metadata: bool
+        self, conversations: List[ConversationTree], include_metadata: bool
     ) -> Dict[str, Any]:
         """Export in native CTK format (preserves full tree structure)"""
         data = {
             "format": "ctk",
             "version": "2.0.0",
             "exported_at": datetime.now().isoformat(),
-            "conversations": []
+            "conversations": [],
         }
 
         for conv in conversations:
@@ -87,7 +89,7 @@ class JSONExporter(ExporterPlugin):
                 "id": conv.id,
                 "title": conv.title,
                 "messages": {},
-                "root_message_ids": conv.root_message_ids
+                "root_message_ids": conv.root_message_ids,
             }
 
             if include_metadata:
@@ -101,7 +103,7 @@ class JSONExporter(ExporterPlugin):
                     "content": msg.content.to_dict() if msg.content else {},
                     "parent_id": msg.parent_id,
                     "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
-                    "metadata": msg.metadata
+                    "metadata": msg.metadata,
                 }
 
             data["conversations"].append(conv_data)
@@ -109,9 +111,7 @@ class JSONExporter(ExporterPlugin):
         return data
 
     def _export_openai_format(
-        self,
-        conversations: List[ConversationTree],
-        path_selection: str
+        self, conversations: List[ConversationTree], path_selection: str
     ) -> List[Dict[str, Any]]:
         """Export in OpenAI format"""
         exported_conversations = []
@@ -122,8 +122,12 @@ class JSONExporter(ExporterPlugin):
                 paths = conv.get_all_paths()
                 for i, path in enumerate(paths):
                     conv_data = {
-                        "title": f"{conv.title or 'Conversation'} - Path {i+1}" if len(paths) > 1 else conv.title,
-                        "messages": self._messages_to_openai_format(path)
+                        "title": (
+                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            if len(paths) > 1
+                            else conv.title
+                        ),
+                        "messages": self._messages_to_openai_format(path),
                     }
                     exported_conversations.append(conv_data)
             else:
@@ -131,21 +135,17 @@ class JSONExporter(ExporterPlugin):
                 path = self._select_path(conv, path_selection)
                 conv_data = {
                     "title": conv.title,
-                    "messages": self._messages_to_openai_format(path)
+                    "messages": self._messages_to_openai_format(path),
                 }
                 exported_conversations.append(conv_data)
 
         return exported_conversations
 
     def _export_anthropic_format(
-        self,
-        conversations: List[ConversationTree],
-        path_selection: str
+        self, conversations: List[ConversationTree], path_selection: str
     ) -> Dict[str, Any]:
         """Export in Anthropic format"""
-        data = {
-            "conversations": []
-        }
+        data = {"conversations": []}
 
         for conv in conversations:
             if path_selection == "all":
@@ -153,8 +153,12 @@ class JSONExporter(ExporterPlugin):
                 for i, path in enumerate(paths):
                     conv_data = {
                         "uuid": f"{conv.id}-{i}" if len(paths) > 1 else conv.id,
-                        "name": f"{conv.title or 'Conversation'} - Path {i+1}" if len(paths) > 1 else conv.title,
-                        "messages": self._messages_to_anthropic_format(path)
+                        "name": (
+                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            if len(paths) > 1
+                            else conv.title
+                        ),
+                        "messages": self._messages_to_anthropic_format(path),
                     }
                     data["conversations"].append(conv_data)
             else:
@@ -162,7 +166,7 @@ class JSONExporter(ExporterPlugin):
                 conv_data = {
                     "uuid": conv.id,
                     "name": conv.title,
-                    "messages": self._messages_to_anthropic_format(path)
+                    "messages": self._messages_to_anthropic_format(path),
                 }
                 data["conversations"].append(conv_data)
 
@@ -172,25 +176,30 @@ class JSONExporter(ExporterPlugin):
         self,
         conversations: List[ConversationTree],
         path_selection: str,
-        include_metadata: bool
+        include_metadata: bool,
     ) -> List[Dict[str, Any]]:
         """Export in generic format"""
         exported_conversations = []
 
         for conv in conversations:
-            base_data = {
-                "id": conv.id,
-                "title": conv.title
-            }
+            base_data = {"id": conv.id, "title": conv.title}
 
             if include_metadata:
                 base_data["metadata"] = {
                     "source": conv.metadata.source,
                     "model": conv.metadata.model,
-                    "created_at": conv.metadata.created_at.isoformat() if conv.metadata.created_at else None,
-                    "updated_at": conv.metadata.updated_at.isoformat() if conv.metadata.updated_at else None,
+                    "created_at": (
+                        conv.metadata.created_at.isoformat()
+                        if conv.metadata.created_at
+                        else None
+                    ),
+                    "updated_at": (
+                        conv.metadata.updated_at.isoformat()
+                        if conv.metadata.updated_at
+                        else None
+                    ),
                     "tags": conv.metadata.tags,
-                    "project": conv.metadata.project
+                    "project": conv.metadata.project,
                 }
 
             if path_selection == "all":
@@ -200,7 +209,7 @@ class JSONExporter(ExporterPlugin):
                 for i, path in enumerate(paths):
                     path_data = {
                         "path_id": f"path_{i}",
-                        "messages": self._messages_to_generic_format(path)
+                        "messages": self._messages_to_generic_format(path),
                     }
                     base_data["paths"].append(path_data)
             else:
@@ -212,14 +221,16 @@ class JSONExporter(ExporterPlugin):
 
         return exported_conversations
 
-    def _messages_to_openai_format(self, messages: List[Message]) -> List[Dict[str, Any]]:
+    def _messages_to_openai_format(
+        self, messages: List[Message]
+    ) -> List[Dict[str, Any]]:
         """Convert messages to OpenAI format"""
         formatted_messages = []
 
         for msg in messages:
             msg_data = {
                 "role": self._map_role_to_openai(msg.role),
-                "content": msg.content.get_text() if msg.content else ""
+                "content": msg.content.get_text() if msg.content else "",
             }
 
             # Handle multimodal content
@@ -228,23 +239,23 @@ class JSONExporter(ExporterPlugin):
 
                 # Add text
                 if msg.content.text:
-                    content_parts.append({
-                        "type": "text",
-                        "text": msg.content.text
-                    })
+                    content_parts.append({"type": "text", "text": msg.content.text})
 
                 # Add images
                 for img in msg.content.images:
                     if img.url:
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {"url": img.url}
-                        })
+                        content_parts.append(
+                            {"type": "image_url", "image_url": {"url": img.url}}
+                        )
                     elif img.data:
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{img.mime_type};base64,{img.data}"}
-                        })
+                        content_parts.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{img.mime_type};base64,{img.data}"
+                                },
+                            }
+                        )
 
                 if content_parts:
                     msg_data["content"] = content_parts
@@ -253,34 +264,89 @@ class JSONExporter(ExporterPlugin):
             if msg.content and msg.content.has_tools():
                 msg_data["tool_calls"] = []
                 for tool in msg.content.tool_calls:
-                    msg_data["tool_calls"].append({
-                        "id": tool.id,
-                        "type": "function",
-                        "function": {
-                            "name": tool.name,
-                            "arguments": json.dumps(tool.arguments)
+                    msg_data["tool_calls"].append(
+                        {
+                            "id": tool.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool.name,
+                                "arguments": json.dumps(tool.arguments),
+                            },
                         }
-                    })
+                    )
 
             formatted_messages.append(msg_data)
 
         return formatted_messages
 
-    def _messages_to_anthropic_format(self, messages: List[Message]) -> List[Dict[str, Any]]:
-        """Convert messages to Anthropic format"""
+    def _messages_to_anthropic_format(
+        self, messages: List[Message]
+    ) -> List[Dict[str, Any]]:
+        """Convert messages to Anthropic format with full content blocks"""
         formatted_messages = []
 
         for msg in messages:
             msg_data = {
                 "role": self._map_role_to_anthropic(msg.role),
-                "content": msg.content.get_text() if msg.content else "",
-                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
             }
+
+            # Check if message has structured content (images, tools, etc.)
+            has_media = msg.content and msg.content.has_media()
+            has_tools = msg.content and msg.content.has_tools()
+
+            if has_media or has_tools:
+                # Build Anthropic content blocks
+                content_blocks = []
+
+                # Add text content if present
+                text = msg.content.get_text() if msg.content else ""
+                if text:
+                    content_blocks.append({"type": "text", "text": text})
+
+                # Add images (Anthropic format)
+                if msg.content and msg.content.images:
+                    for img in msg.content.images:
+                        if img.data:
+                            content_blocks.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": img.mime_type or "image/png",
+                                    "data": img.data,
+                                },
+                            })
+                        elif img.url:
+                            content_blocks.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "url",
+                                    "url": img.url,
+                                },
+                            })
+
+                # Add tool calls (Anthropic uses tool_use blocks)
+                if msg.content and msg.content.tool_calls:
+                    for tool in msg.content.tool_calls:
+                        content_blocks.append({
+                            "type": "tool_use",
+                            "id": tool.id,
+                            "name": tool.name,
+                            "input": tool.arguments,
+                        })
+
+                msg_data["content"] = content_blocks
+            else:
+                # Simple text content
+                msg_data["content"] = msg.content.get_text() if msg.content else ""
+
             formatted_messages.append(msg_data)
 
         return formatted_messages
 
-    def _messages_to_generic_format(self, messages: List[Message]) -> List[Dict[str, Any]]:
+    def _messages_to_generic_format(
+        self, messages: List[Message]
+    ) -> List[Dict[str, Any]]:
         """Convert messages to generic format"""
         formatted_messages = []
 
@@ -290,7 +356,7 @@ class JSONExporter(ExporterPlugin):
                 "role": msg.role.value,
                 "content": msg.content.to_dict() if msg.content else {},
                 "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
-                "metadata": msg.metadata
+                "metadata": msg.metadata,
             }
             formatted_messages.append(msg_data)
 
@@ -304,7 +370,7 @@ class JSONExporter(ExporterPlugin):
             MessageRole.SYSTEM: "system",
             MessageRole.TOOL: "tool",
             MessageRole.FUNCTION: "function",
-            MessageRole.TOOL_RESULT: "tool"
+            MessageRole.TOOL_RESULT: "tool",
         }
         return mapping.get(role, "user")
 
@@ -316,7 +382,7 @@ class JSONExporter(ExporterPlugin):
             MessageRole.SYSTEM: "system",
             MessageRole.TOOL: "tool",
             MessageRole.FUNCTION: "function",
-            MessageRole.TOOL_RESULT: "tool_result"
+            MessageRole.TOOL_RESULT: "tool_result",
         }
         return mapping.get(role, "human")
 
