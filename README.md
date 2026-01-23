@@ -693,9 +693,30 @@ make clean
 make help
 ```
 
+## 📖 Citation
+
+If you use CTK in your research or projects, please cite it:
+
+```bibtex
+@software{towell_ctk_2025,
+  author       = {Towell, Alex},
+  title        = {{CTK}: Conversation Toolkit},
+  year         = 2025,
+  publisher    = {GitHub},
+  url          = {https://github.com/queelius/ctk},
+  version      = {2.5.0}
+}
+```
+
+Or use the [CITATION.cff](CITATION.cff) file for automatic citation in GitHub.
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+
+> **Note:** Replace the DOI badge above with your actual Zenodo DOI after publishing.
+
 ## 📝 License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details
 
 ## 🤝 Contributing
 

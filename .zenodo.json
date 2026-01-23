@@ -1,0 +1,41 @@
+{
+  "title": "CTK: Conversation Toolkit",
+  "description": "A robust toolkit for managing tree-based AI conversations from multiple providers. CTK provides a unified format for importing, storing, searching, and exporting conversations while preserving provider-specific details and conversation branching structure.",
+  "creators": [
+    {
+      "name": "Towell, Alex",
+      "orcid": "0000-0001-6443-9897",
+      "affiliation": "Independent Researcher"
+    }
+  ],
+  "keywords": [
+    "conversation management",
+    "AI assistants",
+    "chatgpt",
+    "claude",
+    "llm",
+    "conversation trees",
+    "data portability",
+    "ECHO format",
+    "personal data archive",
+    "python"
+  ],
+  "license": {
+    "id": "MIT"
+  },
+  "upload_type": "software",
+  "access_right": "open",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/queelius/ctk",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "communities": [
+    {
+      "identifier": "zenodo"
+    }
+  ],
+  "notes": "Part of the longecho personal archive ecosystem. Supports importing from OpenAI/ChatGPT, Anthropic/Claude, Google Gemini, GitHub Copilot, and other AI assistants. Exports to JSONL (fine-tuning), Markdown, HTML, Hugo, and ECHO archive format."
+}

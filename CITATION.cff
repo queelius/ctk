@@ -1,0 +1,36 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: "CTK: Conversation Toolkit"
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - family-names: Towell
+    given-names: Alex
+    email: lex@metafunctor.com
+    orcid: https://orcid.org/0000-0001-6443-9897
+    affiliation: Independent Researcher
+repository-code: https://github.com/queelius/ctk
+url: https://github.com/queelius/ctk
+abstract: >-
+  A robust toolkit for managing tree-based AI conversations
+  from multiple providers. CTK provides a unified format for
+  importing, storing, searching, and exporting conversations
+  while preserving provider-specific details and conversation
+  branching structure.
+keywords:
+  - conversation management
+  - AI assistants
+  - chatgpt
+  - claude
+  - llm
+  - conversation trees
+  - data portability
+  - ECHO format
+  - personal data archive
+license: MIT
+version: 2.5.0
+date-released: 2025-01-22
