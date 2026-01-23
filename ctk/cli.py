@@ -5,11 +5,11 @@ Conversation Toolkit CLI with automatic plugin discovery
 
 import argparse
 import json
-import sys
-from pathlib import Path
-from typing import Optional, List
 import logging
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
 
 from ctk.core.database import ConversationDB
 from ctk.core.plugin import registry
@@ -20,8 +20,7 @@ def setup_logging(verbose: bool = False):
     """Setup logging configuration"""
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
 
@@ -30,25 +29,29 @@ def cmd_import(args):
     registry.discover_plugins()
 
     # Handle auto-search for specific formats
-    auto_search_formats = ['copilot', 'claude_code', 'cursor']
+    auto_search_formats = ["copilot", "claude_code", "cursor"]
 
     # Check if we should auto-search
-    if args.input == 'auto' and args.format in auto_search_formats:
+    if args.input == "auto" and args.format in auto_search_formats:
         # Auto-search for the specified format
         print(f"Auto-searching for {args.format} data...")
 
-        if args.format == 'copilot':
+        if args.format == "copilot":
             from ctk.integrations.importers.copilot import CopilotImporter
+
             found_paths = CopilotImporter.find_copilot_data()
 
             if not found_paths:
                 print(f"No Copilot data found in VS Code storage")
                 print(f"Searched in:")
                 import platform
+
                 system = platform.system().lower()
-                if system == 'windows':
-                    system = 'win32'
-                for path in CopilotImporter.STORAGE_PATHS.get(system, CopilotImporter.STORAGE_PATHS['linux']):
+                if system == "windows":
+                    system = "win32"
+                for path in CopilotImporter.STORAGE_PATHS.get(
+                    system, CopilotImporter.STORAGE_PATHS["linux"]
+                ):
                     print(f"  {path}")
                 return 1
 
@@ -73,7 +76,9 @@ def cmd_import(args):
             # If file doesn't exist and format is searchable, suggest auto mode
             if args.format in auto_search_formats:
                 print(f"Error: File not found: {input_path}")
-                print(f"\nTip: Use 'ctk import auto --format {args.format}' to auto-search for {args.format} data")
+                print(
+                    f"\nTip: Use 'ctk import auto --format {args.format}' to auto-search for {args.format} data"
+                )
             else:
                 print(f"Error: File not found: {input_path}")
             return 1
@@ -81,7 +86,7 @@ def cmd_import(args):
         # Handle directory imports (e.g., OpenAI export directories)
         if input_path.is_dir():
             # Look for standard data files in the directory
-            possible_files = ['conversations.json', 'data.json', 'export.json']
+            possible_files = ["conversations.json", "data.json", "export.json"]
             data_file = None
             for filename in possible_files:
                 candidate = input_path / filename
@@ -90,16 +95,18 @@ def cmd_import(args):
                     break
 
             if not data_file:
-                print(f"Error: Directory '{input_path}' does not contain a recognizable data file")
+                print(
+                    f"Error: Directory '{input_path}' does not contain a recognizable data file"
+                )
                 print(f"  Looked for: {', '.join(possible_files)}")
                 return 1
 
             # Read from the found file
-            with open(data_file, 'r') as f:
+            with open(data_file, "r") as f:
                 data = f.read()
         else:
             # Read input file
-            with open(input_path, 'r') as f:
+            with open(input_path, "r") as f:
                 data = f.read()
 
         # Import conversations - get importer first (explicit or auto-detect)
@@ -111,10 +118,10 @@ def cmd_import(args):
                 return 1
 
             # Only try to parse as JSON if it's NOT a JSONL format
-            if args.format not in ['jsonl', 'local', 'llama', 'mistral', 'alpaca']:
+            if args.format not in ["jsonl", "local", "llama", "mistral", "alpaca"]:
                 try:
                     data = json.loads(data)
-                except:
+                except (json.JSONDecodeError, ValueError, TypeError):
                     pass  # Keep as string if not JSON
         else:
             # Auto-detect format
@@ -134,24 +141,23 @@ def cmd_import(args):
 
         # Detect if this is an OpenAI format importer
         is_openai_format = (
-            (args.format and args.format in ['openai', 'chatgpt', 'gpt']) or
-            (importer.name in ['openai', 'chatgpt', 'gpt'])
-        )
+            args.format and args.format in ["openai", "chatgpt", "gpt"]
+        ) or (importer.name in ["openai", "chatgpt", "gpt"])
 
         # If importing OpenAI format, pass source_dir for image resolution
         if is_openai_format:
             if input_path.is_dir():
-                import_kwargs['source_dir'] = str(input_path)
+                import_kwargs["source_dir"] = str(input_path)
             else:
                 # Input is a file, use parent directory as source_dir
-                import_kwargs['source_dir'] = str(input_path.parent)
+                import_kwargs["source_dir"] = str(input_path.parent)
 
         # If saving to database, pass media_dir for image storage
         if args.db:
             try:
                 db_temp = ConversationDB(args.db)
-                if hasattr(db_temp, 'media_dir'):
-                    import_kwargs['media_dir'] = str(db_temp.media_dir)
+                if hasattr(db_temp, "media_dir"):
+                    import_kwargs["media_dir"] = str(db_temp.media_dir)
             except (ValueError, PermissionError, OSError) as e:
                 print(f"Error: Cannot open database: {e}")
                 return 1
@@ -182,33 +188,34 @@ def cmd_import(args):
                 for conv in conversations:
                     # Add tags from command line
                     if args.tags:
-                        conv.metadata.tags.extend(args.tags.split(','))
+                        conv.metadata.tags.extend(args.tags.split(","))
 
                     conv_id = db.save_conversation(conv)
                     print(f"  Saved: {conv.title or 'Untitled'} ({conv_id})")
-        
+
         # Export to file if requested
         if args.output:
-            output_format = args.output_format or 'jsonl'
+            output_format = args.output_format or "jsonl"
             exporter = registry.get_exporter(output_format)
             if not exporter:
                 print(f"Error: Unknown export format: {output_format}")
                 return 1
-            
+
             export_kwargs = {
-                'sanitize': args.sanitize,
-                'path_selection': args.path_selection,
+                "sanitize": args.sanitize,
+                "path_selection": args.path_selection,
             }
-            
+
             exporter.export_to_file(conversations, args.output, **export_kwargs)
             print(f"Exported to {args.output} in {output_format} format")
-        
+
         return 0
-        
+
     except Exception as e:
         print(f"Error importing file: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -216,7 +223,7 @@ def cmd_import(args):
 def cmd_export(args):
     """Export conversations from database"""
     registry.discover_plugins()
-    
+
     if not args.db:
         print("Error: Database path required for export")
         return 1
@@ -231,11 +238,12 @@ def cmd_export(args):
         # Load conversations
         conversations = []
         # CLI convention: --limit 0 means "no limit"
-        export_limit = None if getattr(args, 'limit', None) in (None, 0) else args.limit
+        export_limit = None if getattr(args, "limit", None) in (None, 0) else args.limit
 
         # Check for view-based export first
-        if hasattr(args, 'view') and args.view:
+        if hasattr(args, "view") and args.view:
             from ctk.core.views import ViewStore
+
             store = ViewStore(args.db)
             evaluated = store.evaluate(args.view, db)
             if not evaluated:
@@ -259,65 +267,81 @@ def cmd_export(args):
                 conv = db.load_conversation(conv_info.id)
                 if conv:
                     # Apply filters
-                    if args.filter_source and conv.metadata.source != args.filter_source:
+                    if (
+                        args.filter_source
+                        and conv.metadata.source != args.filter_source
+                    ):
                         continue
-                    if args.filter_model and args.filter_model not in (conv.metadata.model or ''):
+                    if args.filter_model and args.filter_model not in (
+                        conv.metadata.model or ""
+                    ):
                         continue
                     if args.filter_tags:
-                        required_tags = set(args.filter_tags.split(','))
+                        required_tags = set(args.filter_tags.split(","))
                         if not required_tags.issubset(set(conv.metadata.tags)):
                             continue
                     # Organization filters
-                    if hasattr(args, 'starred') and args.starred:
+                    if hasattr(args, "starred") and args.starred:
                         if not conv.metadata.starred_at:
                             continue
-                    if hasattr(args, 'pinned') and args.pinned:
+                    if hasattr(args, "pinned") and args.pinned:
                         if not conv.metadata.pinned_at:
                             continue
 
                     conversations.append(conv)
-        
+
         if not conversations:
             print("No conversations found matching criteria")
             return 1
-        
+
         print(f"Exporting {len(conversations)} conversation(s)")
-        
+
         # Export
-        format_name = args.format or 'jsonl'
+        format_name = args.format or "jsonl"
         exporter = registry.get_exporter(format_name)
         if not exporter:
             print(f"Error: Unknown export format: {format_name}")
             print(f"Available formats: {', '.join(registry.list_exporters())}")
             return 1
-        
+
         export_kwargs = {
-            'sanitize': args.sanitize,
-            'path_selection': args.path_selection,
-            'include_metadata': args.include_metadata,
+            "sanitize": args.sanitize,
+            "path_selection": args.path_selection,
+            "include_metadata": args.include_metadata,
         }
 
         # Add HTML-specific options if present
-        if hasattr(args, 'theme'):
-            export_kwargs['theme'] = args.theme
-        if hasattr(args, 'group_by'):
-            export_kwargs['group_by'] = args.group_by
-        if hasattr(args, 'show_tree'):
-            export_kwargs['show_tree'] = args.show_tree
-        if hasattr(args, 'embed'):
-            export_kwargs['embed'] = args.embed
-        if hasattr(args, 'media_dir') and args.media_dir:
-            export_kwargs['media_dir'] = args.media_dir
+        if hasattr(args, "theme"):
+            export_kwargs["theme"] = args.theme
+        if hasattr(args, "group_by"):
+            export_kwargs["group_by"] = args.group_by
+        if hasattr(args, "show_tree"):
+            export_kwargs["show_tree"] = args.show_tree
+        if hasattr(args, "embed"):
+            export_kwargs["embed"] = args.embed
+        if hasattr(args, "media_dir") and args.media_dir:
+            export_kwargs["media_dir"] = args.media_dir
 
         # Add Hugo-specific options if present
-        if hasattr(args, 'draft'):
-            export_kwargs['include_draft'] = args.draft
-        if hasattr(args, 'date_prefix'):
-            export_kwargs['date_prefix'] = args.date_prefix
+        if hasattr(args, "draft"):
+            export_kwargs["include_draft"] = args.draft
+        if hasattr(args, "date_prefix"):
+            export_kwargs["date_prefix"] = args.date_prefix
+
+        # Add ECHO-specific options if present
+        if hasattr(args, "include_db"):
+            export_kwargs["include_db"] = args.include_db
+        if hasattr(args, "owner_name"):
+            export_kwargs["owner_name"] = args.owner_name
+        if hasattr(args, "include_site"):
+            export_kwargs["include_site"] = args.include_site
+        # Pass db_path for database copy
+        if hasattr(args, "db") and args.db:
+            export_kwargs["db_path"] = args.db
 
         # Pass database directory for media files
-        if hasattr(db, 'db_dir') and db.db_dir:
-            export_kwargs['db_dir'] = str(db.db_dir)
+        if hasattr(db, "db_dir") and db.db_dir:
+            export_kwargs["db_dir"] = str(db.db_dir)
 
         try:
             exporter.export_to_file(conversations, args.output, **export_kwargs)
@@ -343,14 +367,14 @@ def cmd_list(args):
         db=db,
         limit=args.limit,
         json_output=args.json,
-        archived=getattr(args, 'archived', False),
-        starred=getattr(args, 'starred', False),
-        pinned=getattr(args, 'pinned', False),
-        include_archived=getattr(args, 'include_archived', False),
-        source=getattr(args, 'source', None),
-        project=getattr(args, 'project', None),
-        model=getattr(args, 'model', None),
-        tags=getattr(args, 'tags', None)
+        archived=getattr(args, "archived", False),
+        starred=getattr(args, "starred", False),
+        pinned=getattr(args, "pinned", False),
+        include_archived=getattr(args, "include_archived", False),
+        source=getattr(args, "source", None),
+        project=getattr(args, "project", None),
+        model=getattr(args, "model", None),
+        tags=getattr(args, "tags", None),
     )
 
 
@@ -359,10 +383,11 @@ def cmd_query(args):
 
     Replaces ctk db query for searching. Use ctk sql for raw SQL.
     """
+    import re
+    from datetime import datetime, timedelta
+
     from rich.console import Console
     from rich.table import Table
-    from datetime import datetime, timedelta
-    import re
 
     console = Console()
 
@@ -375,6 +400,7 @@ def cmd_query(args):
     # Handle --view flag (evaluate saved view)
     if args.view:
         from ctk.core.views import ViewStore
+
         store = ViewStore(args.db)
 
         try:
@@ -389,9 +415,13 @@ def cmd_query(args):
                 print(f"View '{args.view}' has no matching conversations")
                 return 0
 
-            if args.format == 'json':
+            if args.format == "json":
                 import json
-                data = [{'id': item.conversation_id, 'title': item.title_override or ''} for item in items]
+
+                data = [
+                    {"id": item.conversation_id, "title": item.title_override or ""}
+                    for item in items
+                ]
                 print(json.dumps(data, indent=2))
                 return 0
 
@@ -401,7 +431,7 @@ def cmd_query(args):
             table.add_column("ID", style="cyan")
             table.add_column("Title", style="white")
 
-            for i, item in enumerate(items[:args.limit or 100], 1):
+            for i, item in enumerate(items[: args.limit or 100], 1):
                 conv = db.load_conversation(item.conversation_id)
                 title = item.title_override or (conv.title if conv else "Untitled")
                 table.add_row(str(i), item.conversation_id[:8], title[:60])
@@ -419,17 +449,17 @@ def cmd_query(args):
         if not date_str:
             return None
         # Handle relative dates like "7d", "1w", "1m"
-        match = re.match(r'^(\d+)([dwmy])$', date_str.lower())
+        match = re.match(r"^(\d+)([dwmy])$", date_str.lower())
         if match:
             num, unit = int(match.group(1)), match.group(2)
-            if unit == 'd':
+            if unit == "d":
                 return datetime.now() - timedelta(days=num)
-            elif unit == 'w':
+            elif unit == "w":
                 return datetime.now() - timedelta(weeks=num)
-            elif unit == 'm':
-                return datetime.now() - timedelta(days=num*30)
-            elif unit == 'y':
-                return datetime.now() - timedelta(days=num*365)
+            elif unit == "m":
+                return datetime.now() - timedelta(days=num * 30)
+            elif unit == "y":
+                return datetime.now() - timedelta(days=num * 365)
         # Try ISO format
         try:
             return datetime.fromisoformat(date_str)
@@ -441,7 +471,7 @@ def cmd_query(args):
     date_to = parse_date(args.until)
 
     # Collect tags from multiple --tag flags
-    tags = ','.join(args.tag) if args.tag else None
+    tags = ",".join(args.tag) if args.tag else None
 
     # Use the search helper
     from .core.helpers import search_conversations_helper
@@ -465,10 +495,12 @@ def cmd_query(args):
         archived=args.archived,
         starred=args.starred,
         pinned=args.pinned,
-        include_archived=args.include_archived if hasattr(args, 'include_archived') else False,
-        order_by=args.order_by or 'updated_at',
-        ascending=args.asc if hasattr(args, 'asc') else False,
-        output_format=args.format
+        include_archived=(
+            args.include_archived if hasattr(args, "include_archived") else False
+        ),
+        order_by=args.order_by or "updated_at",
+        ascending=args.asc if hasattr(args, "asc") else False,
+        output_format=args.format,
     )
 
 
@@ -478,8 +510,9 @@ def cmd_search(args):
         print("Error: Database path required")
         return 1
 
-    from .core.helpers import search_conversations_helper
     from datetime import datetime
+
+    from .core.helpers import search_conversations_helper
 
     db = ConversationDB(args.db)
 
@@ -507,13 +540,13 @@ def cmd_search(args):
         min_messages=args.min_messages,
         max_messages=args.max_messages,
         has_branches=args.has_branches,
-        archived=getattr(args, 'archived', False),
-        starred=getattr(args, 'starred', False),
-        pinned=getattr(args, 'pinned', False),
-        include_archived=getattr(args, 'include_archived', False),
+        archived=getattr(args, "archived", False),
+        starred=getattr(args, "starred", False),
+        pinned=getattr(args, "pinned", False),
+        include_archived=getattr(args, "include_archived", False),
         order_by=args.order_by,
         ascending=args.ascending,
-        output_format=args.format
+        output_format=args.format,
     )
 
 
@@ -534,20 +567,28 @@ def cmd_stats(args):
         print(f"💬 Messages: {stats['total_messages']:,}")
         print(f"🏷️  Tags: {stats['total_tags']:,}")
 
-        if stats['messages_by_role']:
+        if stats["messages_by_role"]:
             print("\n📝 Messages by Role:")
-            for role, count in sorted(stats['messages_by_role'].items(), key=lambda x: x[1], reverse=True):
-                bar = '█' * min(40, count // (max(stats['messages_by_role'].values()) // 40 + 1))
+            for role, count in sorted(
+                stats["messages_by_role"].items(), key=lambda x: x[1], reverse=True
+            ):
+                bar = "█" * min(
+                    40, count // (max(stats["messages_by_role"].values()) // 40 + 1)
+                )
                 print(f"  {role:12} {count:7,} {bar}")
 
-        if stats['conversations_by_source']:
+        if stats["conversations_by_source"]:
             print("\n🌐 Conversations by Source:")
-            for source, count in sorted(stats['conversations_by_source'].items(), key=lambda x: x[1], reverse=True):
+            for source, count in sorted(
+                stats["conversations_by_source"].items(),
+                key=lambda x: x[1],
+                reverse=True,
+            ):
                 print(f"  {source:20} {count:7,}")
 
-        if stats.get('top_tags'):
+        if stats.get("top_tags"):
             print("\n🏆 Top Tags:")
-            for tag in stats['top_tags'][:10]:
+            for tag in stats["top_tags"][:10]:
                 print(f"  {tag['name']:30} {tag['count']:5,} uses")
 
         # Add timeline if requested
@@ -562,14 +603,16 @@ def cmd_stats(args):
             models = db.get_models()
             print("\n🤖 Models Used:")
             for model_info in models[:10]:
-                print(f"  {model_info['model']:30} {model_info['count']:5,} conversations")
+                print(
+                    f"  {model_info['model']:30} {model_info['count']:5,} conversations"
+                )
 
         return 0
 
 
 def cmd_view(args):
     """View management commands"""
-    from ctk.core.views import ViewStore, View, ViewItem, ViewQuery
+    from ctk.core.views import View, ViewItem, ViewQuery, ViewStore
 
     if not args.db:
         print("Error: Database path required")
@@ -587,8 +630,10 @@ def cmd_view(args):
         print(f"{'Name':<20} {'Type':<10} {'Items':<8} {'Description'}")
         print("-" * 70)
         for v in views:
-            desc = (v['description'] or '')[:30]
-            print(f"{v['name']:<20} {v['selection_type']:<10} {v['item_count']:<8} {desc}")
+            desc = (v["description"] or "")[:30]
+            print(
+                f"{v['name']:<20} {v['selection_type']:<10} {v['item_count']:<8} {desc}"
+            )
         return 0
 
     elif action == "create":
@@ -616,7 +661,7 @@ def cmd_view(args):
             description=args.description,
             items=args.ids if args.ids else None,
             query=query,
-            author=args.author
+            author=args.author,
         )
 
         if args.track_changes:
@@ -645,11 +690,11 @@ def cmd_view(args):
         if view.items:
             print(f"\nItems ({len(view.get_items())} conversations):")
             for item in view.items:
-                if hasattr(item, 'id'):
+                if hasattr(item, "id"):
                     note = f" - {item.note}" if item.note else ""
                     title = f" ({item.title})" if item.title else ""
                     print(f"  {item.id[:8]}{title}{note}")
-                elif hasattr(item, 'title'):
+                elif hasattr(item, "title"):
                     print(f"  [Section: {item.title}]")
 
         if view.query:
@@ -675,7 +720,9 @@ def cmd_view(args):
         db = ConversationDB(args.db)
         with db:
             for conv_id in args.ids:
-                if store.add_to_view(args.name, conv_id, title=args.title, note=args.note, db=db):
+                if store.add_to_view(
+                    args.name, conv_id, title=args.title, note=args.note, db=db
+                ):
                     print(f"Added {conv_id[:8]} to {args.name}")
                 else:
                     print(f"Failed to add {conv_id[:8]}")
@@ -722,7 +769,9 @@ def cmd_view(args):
                     if result.get("error"):
                         print(f"{name}: {result['error']}")
                     elif result["issues"] > 0:
-                        print(f"{name}: {result['issues']} issues (missing: {len(result['missing_ids'])}, drift: {result['drift_count']})")
+                        print(
+                            f"{name}: {result['issues']} issues (missing: {len(result['missing_ids'])}, drift: {result['drift_count']})"
+                        )
                     else:
                         print(f"{name}: OK ({result['resolved_items']} items)")
         else:
@@ -734,24 +783,30 @@ def cmd_view(args):
                     return 1
 
                 print(f"View: {result['name']}")
-                print(f"Items: {result['total_items']} defined, {result['resolved_items']} resolved")
+                print(
+                    f"Items: {result['total_items']} defined, {result['resolved_items']} resolved"
+                )
 
-                if result['missing_ids']:
+                if result["missing_ids"]:
                     print(f"\nMissing conversations ({len(result['missing_ids'])}):")
-                    for mid in result['missing_ids']:
+                    for mid in result["missing_ids"]:
                         print(f"  {mid}")
 
-                if result['drift_count'] > 0:
+                if result["drift_count"] > 0:
                     print(f"\nContent drift detected: {result['drift_count']} items")
 
-                if result['issues'] == 0:
+                if result["issues"] == 0:
                     print("\nNo issues found.")
 
         return 0
 
     elif action == "eval":
         import sys
-        print("[DEPRECATED] 'ctk view eval' is deprecated. Use 'ctk query --view <name>' instead.", file=sys.stderr)
+
+        print(
+            "[DEPRECATED] 'ctk view eval' is deprecated. Use 'ctk query --view <name>' instead.",
+            file=sys.stderr,
+        )
 
         if not args.name:
             print("Error: View name required")
@@ -772,7 +827,9 @@ def cmd_view(args):
                 section_str = f" [{item.section}]" if item.section else ""
                 note_str = f" - {item.item.note}" if item.item.note else ""
                 drift_str = " [DRIFT]" if item.drift_detected else ""
-                print(f"{item.index + 1}. {item.effective_title}{section_str}{note_str}{drift_str}")
+                print(
+                    f"{item.index + 1}. {item.effective_title}{section_str}{note_str}{drift_str}"
+                )
 
         return 0
 
@@ -800,9 +857,9 @@ def cmd_plugins(args):
 
 def cmd_auto_tag(args):
     """Auto-tag conversations using LLM"""
-    from ctk.integrations.llm.ollama import OllamaProvider
-    from ctk.integrations.llm.base import Message, MessageRole
     from ctk.core.config import get_config
+    from ctk.integrations.llm.base import Message, MessageRole
+    from ctk.integrations.llm.ollama import OllamaProvider
 
     if not args.db:
         print("Error: Database path required")
@@ -814,13 +871,13 @@ def cmd_auto_tag(args):
 
     # Configure provider
     config = {
-        'model': args.model,
-        'base_url': provider_config.get('base_url', 'http://localhost:11434'),
-        'timeout': provider_config.get('timeout', 120),
+        "model": args.model,
+        "base_url": provider_config.get("base_url", "http://localhost:11434"),
+        "timeout": provider_config.get("timeout", 120),
     }
 
     if args.base_url:
-        config['base_url'] = args.base_url
+        config["base_url"] = args.base_url
 
     # Create provider
     provider = OllamaProvider(config)
@@ -830,44 +887,46 @@ def cmd_auto_tag(args):
         if args.query:
             # Full-text search
             search_args = {
-                'query_text': args.query,
-                'limit': None,  # Get all matching, filter later
-                'include_archived': False,
+                "query_text": args.query,
+                "limit": None,  # Get all matching, filter later
+                "include_archived": False,
             }
 
             if args.project:
-                search_args['project'] = args.project
+                search_args["project"] = args.project
             if args.starred:
-                search_args['starred'] = True
+                search_args["starred"] = True
             if args.source:
-                search_args['source'] = args.source
+                search_args["source"] = args.source
 
             conversations = db.search_conversations(**search_args)
         else:
             # List with filters
             filter_args = {
-                'limit': None,  # Get all matching, filter later
-                'include_archived': False,
+                "limit": None,  # Get all matching, filter later
+                "include_archived": False,
             }
 
             if args.project:
-                filter_args['project'] = args.project
+                filter_args["project"] = args.project
             if args.starred:
-                filter_args['starred'] = True
+                filter_args["starred"] = True
             if args.source:
-                filter_args['source'] = args.source
+                filter_args["source"] = args.source
 
             conversations = db.list_conversations(**filter_args)
 
         # Additional filtering
         if args.title:
-            conversations = [c for c in conversations if args.title.lower() in c.title.lower()]
+            conversations = [
+                c for c in conversations if args.title.lower() in c.title.lower()
+            ]
         if args.no_tags:
-            conversations = [c for c in conversations if not c.to_dict().get('tags')]
+            conversations = [c for c in conversations if not c.to_dict().get("tags")]
 
         # Apply limit after all filtering
         if args.limit is not None:
-            conversations = conversations[:args.limit]
+            conversations = conversations[: args.limit]
 
         if not conversations:
             print("No conversations found matching criteria")
@@ -889,7 +948,11 @@ def cmd_auto_tag(args):
             messages = list(tree.message_map.values())[:10]
             for msg in messages:
                 role = msg.role.value.upper()
-                content = msg.content.text[:200] if msg.content.text and len(msg.content.text) > 200 else (msg.content.text or "")
+                content = (
+                    msg.content.text[:200]
+                    if msg.content.text and len(msg.content.text) > 200
+                    else (msg.content.text or "")
+                )
                 context += f"{role}: {content}\n\n"
 
             # Ask LLM for tags
@@ -903,12 +966,14 @@ Tags:"""
             try:
                 response = provider.chat(
                     [Message(role=MessageRole.USER, content=tag_prompt)],
-                    temperature=0.3
+                    temperature=0.3,
                 )
 
                 # Parse tags
-                response_text = response.content if hasattr(response, 'content') else str(response)
-                tags = [t.strip() for t in response_text.strip().split(',')]
+                response_text = (
+                    response.content if hasattr(response, "content") else str(response)
+                )
+                tags = [t.strip() for t in response_text.strip().split(",")]
                 tags = [t for t in tags if t]
 
                 if not tags:
@@ -925,7 +990,7 @@ Tags:"""
                     apply = True
                 else:
                     confirm = input("  Apply? (y/n): ").strip().lower()
-                    apply = confirm == 'y'
+                    apply = confirm == "y"
 
                 if apply:
                     db.add_tags(conv_summary.id, tags)
@@ -943,12 +1008,12 @@ Tags:"""
 
 def cmd_say(args):
     """One-shot message to LLM with full tool support (same as TUI 'say' command)"""
-    from ctk.integrations.llm.ollama import OllamaProvider
-    from ctk.integrations.chat.tui import ChatTUI
     from ctk.core.config import get_config
+    from ctk.integrations.chat.tui import ChatTUI
+    from ctk.integrations.llm.ollama import OllamaProvider
 
     # Join query words
-    message = ' '.join(args.message)
+    message = " ".join(args.message)
 
     # Load config
     cfg = get_config()
@@ -956,12 +1021,12 @@ def cmd_say(args):
 
     # Configure provider
     config = {
-        'model': args.model,
-        'base_url': provider_config.get('base_url', 'http://localhost:11434'),
-        'timeout': provider_config.get('timeout', 120),
+        "model": args.model,
+        "base_url": provider_config.get("base_url", "http://localhost:11434"),
+        "timeout": provider_config.get("timeout", 120),
     }
     if args.base_url:
-        config['base_url'] = args.base_url
+        config["base_url"] = args.base_url
 
     # Create provider
     try:
@@ -972,7 +1037,7 @@ def cmd_say(args):
 
     # Test connection
     if not provider.is_available():
-        base_url = config.get('base_url', 'http://localhost:11434')
+        base_url = config.get("base_url", "http://localhost:11434")
         print(f"Error: Cannot connect to {args.provider} at {base_url}")
         return 1
 
@@ -985,7 +1050,7 @@ def cmd_say(args):
             print(f"Warning: Could not connect to database: {e}")
 
     # Create TUI instance (but don't run interactive loop)
-    disable_tools = getattr(args, 'no_tools', False)
+    disable_tools = getattr(args, "no_tools", False)
     tui = ChatTUI(provider, db=db, render_markdown=True, disable_tools=disable_tools)
 
     # One-shot: send message and get response
@@ -1025,7 +1090,14 @@ def _resolve_conversation_id(db: ConversationDB, conv_id: str) -> str:
         return matches[0].id
 
 
-def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug: bool = False, use_rich: bool = True, shell_executor=None) -> str:
+def execute_ask_tool(
+    db: ConversationDB,
+    tool_name: str,
+    tool_args: dict,
+    debug: bool = False,
+    use_rich: bool = True,
+    shell_executor=None,
+) -> str:
     """
     Execute a tool and return result as string.
 
@@ -1047,9 +1119,11 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
         print(f"[DEBUG] Args: {tool_args}", file=sys.stderr)
 
     try:
-        if tool_name == 'search_conversations':
+        if tool_name == "search_conversations":
             # Parse tags if provided
-            tags_list = tool_args.get('tags', '').split(',') if tool_args.get('tags') else None
+            tags_list = (
+                tool_args.get("tags", "").split(",") if tool_args.get("tags") else None
+            )
 
             # Convert string booleans to actual booleans
             # IMPORTANT: Only return True if explicitly true, otherwise None (not False!)
@@ -1058,36 +1132,46 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                 if val is None:
                     return None
                 if isinstance(val, bool):
-                    return True if val else None  # Only True matters, False = not filtering
+                    return (
+                        True if val else None
+                    )  # Only True matters, False = not filtering
                 if isinstance(val, str):
                     lower_val = val.lower()
-                    if lower_val in ('true', '1', 'yes'):
+                    if lower_val in ("true", "1", "yes"):
                         return True
                     # "false", "none", "null", "0", "no" all mean "not filtering"
                     return None
                 return None
 
             # Convert boolean flags - only True matters for filtering
-            starred = to_bool_or_none(tool_args.get('starred'))
-            pinned = to_bool_or_none(tool_args.get('pinned'))
-            archived = to_bool_or_none(tool_args.get('archived'))
+            starred = to_bool_or_none(tool_args.get("starred"))
+            pinned = to_bool_or_none(tool_args.get("pinned"))
+            archived = to_bool_or_none(tool_args.get("archived"))
 
             # Clean up "None" strings in other params
             def clean_none(val):
-                if val is None or (isinstance(val, str) and val.lower() in ('none', 'null', '')):
+                if val is None or (
+                    isinstance(val, str) and val.lower() in ("none", "null", "")
+                ):
                     return None
                 return val
 
             # Clean all string params that might be "None" or "null"
-            query_text = clean_none(tool_args.get('query'))
-            source = clean_none(tool_args.get('source'))
-            project = clean_none(tool_args.get('project'))
-            model = clean_none(tool_args.get('model'))
-            limit_val = clean_none(tool_args.get('limit'))
+            query_text = clean_none(tool_args.get("query"))
+            source = clean_none(tool_args.get("source"))
+            project = clean_none(tool_args.get("project"))
+            model = clean_none(tool_args.get("model"))
+            limit_val = clean_none(tool_args.get("limit"))
 
             if debug:
-                print(f"[DEBUG] Parsed filters: starred={starred}, pinned={pinned}, archived={archived}", file=sys.stderr)
-                print(f"[DEBUG] query={query_text}, source={source}, model={model}", file=sys.stderr)
+                print(
+                    f"[DEBUG] Parsed filters: starred={starred}, pinned={pinned}, archived={archived}",
+                    file=sys.stderr,
+                )
+                print(
+                    f"[DEBUG] query={query_text}, source={source}, model={model}",
+                    file=sys.stderr,
+                )
 
             # If no query, use list_conversations for better performance
             if query_text:
@@ -1100,7 +1184,7 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                     starred=starred,
                     archived=archived,
                     tags=tags_list,
-                    include_archived=False
+                    include_archived=False,
                 )
             else:
                 # No query - use list for better performance
@@ -1113,7 +1197,7 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                     pinned=pinned,
                     archived=archived,
                     tags=tags_list,
-                    include_archived=False
+                    include_archived=False,
                 )
 
             if debug:
@@ -1132,26 +1216,33 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
                 if len(results) > 10:
                     from rich.console import Console
+
                     console = Console()
-                    console.print(f"[dim]... and {len(results) - 10} more results (showing first 10)[/dim]")
+                    console.print(
+                        f"[dim]... and {len(results) - 10} more results (showing first 10)[/dim]"
+                    )
 
                 return ""  # Already printed
             else:
                 # Plain text format for JSON mode
                 result_str = f"Found {len(results)} conversation(s):\n\n"
                 for i, conv in enumerate(results[:10], 1):
-                    conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
-                    title = conv_dict.get('title', 'Untitled')[:50]
+                    conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+                    title = conv_dict.get("title", "Untitled")[:50]
                     result_str += f"[{i}] {conv_dict['id'][:8]} - {title}\n"
 
                 if len(results) > 10:
-                    result_str += f"\n... and {len(results) - 10} more (showing first 10)\n"
+                    result_str += (
+                        f"\n... and {len(results) - 10} more (showing first 10)\n"
+                    )
 
-                result_str += f"\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
+                result_str += (
+                    f"\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
+                )
                 return result_str
 
-        elif tool_name == 'get_conversation':
-            conv_id = tool_args['conversation_id']
+        elif tool_name == "get_conversation":
+            conv_id = tool_args["conversation_id"]
 
             # Handle prefix matching
             if len(conv_id) < 36:
@@ -1187,44 +1278,48 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             result_str += f"Messages: {msg_count}\n"
 
             # Show messages if requested
-            if tool_args.get('show_messages', False):
+            if tool_args.get("show_messages", False):
                 result_str += "\nMessages:\n"
                 path = tree.get_longest_path()
                 for i, msg in enumerate(path[:5], 1):
                     # Handle both MessageContent objects and plain strings
-                    if hasattr(msg.content, 'get_text'):
+                    if hasattr(msg.content, "get_text"):
                         text = msg.content.get_text()
                     else:
                         text = str(msg.content) if msg.content else ""
                     content = text[:100] if text else "(no content)"
-                    role = msg.role.value if hasattr(msg.role, 'value') else str(msg.role)
+                    role = (
+                        msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+                    )
                     result_str += f"\n{i}. {role}: {content}...\n"
                 if len(path) > 5:
                     result_str += f"\n... and {len(path) - 5} more messages\n"
 
             return result_str
 
-        elif tool_name == 'get_statistics':
+        elif tool_name == "get_statistics":
             stats = db.get_statistics()
 
             result_str = "Database Statistics:\n\n"
-            result_str += f"Total conversations: {stats.get('total_conversations', 0)}\n"
+            result_str += (
+                f"Total conversations: {stats.get('total_conversations', 0)}\n"
+            )
             result_str += f"Total messages: {stats.get('total_messages', 0)}\n"
 
-            if stats.get('by_source'):
+            if stats.get("by_source"):
                 result_str += "\nBy source:\n"
-                for source, count in stats['by_source'].items():
+                for source, count in stats["by_source"].items():
                     result_str += f"  - {source}: {count}\n"
 
-            if stats.get('by_model'):
+            if stats.get("by_model"):
                 result_str += "\nTop models:\n"
-                for model, count in list(stats['by_model'].items())[:5]:
+                for model, count in list(stats["by_model"].items())[:5]:
                     result_str += f"  - {model}: {count}\n"
 
             return result_str
 
-        elif tool_name == 'execute_shell_command':
-            command = tool_args.get('command', '')
+        elif tool_name == "execute_shell_command":
+            command = tool_args.get("command", "")
             if not command:
                 return "Error: No command provided"
 
@@ -1234,19 +1329,27 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             # Execute the command via the provided executor
             try:
                 result = shell_executor(command)
-                if hasattr(result, 'output'):
+                if hasattr(result, "output"):
                     # CommandResult object
                     if result.success:
-                        return result.output if result.output else "(command executed successfully)"
+                        return (
+                            result.output
+                            if result.output
+                            else "(command executed successfully)"
+                        )
                     else:
-                        return f"Error: {result.error}" if result.error else "Command failed"
+                        return (
+                            f"Error: {result.error}"
+                            if result.error
+                            else "Command failed"
+                        )
                 else:
                     return str(result)
             except Exception as e:
                 return f"Error executing command: {e}"
 
-        elif tool_name == 'star_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "star_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1258,8 +1361,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.star_conversation(conv_id)
             return f"Starred conversation {conv_id[:8]}..."
 
-        elif tool_name == 'unstar_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "unstar_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1270,8 +1373,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.unstar_conversation(conv_id)
             return f"Unstarred conversation {conv_id[:8]}..."
 
-        elif tool_name == 'pin_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "pin_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1282,8 +1385,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.pin_conversation(conv_id)
             return f"Pinned conversation {conv_id[:8]}..."
 
-        elif tool_name == 'unpin_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "unpin_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1294,8 +1397,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.unpin_conversation(conv_id)
             return f"Unpinned conversation {conv_id[:8]}..."
 
-        elif tool_name == 'archive_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "archive_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1306,8 +1409,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.archive_conversation(conv_id)
             return f"Archived conversation {conv_id[:8]}..."
 
-        elif tool_name == 'unarchive_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "unarchive_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1318,9 +1421,9 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.unarchive_conversation(conv_id)
             return f"Unarchived conversation {conv_id[:8]}..."
 
-        elif tool_name == 'rename_conversation':
-            conv_id = tool_args.get('conversation_id', '')
-            title = tool_args.get('title', '')
+        elif tool_name == "rename_conversation":
+            conv_id = tool_args.get("conversation_id", "")
+            title = tool_args.get("title", "")
             if not conv_id:
                 return "Error: conversation_id required"
             if not title:
@@ -1333,37 +1436,37 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.update_conversation_title(conv_id, title)
             return f"Renamed conversation {conv_id[:8]}... to '{title}'"
 
-        elif tool_name == 'show_conversation_content':
+        elif tool_name == "show_conversation_content":
             from ctk.core.helpers import show_conversation_helper
 
-            conv_id = tool_args.get('conversation_id', '')
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
-            path_selection = tool_args.get('path_selection', 'longest')
+            path_selection = tool_args.get("path_selection", "longest")
 
             result = show_conversation_helper(
                 db=db,
                 conv_id=conv_id,
                 path_selection=path_selection,
                 plain_output=True,
-                show_metadata=True
+                show_metadata=True,
             )
 
-            if result['success']:
-                return result['output']
+            if result["success"]:
+                return result["output"]
             else:
                 return f"Error: {result['error']}"
 
-        elif tool_name == 'show_conversation_tree':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "show_conversation_tree":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
             # Use shell command if executor available
             if shell_executor:
                 result = shell_executor(f"tree {conv_id}")
-                if hasattr(result, 'output'):
+                if hasattr(result, "output"):
                     return result.output if result.success else f"Error: {result.error}"
                 return str(result)
 
@@ -1378,8 +1481,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             return f"Tree for {tree.title or 'Untitled'}:\n(Use TUI shell mode for full tree visualization)"
 
-        elif tool_name == 'delete_conversation':
-            conv_id = tool_args.get('conversation_id', '')
+        elif tool_name == "delete_conversation":
+            conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1389,14 +1492,14 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             # Get title before deletion for confirmation message
             tree = db.load_conversation(conv_id)
-            title = tree.title if tree else 'Unknown'
+            title = tree.title if tree else "Unknown"
 
             db.delete_conversation(conv_id)
             return f"Deleted conversation '{title}' ({conv_id[:8]}...)"
 
-        elif tool_name == 'tag_conversation':
-            conv_id = tool_args.get('conversation_id', '')
-            tags = tool_args.get('tags', [])
+        elif tool_name == "tag_conversation":
+            conv_id = tool_args.get("conversation_id", "")
+            tags = tool_args.get("tags", [])
             if not conv_id:
                 return "Error: conversation_id required"
             if not tags:
@@ -1411,17 +1514,19 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                 return f"Conversation {conv_id} not found"
 
             # Add tags
-            existing_tags = tree.metadata.tags if tree.metadata and tree.metadata.tags else []
+            existing_tags = (
+                tree.metadata.tags if tree.metadata and tree.metadata.tags else []
+            )
             new_tags = [t for t in tags if t not in existing_tags]
             tree.metadata.tags = existing_tags + new_tags
             db.save_conversation(tree)
 
             return f"Added tags to {conv_id[:8]}...: {', '.join(new_tags)}"
 
-        elif tool_name == 'list_tags':
+        elif tool_name == "list_tags":
             # Get all tags with counts
             stats = db.get_statistics()
-            tags_data = stats.get('by_tag', {})
+            tags_data = stats.get("by_tag", {})
 
             if not tags_data:
                 return "No tags found in database."
@@ -1435,9 +1540,9 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             result_str += f"\nTotal: {len(tags_data)} unique tags"
             return result_str
 
-        elif tool_name == 'remove_tag':
-            conv_id = tool_args.get('conversation_id', '')
-            tag = tool_args.get('tag', '')
+        elif tool_name == "remove_tag":
+            conv_id = tool_args.get("conversation_id", "")
+            tag = tool_args.get("tag", "")
             if not conv_id:
                 return "Error: conversation_id required"
             if not tag:
@@ -1461,30 +1566,34 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             db.save_conversation(tree)
             return f"Removed tag '{tag}' from {conv_id[:8]}..."
 
-        elif tool_name == 'list_sources':
+        elif tool_name == "list_sources":
             stats = db.get_statistics()
-            sources_data = stats.get('by_source', {})
+            sources_data = stats.get("by_source", {})
 
             if not sources_data:
                 return "No sources found in database."
 
             result_str = "Sources in database:\n\n"
-            sorted_sources = sorted(sources_data.items(), key=lambda x: x[1], reverse=True)
+            sorted_sources = sorted(
+                sources_data.items(), key=lambda x: x[1], reverse=True
+            )
             for source, count in sorted_sources:
                 result_str += f"  {source}: {count} conversation(s)\n"
 
             result_str += f"\nTotal: {len(sources_data)} sources"
             return result_str
 
-        elif tool_name == 'list_models':
+        elif tool_name == "list_models":
             stats = db.get_statistics()
-            models_data = stats.get('by_model', {})
+            models_data = stats.get("by_model", {})
 
             if not models_data:
                 return "No models found in database."
 
             result_str = "Models in database:\n\n"
-            sorted_models = sorted(models_data.items(), key=lambda x: x[1], reverse=True)
+            sorted_models = sorted(
+                models_data.items(), key=lambda x: x[1], reverse=True
+            )
             for model, count in sorted_models[:20]:  # Limit to top 20
                 result_str += f"  {model}: {count} conversation(s)\n"
 
@@ -1494,9 +1603,9 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             result_str += f"\nTotal: {len(models_data)} unique models"
             return result_str
 
-        elif tool_name == 'export_conversation':
-            conv_id = tool_args.get('conversation_id', '')
-            export_format = tool_args.get('format', 'markdown')
+        elif tool_name == "export_conversation":
+            conv_id = tool_args.get("conversation_id", "")
+            export_format = tool_args.get("format", "markdown")
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1508,46 +1617,60 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             if not tree:
                 return f"Conversation {conv_id} not found"
 
-            if export_format == 'markdown':
-                from ctk.integrations.exporters.markdown import MarkdownExporter
+            if export_format == "markdown":
+                from ctk.integrations.exporters.markdown import \
+                    MarkdownExporter
+
                 exporter = MarkdownExporter()
                 output = exporter.export_to_string(tree)
                 return f"Markdown export of '{tree.title}':\n\n{output}"
 
-            elif export_format == 'json':
+            elif export_format == "json":
                 import json
+
                 # Convert to dict
                 conv_dict = {
-                    'id': tree.id,
-                    'title': tree.title,
-                    'messages': [
+                    "id": tree.id,
+                    "title": tree.title,
+                    "messages": [
                         {
-                            'role': msg.role.value if msg.role else 'user',
-                            'content': msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
+                            "role": msg.role.value if msg.role else "user",
+                            "content": (
+                                msg.content.get_text()
+                                if hasattr(msg.content, "get_text")
+                                else str(msg.content)
+                            ),
                         }
                         for msg in tree.get_longest_path()
-                    ]
+                    ],
                 }
                 return f"JSON export:\n{json.dumps(conv_dict, indent=2)}"
 
-            elif export_format == 'jsonl':
+            elif export_format == "jsonl":
                 messages = tree.get_longest_path()
                 lines = []
                 for msg in messages:
                     import json
-                    line = json.dumps({
-                        'role': msg.role.value if msg.role else 'user',
-                        'content': msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
-                    })
+
+                    line = json.dumps(
+                        {
+                            "role": msg.role.value if msg.role else "user",
+                            "content": (
+                                msg.content.get_text()
+                                if hasattr(msg.content, "get_text")
+                                else str(msg.content)
+                            ),
+                        }
+                    )
                     lines.append(line)
                 return f"JSONL export ({len(lines)} messages):\n" + "\n".join(lines)
 
             else:
                 return f"Unknown format: {export_format}. Use markdown, json, or jsonl."
 
-        elif tool_name == 'duplicate_conversation':
-            conv_id = tool_args.get('conversation_id', '')
-            new_title = tool_args.get('new_title', None)
+        elif tool_name == "duplicate_conversation":
+            conv_id = tool_args.get("conversation_id", "")
+            new_title = tool_args.get("new_title", None)
             if not conv_id:
                 return "Error: conversation_id required"
 
@@ -1560,8 +1683,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                 return f"Conversation {conv_id} not found"
 
             # Create a deep copy with new ID
-            import uuid
             import copy
+            import uuid
 
             new_tree = copy.deepcopy(tree)
             new_tree.id = str(uuid.uuid4())
@@ -1584,13 +1707,15 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             new_tree.message_map = new_message_map
 
             # Update root_message_ids
-            new_tree.root_message_ids = [old_to_new.get(rid, rid) for rid in new_tree.root_message_ids]
+            new_tree.root_message_ids = [
+                old_to_new.get(rid, rid) for rid in new_tree.root_message_ids
+            ]
 
             db.save_conversation(new_tree)
             return f"Created copy: '{new_tree.title}' ({new_tree.id[:8]}...)"
 
-        elif tool_name == 'get_recent_conversations':
-            limit = tool_args.get('limit', 10)
+        elif tool_name == "get_recent_conversations":
+            limit = tool_args.get("limit", 10)
             if not isinstance(limit, int):
                 try:
                     limit = int(limit)
@@ -1604,15 +1729,15 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             result_str = f"Recent conversations (last {len(conversations)}):\n\n"
             for i, conv in enumerate(conversations, 1):
-                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
                 flags = ""
-                if conv_dict.get('starred_at'):
+                if conv_dict.get("starred_at"):
                     flags += "⭐"
-                if conv_dict.get('pinned_at'):
+                if conv_dict.get("pinned_at"):
                     flags += "📌"
 
-                title = conv_dict.get('title', 'Untitled')[:50]
-                updated = conv_dict.get('updated_at', 'Unknown')[:19]
+                title = conv_dict.get("title", "Untitled")[:50]
+                updated = conv_dict.get("updated_at", "Unknown")[:19]
 
                 result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
                 result_str += f"   Updated: {updated}\n"
@@ -1620,14 +1745,14 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             result_str += f"\nType `show <id>` to view any conversation."
             return result_str
 
-        elif tool_name == 'list_conversations':
+        elif tool_name == "list_conversations":
             # Get filter parameters
-            starred = tool_args.get('starred')
-            pinned = tool_args.get('pinned')
-            archived = tool_args.get('archived')
-            limit = tool_args.get('limit', 20)
-            source = tool_args.get('source')
-            model = tool_args.get('model')
+            starred = tool_args.get("starred")
+            pinned = tool_args.get("pinned")
+            archived = tool_args.get("archived")
+            limit = tool_args.get("limit", 20)
+            source = tool_args.get("source")
+            model = tool_args.get("model")
 
             if not isinstance(limit, int):
                 try:
@@ -1636,17 +1761,17 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
                     limit = 20
 
             # Build kwargs for list_conversations
-            kwargs = {'limit': limit}
+            kwargs = {"limit": limit}
             if starred is not None:
-                kwargs['starred'] = starred
+                kwargs["starred"] = starred
             if pinned is not None:
-                kwargs['pinned'] = pinned
+                kwargs["pinned"] = pinned
             if archived is not None:
-                kwargs['archived'] = archived
+                kwargs["archived"] = archived
             if source:
-                kwargs['source'] = source
+                kwargs["source"] = source
             if model:
-                kwargs['model'] = model
+                kwargs["model"] = model
 
             conversations = db.list_conversations(**kwargs)
 
@@ -1667,18 +1792,18 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             result_str = f"Conversations ({len(conversations)} results):\n\n"
             for i, conv in enumerate(conversations, 1):
-                conv_dict = conv.to_dict() if hasattr(conv, 'to_dict') else conv
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
                 flags = ""
-                if conv_dict.get('starred_at'):
+                if conv_dict.get("starred_at"):
                     flags += "⭐"
-                if conv_dict.get('pinned_at'):
+                if conv_dict.get("pinned_at"):
                     flags += "📌"
-                if conv_dict.get('archived_at'):
+                if conv_dict.get("archived_at"):
                     flags += "📦"
 
-                title = conv_dict.get('title', 'Untitled')[:50]
-                source_str = conv_dict.get('metadata', {}).get('source', '') or ''
-                model_str = conv_dict.get('metadata', {}).get('model', '') or ''
+                title = conv_dict.get("title", "Untitled")[:50]
+                source_str = conv_dict.get("metadata", {}).get("source", "") or ""
+                model_str = conv_dict.get("metadata", {}).get("model", "") or ""
 
                 result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
                 if source_str or model_str:
@@ -1686,8 +1811,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             return result_str
 
-        elif tool_name == 'list_conversation_paths':
-            conv_id_arg = tool_args.get('conversation_id', '')
+        elif tool_name == "list_conversation_paths":
+            conv_id_arg = tool_args.get("conversation_id", "")
             conv_id = _resolve_conversation_id(db, conv_id_arg)
             if not conv_id:
                 return f"Conversation not found: {conv_id_arg}"
@@ -1701,13 +1826,23 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
             if not paths:
                 return f"No paths found in conversation {conv_id[:8]}..."
 
-            result_str = f"Paths in conversation {conv_id[:8]}... ({len(paths)} total):\n\n"
+            result_str = (
+                f"Paths in conversation {conv_id[:8]}... ({len(paths)} total):\n\n"
+            )
             for i, path in enumerate(paths, 1):
                 result_str += f"Path {i} ({len(path)} messages):\n"
                 for msg in path:
                     role_label = msg.role.value.title() if msg.role else "User"
-                    content_text = msg.content.get_text() if hasattr(msg.content, 'get_text') else str(msg.content)
-                    preview = content_text[:50].replace('\n', ' ').strip() if content_text else ""
+                    content_text = (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    )
+                    preview = (
+                        content_text[:50].replace("\n", " ").strip()
+                        if content_text
+                        else ""
+                    )
                     if len(content_text) > 50:
                         preview += "..."
                     result_str += f"  {role_label}: {preview}\n"
@@ -1715,7 +1850,7 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             return result_str
 
-        elif tool_name == 'list_plugins':
+        elif tool_name == "list_plugins":
             from ctk.core.plugin import PluginManager
 
             manager = PluginManager()
@@ -1740,8 +1875,8 @@ def execute_ask_tool(db: ConversationDB, tool_name: str, tool_args: dict, debug:
 
             return result_str
 
-        elif tool_name == 'auto_tag_conversation':
-            conv_id_arg = tool_args.get('conversation_id', '')
+        elif tool_name == "auto_tag_conversation":
+            conv_id_arg = tool_args.get("conversation_id", "")
             conv_id = _resolve_conversation_id(db, conv_id_arg)
             if not conv_id:
                 return f"Conversation not found: {conv_id_arg}"
@@ -1776,7 +1911,7 @@ def cmd_tags(args):
                 print(f"Error: Conversation {args.conversation_id} not found")
                 return 1
 
-            new_tags = args.add.split(',')
+            new_tags = args.add.split(",")
             conv.metadata.tags.extend(new_tags)
             db.save_conversation(conv)
             print(f"Added tags to conversation: {', '.join(new_tags)}")
@@ -1788,8 +1923,10 @@ def cmd_tags(args):
                 print(f"Error: Conversation {args.conversation_id} not found")
                 return 1
 
-            tags_to_remove = set(args.remove.split(','))
-            conv.metadata.tags = [t for t in conv.metadata.tags if t not in tags_to_remove]
+            tags_to_remove = set(args.remove.split(","))
+            conv.metadata.tags = [
+                t for t in conv.metadata.tags if t not in tags_to_remove
+            ]
             db.save_conversation(conv)
             print(f"Removed tags from conversation: {', '.join(tags_to_remove)}")
 
@@ -1806,10 +1943,10 @@ def cmd_tags(args):
             uncategorized = []
 
             for tag in tags:
-                if tag.get('category'):
-                    if tag['category'] not in categorized:
-                        categorized[tag['category']] = []
-                    categorized[tag['category']].append(tag)
+                if tag.get("category"):
+                    if tag["category"] not in categorized:
+                        categorized[tag["category"]] = []
+                    categorized[tag["category"]].append(tag)
                 else:
                     uncategorized.append(tag)
 
@@ -1818,17 +1955,21 @@ def cmd_tags(args):
             # Show categorized tags
             for category, cat_tags in sorted(categorized.items()):
                 print(f"\n📁 {category.upper()}:")
-                for tag in sorted(cat_tags, key=lambda x: x.get('usage_count', 0), reverse=True):
-                    count = tag.get('usage_count', 0)
-                    bar = '█' * min(30, count // 10 + 1)
+                for tag in sorted(
+                    cat_tags, key=lambda x: x.get("usage_count", 0), reverse=True
+                ):
+                    count = tag.get("usage_count", 0)
+                    bar = "█" * min(30, count // 10 + 1)
                     print(f"  {tag['name']:30} {count:5} {bar}")
 
             # Show uncategorized tags
             if uncategorized:
                 print(f"\n🏷️  UNCATEGORIZED:")
-                for tag in sorted(uncategorized, key=lambda x: x.get('usage_count', 0), reverse=True)[:20]:
-                    count = tag.get('usage_count', 0)
-                    bar = '█' * min(30, count // 10 + 1)
+                for tag in sorted(
+                    uncategorized, key=lambda x: x.get("usage_count", 0), reverse=True
+                )[:20]:
+                    count = tag.get("usage_count", 0)
+                    bar = "█" * min(30, count // 10 + 1)
                     print(f"  {tag['name']:30} {count:5} {bar}")
 
     return 0
@@ -1851,11 +1992,13 @@ def cmd_models(args):
         print(f"{'Model':<40} {'Count':<10} Distribution")
         print("-" * 80)
 
-        total = sum(m['count'] for m in models)
+        total = sum(m["count"] for m in models)
         for model_info in models:
-            percentage = (model_info['count'] / total) * 100
-            bar = '█' * int(percentage / 2)
-            print(f"{model_info['model']:<40} {model_info['count']:<10} {bar} {percentage:.1f}%")
+            percentage = (model_info["count"] / total) * 100
+            bar = "█" * int(percentage / 2)
+            print(
+                f"{model_info['model']:<40} {model_info['count']:<10} {bar} {percentage:.1f}%"
+            )
 
     return 0
 
@@ -1877,11 +2020,13 @@ def cmd_sources(args):
         print(f"{'Source':<30} {'Count':<10} Distribution")
         print("-" * 70)
 
-        total = sum(s['count'] for s in sources)
+        total = sum(s["count"] for s in sources)
         for source_info in sources:
-            percentage = (source_info['count'] / total) * 100
-            bar = '█' * int(percentage / 2)
-            print(f"{source_info['source']:<30} {source_info['count']:<10} {bar} {percentage:.1f}%")
+            percentage = (source_info["count"] / total) * 100
+            bar = "█" * int(percentage / 2)
+            print(
+                f"{source_info['source']:<30} {source_info['count']:<10} {bar} {percentage:.1f}%"
+            )
 
     return 0
 
@@ -1889,9 +2034,9 @@ def cmd_sources(args):
 def cmd_chat(args):
     """Start interactive chat with LLM"""
     # Import here to avoid loading if not needed
-    from ctk.integrations.llm.ollama import OllamaProvider
-    from ctk.integrations.chat.tui import ChatTUI
     from ctk.core.config import get_config
+    from ctk.integrations.chat.tui import ChatTUI
+    from ctk.integrations.llm.ollama import OllamaProvider
 
     # Load config
     cfg = get_config()
@@ -1899,14 +2044,14 @@ def cmd_chat(args):
 
     # Configure provider (CLI args override config)
     config = {
-        'model': args.model,
-        'base_url': provider_config.get('base_url', 'http://localhost:11434'),
-        'timeout': provider_config.get('timeout', 120),
+        "model": args.model,
+        "base_url": provider_config.get("base_url", "http://localhost:11434"),
+        "timeout": provider_config.get("timeout", 120),
     }
 
     # Override with CLI args if provided
     if args.base_url:
-        config['base_url'] = args.base_url
+        config["base_url"] = args.base_url
 
     print(f"Initializing {args.provider} provider...")
     print(f"  Model: {args.model}")
@@ -1917,7 +2062,7 @@ def cmd_chat(args):
     print()
 
     # Create provider
-    if args.provider == 'ollama':
+    if args.provider == "ollama":
         provider = OllamaProvider(config)
     else:
         print(f"Error: Unsupported provider: {args.provider}")
@@ -1925,7 +2070,7 @@ def cmd_chat(args):
 
     # Test connection
     if not provider.is_available():
-        base_url = config.get('base_url', 'http://localhost:11434')
+        base_url = config.get("base_url", "http://localhost:11434")
         print(f"Error: Cannot connect to {args.provider} at {base_url}")
         print(f"Make sure {args.provider} is running")
         return 1
@@ -1942,8 +2087,10 @@ def cmd_chat(args):
 
     # Create and run chat
     render_markdown = not args.no_markdown
-    disable_tools = getattr(args, 'no_tools', False)
-    chat = ChatTUI(provider, db=db, render_markdown=render_markdown, disable_tools=disable_tools)
+    disable_tools = getattr(args, "no_tools", False)
+    chat = ChatTUI(
+        provider, db=db, render_markdown=render_markdown, disable_tools=disable_tools
+    )
     chat.run()
 
     return 0
@@ -1957,25 +2104,25 @@ def cmd_show(args):
 
     try:
         # Determine which path to show based on args
-        path_selection = getattr(args, 'path', 'longest')  # Default to longest
+        path_selection = getattr(args, "path", "longest")  # Default to longest
 
         # Use shared helper to load conversation
         result = show_conversation_helper(
             db=db,
             conv_id=args.id,
             path_selection=path_selection,
-            plain_output=getattr(args, 'no_color', False),
-            show_metadata=True
+            plain_output=getattr(args, "no_color", False),
+            show_metadata=True,
         )
 
-        if not result['success']:
+        if not result["success"]:
             print(f"Error: {result['error']}")
             return 1
 
-        tree = result['conversation']
-        nav = result['navigator']
-        path = result['path']
-        path_count = result['path_count']
+        tree = result["conversation"]
+        nav = result["navigator"]
+        path = result["path"]
+        path_count = result["path_count"]
 
         # Display conversation metadata
         print(f"\nConversation: {tree.title}")
@@ -1998,16 +2145,23 @@ def cmd_show(args):
         # Display path using navigator's pretty-print method
         from rich.console import Console
 
-        if getattr(args, 'no_color', False):
+        if getattr(args, "no_color", False):
             # Plain output
             print(f"\nMessages (path: {path_selection}, {len(path)} messages):")
             print(nav.format_path(path, show_metadata=True))
         else:
             # Pretty output
             console = Console()
-            console.print(f"\n[bold]Messages (path: {path_selection}, {len(path)} messages):[/bold]")
-            render_markdown = not getattr(args, 'no_markdown', False)
-            nav.print_path(path, console=console, show_metadata=True, render_markdown=render_markdown)
+            console.print(
+                f"\n[bold]Messages (path: {path_selection}, {len(path)} messages):[/bold]"
+            )
+            render_markdown = not getattr(args, "no_markdown", False)
+            nav.print_path(
+                path,
+                console=console,
+                show_metadata=True,
+                render_markdown=render_markdown,
+            )
 
         # Show branch info
         if path_count > 1:
@@ -2057,7 +2211,7 @@ def cmd_delete(args):
             print(f"  Messages: {len(tree.message_map)}")
 
             confirm = input("\nType 'yes' to confirm deletion: ").strip().lower()
-            if confirm != 'yes':
+            if confirm != "yes":
                 print("Deletion cancelled")
                 return 0
 
@@ -2109,6 +2263,7 @@ def cmd_tree_view(args):
             return 1
 
         from rich.console import Console
+
         console = Console()
 
         console.print(f"\n[bold cyan]Conversation Tree:[/bold cyan] {tree.title}")
@@ -2125,6 +2280,7 @@ def cmd_tree_view(args):
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
@@ -2163,6 +2319,7 @@ def cmd_paths(args):
         nav = ConversationTreeNavigator(tree)
 
         from rich.console import Console
+
         console = Console()
 
         console.print(f"\n[bold cyan]Conversation:[/bold cyan] {tree.title}")
@@ -2406,6 +2563,7 @@ def cmd_duplicate(args):
 def cmd_sql(args):
     """Execute SQL queries with Rich table output"""
     import sqlite3
+
     from rich.console import Console
     from rich.table import Table
 
@@ -2419,7 +2577,7 @@ def cmd_sql(args):
     db_path = Path(args.db)
     if db_path.is_dir():
         db_file = db_path / "conversations.db"
-    elif db_path.suffix == '.db':
+    elif db_path.suffix == ".db":
         db_file = db_path
     else:
         db_file = db_path / "conversations.db"
@@ -2435,7 +2593,9 @@ def cmd_sql(args):
 
         # Show schema if requested
         if args.schema:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
             tables = [row[0] for row in cursor.fetchall()]
 
             console.print("\n[bold cyan]Database Schema[/bold cyan]\n")
@@ -2465,27 +2625,37 @@ def cmd_sql(args):
         # Interactive mode
         if args.interactive:
             console.print("[bold cyan]CTK SQL Interactive Mode[/bold cyan]")
-            console.print("Type SQL queries, 'schema' to see tables, or 'exit' to quit.\n")
+            console.print(
+                "Type SQL queries, 'schema' to see tables, or 'exit' to quit.\n"
+            )
 
             while True:
                 try:
                     query = input("sql> ").strip()
                     if not query:
                         continue
-                    if query.lower() in ('exit', 'quit', 'q'):
+                    if query.lower() in ("exit", "quit", "q"):
                         break
-                    if query.lower() == 'schema':
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                    if query.lower() == "schema":
+                        cursor.execute(
+                            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                        )
                         tables = [row[0] for row in cursor.fetchall()]
                         console.print(f"Tables: {', '.join(tables)}")
                         continue
 
                     cursor.execute(query)
                     rows = cursor.fetchall()
-                    keys = [desc[0] for desc in cursor.description] if cursor.description else []
+                    keys = (
+                        [desc[0] for desc in cursor.description]
+                        if cursor.description
+                        else []
+                    )
 
                     if rows:
-                        _display_sql_results(console, rows, keys, args.format, args.limit)
+                        _display_sql_results(
+                            console, rows, keys, args.format, args.limit
+                        )
                     else:
                         console.print("[dim]No results[/dim]")
 
@@ -2522,28 +2692,29 @@ def cmd_sql(args):
 
 def _display_sql_results(console, rows, keys, format_type, limit):
     """Display SQL query results in the specified format"""
-    from rich.table import Table
     import json
+
+    from rich.table import Table
 
     # Apply limit
     if limit and limit > 0:
         rows = rows[:limit]
 
-    if format_type == 'json':
+    if format_type == "json":
         data = []
         for row in rows:
-            if hasattr(row, '_asdict'):
+            if hasattr(row, "_asdict"):
                 data.append(row._asdict())
-            elif hasattr(row, '_mapping'):
+            elif hasattr(row, "_mapping"):
                 data.append(dict(row._mapping))
             else:
                 data.append(dict(zip(keys, row)))
         print(json.dumps(data, indent=2, default=str))
 
-    elif format_type == 'csv':
-        print(','.join(str(k) for k in keys))
+    elif format_type == "csv":
+        print(",".join(str(k) for k in keys))
         for row in rows:
-            print(','.join(str(v) if v is not None else '' for v in row))
+            print(",".join(str(v) if v is not None else "" for v in row))
 
     else:  # table (default)
         table = Table(show_header=True, header_style="bold cyan")
@@ -2561,317 +2732,489 @@ def _display_sql_results(console, rows, keys, format_type, limit):
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='Conversation Toolkit - Manage conversation trees from multiple sources'
+        description="Conversation Toolkit - Manage conversation trees from multiple sources"
     )
-    parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    
-    subparsers = parser.add_subparsers(dest='command', help='Commands')
-    
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
     # Import command
-    import_parser = subparsers.add_parser('import', help='Import conversations')
-    import_parser.add_argument('input', help='Input file path (or "auto" for auto-search with copilot/claude_code/cursor)')
-    import_parser.add_argument('--format', '-f',
-                               help='Input format: openai, anthropic, copilot, gemini, jsonl, filesystem_coding (auto-detect if not specified)')
-    import_parser.add_argument('--db', '-d', help='Database path to save to')
-    import_parser.add_argument('--output', '-o', help='Output file path (for conversion)')
-    import_parser.add_argument('--output-format', help='Output format for conversion: json, markdown, jsonl')
-    import_parser.add_argument('--tags', '-t', help='Comma-separated tags to add')
-    import_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
-    import_parser.add_argument('--path-selection', default='longest',
-                               choices=['longest', 'first', 'last'],
-                               help='For branching conversations: which path to export (default: longest)')
+    import_parser = subparsers.add_parser("import", help="Import conversations")
+    import_parser.add_argument(
+        "input",
+        help='Input file path (or "auto" for auto-search with copilot/claude_code/cursor)',
+    )
+    import_parser.add_argument(
+        "--format",
+        "-f",
+        help="Input format: openai, anthropic, copilot, gemini, jsonl, filesystem_coding (auto-detect if not specified)",
+    )
+    import_parser.add_argument("--db", "-d", help="Database path to save to")
+    import_parser.add_argument(
+        "--output", "-o", help="Output file path (for conversion)"
+    )
+    import_parser.add_argument(
+        "--output-format", help="Output format for conversion: json, markdown, jsonl"
+    )
+    import_parser.add_argument("--tags", "-t", help="Comma-separated tags to add")
+    import_parser.add_argument(
+        "--sanitize", action="store_true", help="Sanitize sensitive data"
+    )
+    import_parser.add_argument(
+        "--path-selection",
+        default="longest",
+        choices=["longest", "first", "last"],
+        help="For branching conversations: which path to export (default: longest)",
+    )
 
     # Export command
-    export_parser = subparsers.add_parser('export', help='Export conversations')
-    export_parser.add_argument('output', help='Output file path')
-    export_parser.add_argument('--db', '-d', required=True, help='Database path')
-    export_parser.add_argument('--format', '-f', default='jsonl',
-                               help='Export format: json, markdown, jsonl, html, hugo (default: jsonl)')
-    export_parser.add_argument('--ids', nargs='+', help='Specific conversation IDs to export')
-    export_parser.add_argument('--view', help='Export conversations from a named view')
-    export_parser.add_argument('--limit', type=int, default=0, help='Maximum conversations (0 = all, default: all)')
-    export_parser.add_argument('--filter-source', help='Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)')
-    export_parser.add_argument('--filter-model', help='Filter by model (e.g., gpt-4, claude-3)')
-    export_parser.add_argument('--filter-tags', help='Filter by tags (comma-separated)')
-    export_parser.add_argument('--sanitize', action='store_true', help='Sanitize sensitive data')
-    export_parser.add_argument('--path-selection', default='longest',
-                               choices=['longest', 'first', 'last'],
-                               help='Path selection strategy for tree conversations (default: longest)')
-    export_parser.add_argument('--include-metadata', action='store_true',
-                               help='Include metadata in export')
+    export_parser = subparsers.add_parser("export", help="Export conversations")
+    export_parser.add_argument("output", help="Output file path")
+    export_parser.add_argument("--db", "-d", required=True, help="Database path")
+    export_parser.add_argument(
+        "--format",
+        "-f",
+        default="jsonl",
+        help="Export format: json, markdown, jsonl, html, hugo, echo (default: jsonl)",
+    )
+    export_parser.add_argument(
+        "--ids", nargs="+", help="Specific conversation IDs to export"
+    )
+    export_parser.add_argument("--view", help="Export conversations from a named view")
+    export_parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Maximum conversations (0 = all, default: all)",
+    )
+    export_parser.add_argument(
+        "--filter-source",
+        help="Filter by source (e.g., ChatGPT, Claude, GitHub Copilot)",
+    )
+    export_parser.add_argument(
+        "--filter-model", help="Filter by model (e.g., gpt-4, claude-3)"
+    )
+    export_parser.add_argument("--filter-tags", help="Filter by tags (comma-separated)")
+    export_parser.add_argument(
+        "--sanitize", action="store_true", help="Sanitize sensitive data"
+    )
+    export_parser.add_argument(
+        "--path-selection",
+        default="longest",
+        choices=["longest", "first", "last"],
+        help="Path selection strategy for tree conversations (default: longest)",
+    )
+    export_parser.add_argument(
+        "--include-metadata", action="store_true", help="Include metadata in export"
+    )
     # HTML-specific options
-    export_parser.add_argument('--theme', default='auto', choices=['light', 'dark', 'auto'],
-                               help='Theme for HTML export (default: auto)')
-    export_parser.add_argument('--group-by', default='date', choices=['date', 'source', 'model', 'tag'],
-                               help='Grouping strategy for HTML export (default: date)')
-    export_parser.add_argument('--show-tree', action='store_true', default=True,
-                               help='Show conversation tree structure in HTML export')
-    export_parser.add_argument('--no-embed', action='store_false', dest='embed', default=True,
-                               help='Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file')
-    export_parser.add_argument('--media-dir',
-                               help='Output media files to directory instead of embedding. Path relative to output file (default: embed in HTML)')
+    export_parser.add_argument(
+        "--theme",
+        default="auto",
+        choices=["light", "dark", "auto"],
+        help="Theme for HTML export (default: auto)",
+    )
+    export_parser.add_argument(
+        "--group-by",
+        default="date",
+        choices=["date", "source", "model", "tag"],
+        help="Grouping strategy for HTML export (default: date)",
+    )
+    export_parser.add_argument(
+        "--show-tree",
+        action="store_true",
+        default=True,
+        help="Show conversation tree structure in HTML export",
+    )
+    export_parser.add_argument(
+        "--no-embed",
+        action="store_false",
+        dest="embed",
+        default=True,
+        help="Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file",
+    )
+    export_parser.add_argument(
+        "--media-dir",
+        help="Output media files to directory instead of embedding. Path relative to output file (default: embed in HTML)",
+    )
     # Organization filters
-    export_parser.add_argument('--starred', action='store_true',
-                               help='Export only starred conversations')
-    export_parser.add_argument('--pinned', action='store_true',
-                               help='Export only pinned conversations')
+    export_parser.add_argument(
+        "--starred", action="store_true", help="Export only starred conversations"
+    )
+    export_parser.add_argument(
+        "--pinned", action="store_true", help="Export only pinned conversations"
+    )
     # Hugo-specific options
-    export_parser.add_argument('--draft', action='store_true',
-                               help='Hugo: mark exported conversations as draft')
-    export_parser.add_argument('--no-date-prefix', action='store_false', dest='date_prefix', default=True,
-                               help='Hugo: do not include date prefix in directory names')
+    export_parser.add_argument(
+        "--draft",
+        action="store_true",
+        help="Hugo: mark exported conversations as draft",
+    )
+    export_parser.add_argument(
+        "--no-date-prefix",
+        action="store_false",
+        dest="date_prefix",
+        default=True,
+        help="Hugo: do not include date prefix in directory names",
+    )
+    # ECHO-specific options
+    export_parser.add_argument(
+        "--include-db",
+        action="store_true",
+        help="ECHO: Include SQLite database copy in export",
+    )
+    export_parser.add_argument(
+        "--owner-name",
+        default="Unknown",
+        help="ECHO: Owner name for README (default: Unknown)",
+    )
+    export_parser.add_argument(
+        "--include-site",
+        action="store_true",
+        help="ECHO: Generate browsable HTML site in site/ subdirectory",
+    )
 
     # View command (subcommands)
-    view_parser = subparsers.add_parser('view', help='Manage curated views of conversations')
-    view_parser.add_argument('--db', '-d', required=True, help='Database path')
-    view_subparsers = view_parser.add_subparsers(dest='view_action', help='View action')
+    view_parser = subparsers.add_parser(
+        "view", help="Manage curated views of conversations"
+    )
+    view_parser.add_argument("--db", "-d", required=True, help="Database path")
+    view_subparsers = view_parser.add_subparsers(dest="view_action", help="View action")
 
     # view list
-    view_list = view_subparsers.add_parser('list', help='List all views')
+    view_list = view_subparsers.add_parser("list", help="List all views")
 
     # view create
-    view_create = view_subparsers.add_parser('create', help='Create a new view')
-    view_create.add_argument('name', help='View name')
-    view_create.add_argument('--description', '-D', help='View description')
-    view_create.add_argument('--author', help='Author name')
-    view_create.add_argument('--ids', nargs='+', help='Initial conversation IDs')
-    view_create.add_argument('--tags', help='Filter by tags (comma-separated)')
-    view_create.add_argument('--source', help='Filter by source')
-    view_create.add_argument('--model', help='Filter by model')
-    view_create.add_argument('--starred', action='store_true', help='Filter starred only')
-    view_create.add_argument('--pinned', action='store_true', help='Filter pinned only')
-    view_create.add_argument('--track-changes', action='store_true', help='Track content changes')
+    view_create = view_subparsers.add_parser("create", help="Create a new view")
+    view_create.add_argument("name", help="View name")
+    view_create.add_argument("--description", "-D", help="View description")
+    view_create.add_argument("--author", help="Author name")
+    view_create.add_argument("--ids", nargs="+", help="Initial conversation IDs")
+    view_create.add_argument("--tags", help="Filter by tags (comma-separated)")
+    view_create.add_argument("--source", help="Filter by source")
+    view_create.add_argument("--model", help="Filter by model")
+    view_create.add_argument(
+        "--starred", action="store_true", help="Filter starred only"
+    )
+    view_create.add_argument("--pinned", action="store_true", help="Filter pinned only")
+    view_create.add_argument(
+        "--track-changes", action="store_true", help="Track content changes"
+    )
 
     # view show
-    view_show = view_subparsers.add_parser('show', help='Show view details')
-    view_show.add_argument('name', help='View name')
+    view_show = view_subparsers.add_parser("show", help="Show view details")
+    view_show.add_argument("name", help="View name")
 
     # view add
-    view_add = view_subparsers.add_parser('add', help='Add conversations to a view')
-    view_add.add_argument('name', help='View name')
-    view_add.add_argument('ids', nargs='+', help='Conversation IDs to add')
-    view_add.add_argument('--title', help='Title override for added items')
-    view_add.add_argument('--note', help='Note for added items')
+    view_add = view_subparsers.add_parser("add", help="Add conversations to a view")
+    view_add.add_argument("name", help="View name")
+    view_add.add_argument("ids", nargs="+", help="Conversation IDs to add")
+    view_add.add_argument("--title", help="Title override for added items")
+    view_add.add_argument("--note", help="Note for added items")
 
     # view remove
-    view_remove = view_subparsers.add_parser('remove', help='Remove conversations from a view')
-    view_remove.add_argument('name', help='View name')
-    view_remove.add_argument('ids', nargs='+', help='Conversation IDs to remove')
+    view_remove = view_subparsers.add_parser(
+        "remove", help="Remove conversations from a view"
+    )
+    view_remove.add_argument("name", help="View name")
+    view_remove.add_argument("ids", nargs="+", help="Conversation IDs to remove")
 
     # view delete
-    view_delete = view_subparsers.add_parser('delete', help='Delete a view')
-    view_delete.add_argument('name', help='View name')
+    view_delete = view_subparsers.add_parser("delete", help="Delete a view")
+    view_delete.add_argument("name", help="View name")
 
     # view check
-    view_check = view_subparsers.add_parser('check', help='Check view for issues')
-    view_check.add_argument('name', nargs='?', help='View name (or check all)')
+    view_check = view_subparsers.add_parser("check", help="Check view for issues")
+    view_check.add_argument("name", nargs="?", help="View name (or check all)")
 
     # view eval
-    view_eval = view_subparsers.add_parser('eval', help='Evaluate and list view contents')
-    view_eval.add_argument('name', help='View name')
+    view_eval = view_subparsers.add_parser(
+        "eval", help="Evaluate and list view contents"
+    )
+    view_eval.add_argument("name", help="View name")
 
     # Plugins command
-    plugins_parser = subparsers.add_parser('plugins', help='List available plugins')
+    plugins_parser = subparsers.add_parser("plugins", help="List available plugins")
 
     # Auto-tag command
-    auto_tag_parser = subparsers.add_parser('auto-tag', help='Auto-tag conversations using LLM')
-    auto_tag_parser.add_argument('--db', '-d', required=True, help='Database path')
-    auto_tag_parser.add_argument('--provider', default='ollama', choices=['ollama'], help='LLM provider to use')
-    auto_tag_parser.add_argument('--model', default='llama3.2', help='Model to use for tagging')
-    auto_tag_parser.add_argument('--base-url', help='Provider base URL (default: from config)')
-    auto_tag_parser.add_argument('--limit', type=int, default=None, help='Maximum conversations to tag (default: all matching)')
-    auto_tag_parser.add_argument('--dry-run', action='store_true', help='Show suggestions without applying')
-    auto_tag_parser.add_argument('--yes', '-y', action='store_true', help='Auto-approve all tags')
+    auto_tag_parser = subparsers.add_parser(
+        "auto-tag", help="Auto-tag conversations using LLM"
+    )
+    auto_tag_parser.add_argument("--db", "-d", required=True, help="Database path")
+    auto_tag_parser.add_argument(
+        "--provider", default="ollama", choices=["ollama"], help="LLM provider to use"
+    )
+    auto_tag_parser.add_argument(
+        "--model", default="llama3.2", help="Model to use for tagging"
+    )
+    auto_tag_parser.add_argument(
+        "--base-url", help="Provider base URL (default: from config)"
+    )
+    auto_tag_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum conversations to tag (default: all matching)",
+    )
+    auto_tag_parser.add_argument(
+        "--dry-run", action="store_true", help="Show suggestions without applying"
+    )
+    auto_tag_parser.add_argument(
+        "--yes", "-y", action="store_true", help="Auto-approve all tags"
+    )
     # Filters
-    auto_tag_parser.add_argument('--query', '-q', help='Full-text search in conversation content')
-    auto_tag_parser.add_argument('--project', help='Filter by project')
-    auto_tag_parser.add_argument('--starred', action='store_true', help='Only starred conversations')
-    auto_tag_parser.add_argument('--source', help='Filter by source')
-    auto_tag_parser.add_argument('--title', help='Filter by title (partial match)')
-    auto_tag_parser.add_argument('--no-tags', action='store_true', help='Only conversations without tags')
+    auto_tag_parser.add_argument(
+        "--query", "-q", help="Full-text search in conversation content"
+    )
+    auto_tag_parser.add_argument("--project", help="Filter by project")
+    auto_tag_parser.add_argument(
+        "--starred", action="store_true", help="Only starred conversations"
+    )
+    auto_tag_parser.add_argument("--source", help="Filter by source")
+    auto_tag_parser.add_argument("--title", help="Filter by title (partial match)")
+    auto_tag_parser.add_argument(
+        "--no-tags", action="store_true", help="Only conversations without tags"
+    )
 
     # Chat command
-    chat_parser = subparsers.add_parser('chat', help='Interactive chat with LLM and MCP tools')
-    chat_parser.add_argument('--model', '-m', default='llama3.2', help='Model to use (default: llama3.2)')
-    chat_parser.add_argument('--provider', '-p', default='ollama', choices=['ollama'],
-                            help='LLM provider (default: ollama)')
-    chat_parser.add_argument('--base-url', help='Base URL for provider (e.g., http://localhost:11434)')
-    chat_parser.add_argument('--db', '-d', help='Database path to save conversations')
-    chat_parser.add_argument('--no-markdown', action='store_true', help='Disable markdown rendering')
-    chat_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling (for models that don\'t support it)')
+    chat_parser = subparsers.add_parser(
+        "chat", help="Interactive chat with LLM and MCP tools"
+    )
+    chat_parser.add_argument(
+        "--model", "-m", default="llama3.2", help="Model to use (default: llama3.2)"
+    )
+    chat_parser.add_argument(
+        "--provider",
+        "-p",
+        default="ollama",
+        choices=["ollama"],
+        help="LLM provider (default: ollama)",
+    )
+    chat_parser.add_argument(
+        "--base-url", help="Base URL for provider (e.g., http://localhost:11434)"
+    )
+    chat_parser.add_argument("--db", "-d", help="Database path to save conversations")
+    chat_parser.add_argument(
+        "--no-markdown", action="store_true", help="Disable markdown rendering"
+    )
+    chat_parser.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="Disable tool calling (for models that don't support it)",
+    )
 
     # Say command - one-shot LLM message with full tool support
-    say_parser = subparsers.add_parser('say', help='One-shot message to LLM (same as TUI say)')
-    say_parser.add_argument('message', nargs='+', help='Message to send')
-    say_parser.add_argument('--db', '-d', help='Database path (enables CTK tools)')
-    say_parser.add_argument('--model', '-m', default='llama3.2', help='Model to use (default: llama3.2)')
-    say_parser.add_argument('--provider', '-p', default='ollama', choices=['ollama'],
-                            help='LLM provider (default: ollama)')
-    say_parser.add_argument('--base-url', help='Base URL for provider')
-    say_parser.add_argument('--no-tools', action='store_true', help='Disable tool calling')
+    say_parser = subparsers.add_parser(
+        "say", help="One-shot message to LLM (same as TUI say)"
+    )
+    say_parser.add_argument("message", nargs="+", help="Message to send")
+    say_parser.add_argument("--db", "-d", help="Database path (enables CTK tools)")
+    say_parser.add_argument(
+        "--model", "-m", default="llama3.2", help="Model to use (default: llama3.2)"
+    )
+    say_parser.add_argument(
+        "--provider",
+        "-p",
+        default="ollama",
+        choices=["ollama"],
+        help="LLM provider (default: ollama)",
+    )
+    say_parser.add_argument("--base-url", help="Base URL for provider")
+    say_parser.add_argument(
+        "--no-tools", action="store_true", help="Disable tool calling"
+    )
 
     # Query command - human-friendly search with composable flags
-    query_parser = subparsers.add_parser('query', help='Search conversations with flags')
-    query_parser.add_argument('text', nargs='?', help='Optional search text')
-    query_parser.add_argument('--db', '-d', required=True, help='Database path')
+    query_parser = subparsers.add_parser(
+        "query", help="Search conversations with flags"
+    )
+    query_parser.add_argument("text", nargs="?", help="Optional search text")
+    query_parser.add_argument("--db", "-d", required=True, help="Database path")
     # Filters (multiple --tag = AND)
-    query_parser.add_argument('--tag', action='append', help='Filter by tag (repeatable, AND logic)')
-    query_parser.add_argument('--starred', action='store_true', help='Only starred')
-    query_parser.add_argument('--pinned', action='store_true', help='Only pinned')
-    query_parser.add_argument('--archived', action='store_true', help='Only archived')
-    query_parser.add_argument('--include-archived', action='store_true', help='Include archived in results')
-    query_parser.add_argument('--source', help='Filter by source')
-    query_parser.add_argument('--model', help='Filter by model')
-    query_parser.add_argument('--project', help='Filter by project')
+    query_parser.add_argument(
+        "--tag", action="append", help="Filter by tag (repeatable, AND logic)"
+    )
+    query_parser.add_argument("--starred", action="store_true", help="Only starred")
+    query_parser.add_argument("--pinned", action="store_true", help="Only pinned")
+    query_parser.add_argument("--archived", action="store_true", help="Only archived")
+    query_parser.add_argument(
+        "--include-archived", action="store_true", help="Include archived in results"
+    )
+    query_parser.add_argument("--source", help="Filter by source")
+    query_parser.add_argument("--model", help="Filter by model")
+    query_parser.add_argument("--project", help="Filter by project")
     # Date filters
-    query_parser.add_argument('--since', help='After date (YYYY-MM-DD or 7d, 1w, 1m)')
-    query_parser.add_argument('--until', help='Before date')
+    query_parser.add_argument("--since", help="After date (YYYY-MM-DD or 7d, 1w, 1m)")
+    query_parser.add_argument("--until", help="Before date")
     # View integration
-    query_parser.add_argument('--view', help='Evaluate a saved view')
+    query_parser.add_argument("--view", help="Evaluate a saved view")
     # Output
-    query_parser.add_argument('--format', '-f', choices=['table', 'json', 'csv'], default='table')
-    query_parser.add_argument('--limit', '-n', type=int, help='Max results')
-    query_parser.add_argument('--order-by', choices=['created_at', 'updated_at', 'title'], default='updated_at')
-    query_parser.add_argument('--asc', action='store_true', help='Sort ascending')
+    query_parser.add_argument(
+        "--format", "-f", choices=["table", "json", "csv"], default="table"
+    )
+    query_parser.add_argument("--limit", "-n", type=int, help="Max results")
+    query_parser.add_argument(
+        "--order-by",
+        choices=["created_at", "updated_at", "title"],
+        default="updated_at",
+    )
+    query_parser.add_argument("--asc", action="store_true", help="Sort ascending")
 
     # SQL command - direct SQL queries with Rich output
-    sql_parser = subparsers.add_parser('sql', help='Execute SQL queries on database')
-    sql_parser.add_argument('query', nargs='?', help='SQL query to execute')
-    sql_parser.add_argument('--db', '-d', required=True, help='Database path')
-    sql_parser.add_argument('--format', '-f', choices=['table', 'json', 'csv'],
-                           default='table', help='Output format (default: table)')
-    sql_parser.add_argument('--limit', '-n', type=int, help='Limit number of rows')
-    sql_parser.add_argument('--schema', '-s', action='store_true',
-                           help='Show database schema')
-    sql_parser.add_argument('--interactive', '-i', action='store_true',
-                           help='Interactive SQL mode')
+    sql_parser = subparsers.add_parser("sql", help="Execute SQL queries on database")
+    sql_parser.add_argument("query", nargs="?", help="SQL query to execute")
+    sql_parser.add_argument("--db", "-d", required=True, help="Database path")
+    sql_parser.add_argument(
+        "--format",
+        "-f",
+        choices=["table", "json", "csv"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    sql_parser.add_argument("--limit", "-n", type=int, help="Limit number of rows")
+    sql_parser.add_argument(
+        "--schema", "-s", action="store_true", help="Show database schema"
+    )
+    sql_parser.add_argument(
+        "--interactive", "-i", action="store_true", help="Interactive SQL mode"
+    )
 
     # Database operations command
     from ctk.cli_db import add_db_commands
+
     add_db_commands(subparsers)
 
     # Network/similarity operations command
     from ctk.cli_net import add_net_commands
+
     add_net_commands(subparsers)
 
     # Conversation command group
     from ctk.cli_conv import add_conv_commands
+
     add_conv_commands(subparsers)
 
     # Library command group
     from ctk.cli_lib import add_lib_commands
+
     add_lib_commands(subparsers)
 
     # LLM provider command group
     from ctk.cli_llm import add_llm_commands
+
     add_llm_commands(subparsers)
 
     # Config command group
     from ctk.cli_config import add_config_commands
+
     add_config_commands(subparsers)
 
     args = parser.parse_args()
-    
+
     if args.verbose:
         setup_logging(verbose=True)
-    
+
     if not args.command:
         parser.print_help()
         return 1
-    
+
     # Dispatch to command handler
     # Note: Many commands moved to groups:
     #   ctk conv - show, tree, paths, star, pin, archive, title, delete, duplicate, tag, untag
     #   ctk lib  - list, search, stats, tags, models, sources
     commands = {
-        'import': cmd_import,
-        'export': cmd_export,
-        'view': cmd_view,
-        'plugins': cmd_plugins,
-        'auto-tag': cmd_auto_tag,
-        'say': cmd_say,
-        'chat': cmd_chat,
-        'sql': cmd_sql,
-        'query': cmd_query,
+        "import": cmd_import,
+        "export": cmd_export,
+        "view": cmd_view,
+        "plugins": cmd_plugins,
+        "auto-tag": cmd_auto_tag,
+        "say": cmd_say,
+        "chat": cmd_chat,
+        "sql": cmd_sql,
+        "query": cmd_query,
     }
 
     # Special handling for db subcommands
-    if args.command == 'db':
-        from ctk.cli_db import (
-            cmd_merge, cmd_diff, cmd_intersect, cmd_filter,
-            cmd_split, cmd_dedupe, cmd_stats as cmd_db_stats,
-            cmd_validate, cmd_init, cmd_info,
-            cmd_vacuum, cmd_backup
-        )
+    if args.command == "db":
+        from ctk.cli_db import (cmd_backup, cmd_dedupe, cmd_diff, cmd_filter,
+                                cmd_info, cmd_init, cmd_intersect, cmd_merge,
+                                cmd_split)
+        from ctk.cli_db import cmd_stats as cmd_db_stats
+        from ctk.cli_db import cmd_vacuum, cmd_validate
 
         db_commands = {
-            'init': cmd_init,
-            'info': cmd_info,
-            'vacuum': cmd_vacuum,
-            'backup': cmd_backup,
-            'merge': cmd_merge,
-            'diff': cmd_diff,
-            'intersect': cmd_intersect,
-            'filter': cmd_filter,
-            'split': cmd_split,
-            'dedupe': cmd_dedupe,
-            'stats': cmd_db_stats,
-            'validate': cmd_validate,
+            "init": cmd_init,
+            "info": cmd_info,
+            "vacuum": cmd_vacuum,
+            "backup": cmd_backup,
+            "merge": cmd_merge,
+            "diff": cmd_diff,
+            "intersect": cmd_intersect,
+            "filter": cmd_filter,
+            "split": cmd_split,
+            "dedupe": cmd_dedupe,
+            "stats": cmd_db_stats,
+            "validate": cmd_validate,
             # NOTE: 'query' removed - use 'ctk sql' for raw SQL, 'ctk query' for search
         }
 
-        if hasattr(args, 'db_command') and args.db_command:
+        if hasattr(args, "db_command") and args.db_command:
             return db_commands[args.db_command](args)
         else:
             print("Error: No database operation specified")
             return 1
 
     # Special handling for net subcommands
-    if args.command == 'net':
-        from ctk.cli_net import (
-            cmd_embeddings, cmd_similar, cmd_links, cmd_network,
-            cmd_clusters, cmd_neighbors, cmd_path, cmd_central, cmd_outliers,
-            cmd_export as cmd_net_export
-        )
+    if args.command == "net":
+        from ctk.cli_net import cmd_central, cmd_clusters, cmd_embeddings
+        from ctk.cli_net import cmd_export as cmd_net_export
+        from ctk.cli_net import (cmd_links, cmd_neighbors, cmd_network,
+                                 cmd_outliers, cmd_path, cmd_similar)
 
         net_commands = {
-            'embeddings': cmd_embeddings,
-            'similar': cmd_similar,
-            'links': cmd_links,
-            'network': cmd_network,
-            'clusters': cmd_clusters,
-            'neighbors': cmd_neighbors,
-            'path': cmd_path,
-            'central': cmd_central,
-            'outliers': cmd_outliers,
-            'export': cmd_net_export,
+            "embeddings": cmd_embeddings,
+            "similar": cmd_similar,
+            "links": cmd_links,
+            "network": cmd_network,
+            "clusters": cmd_clusters,
+            "neighbors": cmd_neighbors,
+            "path": cmd_path,
+            "central": cmd_central,
+            "outliers": cmd_outliers,
+            "export": cmd_net_export,
         }
 
-        if hasattr(args, 'net_command') and args.net_command:
+        if hasattr(args, "net_command") and args.net_command:
             return net_commands[args.net_command](args)
         else:
             print("Error: No network operation specified")
-            print("Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers, export")
+            print(
+                "Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers, export"
+            )
             return 1
 
     # Special handling for conv subcommands
-    if args.command == 'conv':
+    if args.command == "conv":
         from ctk.cli_conv import dispatch_conv_command
+
         return dispatch_conv_command(args)
 
     # Special handling for lib subcommands
-    if args.command == 'lib':
+    if args.command == "lib":
         from ctk.cli_lib import dispatch_lib_command
+
         return dispatch_lib_command(args)
 
     # Special handling for llm subcommands
-    if args.command == 'llm':
+    if args.command == "llm":
         from ctk.cli_llm import dispatch_llm_command
+
         return dispatch_llm_command(args)
 
     # Special handling for config subcommands
-    if args.command == 'config':
+    if args.command == "config":
         from ctk.cli_config import dispatch_config_command
+
         return dispatch_config_command(args)
 
     return commands[args.command](args)
@@ -2880,15 +3223,15 @@ def main():
 def _get_command_handlers():
     """Get mapping of command names to handler functions"""
     return {
-        'import': cmd_import,
-        'export': cmd_export,
-        'list': cmd_list,
-        'search': cmd_search,
-        'stats': cmd_stats,
-        'view': cmd_view,
-        'plugins': cmd_plugins,
+        "import": cmd_import,
+        "export": cmd_export,
+        "list": cmd_list,
+        "search": cmd_search,
+        "stats": cmd_stats,
+        "view": cmd_view,
+        "plugins": cmd_plugins,
     }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
