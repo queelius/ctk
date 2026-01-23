@@ -704,7 +704,7 @@ If you use CTK in your research or projects, please cite it:
   year         = 2025,
   publisher    = {GitHub},
   url          = {https://github.com/queelius/ctk},
-  version      = {2.5.0}
+  version      = {2.6.0}
 }
 ```
 
