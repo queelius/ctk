@@ -2,7 +2,6 @@
 Rich formatting utilities for CLI and TUI output.
 """
 
-import json
 from typing import List, Optional
 
 from rich.console import Console

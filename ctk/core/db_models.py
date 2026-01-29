@@ -13,7 +13,6 @@ from sqlalchemy import (JSON, Boolean, CheckConstraint, Column, DateTime, Enum,
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from sqlalchemy.types import ARRAY
 
 
 class Base(DeclarativeBase):

@@ -1920,7 +1920,9 @@ Tags:"""
         for msg in self.message_map.values():
             if not msg.parent_id:
                 # This is a root, get all paths from it
-                def get_paths_from(node, current_path=[]):
+                def get_paths_from(node, current_path=None):
+                    if current_path is None:
+                        current_path = []
                     new_path = current_path + [node]
                     if not node.children:
                         return [new_path]

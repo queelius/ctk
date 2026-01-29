@@ -55,8 +55,8 @@ make clean
 
 **Database Layer** (`ctk/core/database.py`)
 - SQLAlchemy-based persistence using SQLite
-- Tables: conversations, messages, tags, paths
-- Full-text search via SQL LIKE queries
+- Tables: conversations, messages, tags, paths, embeddings, similarities
+- Full-text search via FTS5 virtual tables with LIKE fallback
 - Connection management with context managers
 
 **Plugin System** (`ctk/core/plugin.py`)
@@ -138,7 +138,7 @@ class CommandResult:
     pipe_data: Optional[str] = None
 ```
 
-See `SHELL_COMMANDS_REFERENCE.md` for complete command documentation.
+See `ctk/core/commands/` directory for complete command implementations.
 
 ### Import/Export Flow
 
@@ -214,16 +214,14 @@ Exporters (`ctk/integrations/exporters/`):
 ## Critical Notes
 
 ### Current Status
-- Shell-first mode fully implemented with 20 commands
-- Test coverage at ~35% (698 tests passing)
+- Shell-first mode fully implemented with 26+ commands across 12 modules
+- FTS5 full-text search implemented
 - Key modules well-tested: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)
 
 ### Known Issues
-- Test coverage target: >70% (currently ~35%)
-- Database queries use LIKE instead of full-text search (consider FTS5)
+- Test coverage needs improvement
 - Plugin system needs additional security validation
 - Performance optimization needed for large databases (>100k conversations)
-- Some legacy tests need API updates (53 failing)
 
 ### Testing Approach
 - Unit tests in `tests/unit/` - test individual components

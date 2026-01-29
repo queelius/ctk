@@ -7,7 +7,6 @@ including support for piping between commands.
 
 import sys
 from dataclasses import dataclass
-from io import StringIO
 from typing import Any, Callable, Dict, List, Optional
 
 from ctk.core.shell_parser import ParsedCommand, ParsedPipeline

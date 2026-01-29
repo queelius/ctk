@@ -76,15 +76,16 @@ def migration_lock(lock_path: Path, timeout: float = 30.0):
         if lock_file:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                lock_file.close()
-                # Clean up lock file
-                try:
-                    lock_path.unlink()
-                except (IOError, OSError):
-                    pass
-                logger.debug(f"Migration lock released: {lock_path}")
             except Exception as e:
-                logger.warning(f"Error releasing migration lock: {e}")
+                logger.warning(f"Error unlocking migration lock: {e}")
+            finally:
+                lock_file.close()
+            # Clean up lock file
+            try:
+                lock_path.unlink()
+            except (IOError, OSError):
+                pass
+            logger.debug(f"Migration lock released: {lock_path}")
 
 
 class ConversationDB:

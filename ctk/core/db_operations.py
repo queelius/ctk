@@ -6,7 +6,6 @@ Following Unix philosophy: do one thing well, composable, pipeable
 import hashlib
 import json
 import logging
-import sqlite3
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime
@@ -14,8 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Set, Tuple, Union
 
-from sqlalchemy import and_, create_engine, func, or_, select, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .database import ConversationDB

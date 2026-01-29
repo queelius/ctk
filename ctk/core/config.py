@@ -8,7 +8,6 @@ the config file. This module will warn if credentials are found in config files.
 import json
 import logging
 import os
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

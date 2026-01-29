@@ -54,8 +54,7 @@ ctk export training.jsonl --db my_chats.db --format jsonl
 ```bash
 git clone https://github.com/queelius/ctk.git
 cd ctk
-make setup
-source .venv/bin/activate
+make install
 ```
 
 ### Manual Setup

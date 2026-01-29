@@ -30,7 +30,15 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        # No external dependencies - using only stdlib!
+        "sqlalchemy>=2.0.0",
+        "alembic>=1.13.0",
+        "pydantic>=2.0.0",
+        "requests>=2.31.0",
+        "rich>=13.0.0",
+        "mcp>=1.0.0",
+        "networkx>=3.0",
+        "scikit-learn>=1.3.0",
+        "numpy>=1.24.0",
     ],
     extras_require={
         "dev": [

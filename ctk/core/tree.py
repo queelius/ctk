@@ -12,8 +12,6 @@ from typing import Any, List, Optional, Tuple
 
 from rich.console import Console
 from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.text import Text
 
 from .models import ConversationTree

@@ -2,7 +2,6 @@
 Fluent Python API for CTK - A pythonic interface for conversation management
 """
 
-import json
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
