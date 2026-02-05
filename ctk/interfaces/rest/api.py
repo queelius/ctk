@@ -1275,17 +1275,17 @@ class RestInterface(BaseInterface):
 
             with self.db as db:
                 evaluated = view_store.evaluate(view_name, db)
-                if not evaluated:
+                if evaluated is None:
                     return InterfaceResponse.error(f"View '{view_name}' not found")
 
                 items = []
                 for item in evaluated.items:
                     items.append(
                         {
-                            "conversation_id": item.conversation_id,
-                            "title": item.title_override,
-                            "annotation": item.annotation,
-                            "path": item.path,
+                            "conversation_id": item.item.id,
+                            "title": item.effective_title,
+                            "description": item.effective_description,
+                            "section": item.section,
                         }
                     )
 

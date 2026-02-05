@@ -1340,7 +1340,7 @@ class ViewStore:
             return {"error": f"View '{name}' not found"}
 
         evaluated = self.evaluate(name, db)
-        if not evaluated:
+        if evaluated is None:
             return {"error": f"Failed to evaluate view '{name}'"}
 
         return {

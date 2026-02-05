@@ -308,7 +308,7 @@ class VisualizationCommands:
         Returns:
             CommandResult with conversation display
         """
-        from ctk.core.helpers import show_conversation_helper
+        from ctk.core.conversation_display import show_conversation_helper
 
         # Determine conversation ID
         if not args:

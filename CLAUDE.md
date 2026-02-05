@@ -84,23 +84,14 @@ make clean
 - Connect to REST API for all operations
 - Search, import, export, and view conversations
 
-### CLI Architecture (`ctk/cli.py`)
-Main commands:
-- `import`: Load conversations from various formats
-- `export`: Export conversations to different formats
-- `list`: Display conversations with filtering (supports --starred, --pinned, --archived)
-- `search`: Full-text search across all messages with Rich table output
-- `ask`: Natural language queries using LLM with tool calling
-- `show`: Display specific conversation (supports path selection)
-- `tree`: Visualize conversation tree structure
-- `paths`: List all paths in branching conversation
-- `star/pin/archive`: Organize conversations
-- `title`: Rename conversations
-- `tag`: Auto-tag with LLM
-- `stats`: Database statistics and analytics
-- `plugins`: List available plugins
-- `chat`: Launch interactive TUI (shell-first mode)
-- `merge/diff/filter`: Database operations
+### CLI Architecture (modular)
+- `ctk/cli.py`: Main dispatcher + `import`, `export`, `view`, `query`, `chat`, `plugins`
+- `ctk/cli_conv.py`: `ctk conv` subcommands (show, tree, paths, star, pin, archive, title, delete, tag, fork, reply)
+- `ctk/cli_db.py`: `ctk db` subcommands (stats, merge, diff, filter, sql)
+- `ctk/cli_net.py`: `ctk net` subcommands (network analysis)
+- `ctk/cli_llm.py`: `ctk llm` subcommands (provider/model management)
+- `ctk/cli_config.py`: `ctk config` subcommands
+- `ctk/cli_lib.py`: Shared CLI utilities
 
 ### Shell-First Mode (`ctk/integrations/chat/tui.py`)
 
@@ -144,6 +135,12 @@ See `ctk/core/commands/` directory for complete command implementations.
 
 1. **Import**: File → Format Detection → Importer Plugin → ConversationTree → Database
 2. **Export**: Database → ConversationTree → Path Selection → Exporter Plugin → Output File
+
+### View System (`ctk/core/views.py`)
+- YAML-based named collections stored at `<db_path>/views/<name>.yaml`
+- Selection types: `ITEMS` (explicit list), `QUERY` (filter), `SQL`, `UNION/INTERSECT/SUBTRACT` (composition)
+- `ViewStore`: CRUD for views, `ViewEvaluator`: resolves views against a database
+- CLI: `ctk view create/list/show/eval`, `ctk query --view <name>`
 
 ### Plugin Structure
 
@@ -197,19 +194,20 @@ Exporters (`ctk/integrations/exporters/`):
 - Supports streaming and tool calling
 - Provider implementations: Ollama, OpenAI, Anthropic
 
-**Tool Calling** (`ctk/core/helpers.py`):
+**Tool Calling** (`ctk/core/tools.py`):
 - `get_ask_tools()`: Returns tool definitions for database queries
 - `execute_ask_tool()`: Executes tools and returns formatted results
 - Tools: `search_conversations`, `get_conversation_by_id`
 - Supports both CLI and TUI contexts
 
-### Helper Functions (`ctk/core/helpers.py`)
+### Shared Utilities (module map)
 
-**Shared Utilities**:
-- `format_conversations_table()`: Rich table formatting for CLI/TUI
-- `list_conversations_helper()`: Unified conversation listing logic
-- `search_conversations_helper()`: Unified search logic
-- Tool schemas and execution for LLM queries
+Functions are spread across focused modules (the old `helpers.py` shim was deleted):
+- `format_conversations_table()` → `ctk/core/formatting.py`
+- `list_conversations_helper()`, `search_conversations_helper()` → `ctk/core/db_helpers.py`
+- `show_conversation_helper()` → `ctk/core/conversation_display.py`
+- `get_ask_tools()`, `is_pass_through_tool()` → `ctk/core/tools.py`
+- `get_ctk_system_prompt()`, `get_ctk_system_prompt_no_tools()` → `ctk/core/prompts.py`
 
 ## Critical Notes
 
@@ -217,6 +215,13 @@ Exporters (`ctk/integrations/exporters/`):
 - Shell-first mode fully implemented with 26+ commands across 12 modules
 - FTS5 full-text search implemented
 - Key modules well-tested: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)
+
+### Gotchas
+- `EvaluatedView` implements `__len__`, so empty results are falsy — always use `is None` checks, not `if not evaluated:`
+- `EvaluatedViewItem` attributes: use `item.item.id` (conversation ID), `item.effective_title`, `item.effective_description` — NOT `item.conversation_id` or `item.title_override`
+- CLI uses subcommands: `ctk query` (not `ctk list`/`ctk search`), `ctk conv show/star/pin` (not `ctk show`/`ctk star`), `ctk db stats/merge/diff` (not `ctk stats`)
+- Integration tests in `tests/integration/test_cli.py` use old command names and are known-failing
+- `ConversationDB` context manager is for cleanup only; session is initialized in `__init__`
 
 ### Known Issues
 - Test coverage needs improvement
@@ -258,7 +263,7 @@ Exporters (`ctk/integrations/exporters/`):
 ### Natural Language Queries (Ask Command)
 The `ctk ask` command and TUI `/ask` command use LLM tool calling to interpret natural language queries:
 
-**Implementation** (`ctk/cli.py`, `ctk/core/helpers.py`):
+**Implementation** (`ctk/cli.py`, `ctk/core/tools.py`, `ctk/core/db_helpers.py`):
 - System prompt with few-shot examples guides LLM behavior
 - Tools: `search_conversations`, `get_conversation_by_id`
 - Boolean filters (starred/pinned/archived) only included when explicitly mentioned

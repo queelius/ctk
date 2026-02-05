@@ -246,7 +246,7 @@ def cmd_export(args):
 
             store = ViewStore(args.db)
             evaluated = store.evaluate(args.view, db)
-            if not evaluated:
+            if evaluated is None:
                 print(f"Error: View '{args.view}' not found")
                 return 1
             conversations = evaluated.conversations
@@ -359,7 +359,7 @@ def cmd_list(args):
         print("Error: Database path required")
         return 1
 
-    from .core.helpers import list_conversations_helper
+    from .core.db_helpers import list_conversations_helper
 
     db = ConversationDB(args.db)
 
@@ -404,41 +404,40 @@ def cmd_query(args):
         store = ViewStore(args.db)
 
         try:
-            evaluated = store.evaluate(args.view, db)
-            if not evaluated:
-                print(f"Error: View '{args.view}' not found")
-                return 1
+            with db:
+                evaluated = store.evaluate(args.view, db)
+                if evaluated is None:
+                    print(f"Error: View '{args.view}' not found")
+                    return 1
 
-            # Display view results
-            items = evaluated.items
-            if not items:
-                print(f"View '{args.view}' has no matching conversations")
+                # Display view results
+                items = evaluated.items
+                if not items:
+                    print(f"View '{args.view}' has no matching conversations")
+                    return 0
+
+                if args.format == "json":
+                    import json
+
+                    data = [
+                        {"id": item.item.id, "title": item.effective_title}
+                        for item in items
+                    ]
+                    print(json.dumps(data, indent=2))
+                    return 0
+
+                # Table output
+                table = Table(title=f"View: {args.view}")
+                table.add_column("#", style="dim")
+                table.add_column("ID", style="cyan")
+                table.add_column("Title", style="white")
+
+                for i, item in enumerate(items[: args.limit or 100], 1):
+                    table.add_row(str(i), item.item.id[:8], item.effective_title[:60])
+
+                console.print(table)
+                console.print(f"\n[dim]{len(items)} conversation(s) in view[/dim]")
                 return 0
-
-            if args.format == "json":
-                import json
-
-                data = [
-                    {"id": item.conversation_id, "title": item.title_override or ""}
-                    for item in items
-                ]
-                print(json.dumps(data, indent=2))
-                return 0
-
-            # Table output
-            table = Table(title=f"View: {args.view}")
-            table.add_column("#", style="dim")
-            table.add_column("ID", style="cyan")
-            table.add_column("Title", style="white")
-
-            for i, item in enumerate(items[: args.limit or 100], 1):
-                conv = db.load_conversation(item.conversation_id)
-                title = item.title_override or (conv.title if conv else "Untitled")
-                table.add_row(str(i), item.conversation_id[:8], title[:60])
-
-            console.print(table)
-            console.print(f"\n[dim]{len(items)} conversation(s) in view[/dim]")
-            return 0
 
         except Exception as e:
             print(f"Error evaluating view: {e}")
@@ -474,7 +473,7 @@ def cmd_query(args):
     tags = ",".join(args.tag) if args.tag else None
 
     # Use the search helper
-    from .core.helpers import search_conversations_helper
+    from .core.db_helpers import search_conversations_helper
 
     return search_conversations_helper(
         db=db,
@@ -512,7 +511,7 @@ def cmd_search(args):
 
     from datetime import datetime
 
-    from .core.helpers import search_conversations_helper
+    from .core.db_helpers import search_conversations_helper
 
     db = ConversationDB(args.db)
 
@@ -815,7 +814,7 @@ def cmd_view(args):
         db = ConversationDB(args.db)
         with db:
             evaluated = store.evaluate(args.name, db)
-            if not evaluated:
+            if evaluated is None:
                 print(f"Error: View '{args.name}' not found")
                 return 1
 
@@ -1208,7 +1207,7 @@ def execute_ask_tool(
 
             # Format results with Rich if enabled
             if use_rich:
-                from ctk.core.helpers import format_conversations_table
+                from ctk.core.formatting import format_conversations_table
 
                 # Limit to 10 for display
                 display_results = results[:10]
@@ -1437,7 +1436,7 @@ def execute_ask_tool(
             return f"Renamed conversation {conv_id[:8]}... to '{title}'"
 
         elif tool_name == "show_conversation_content":
-            from ctk.core.helpers import show_conversation_helper
+            from ctk.core.conversation_display import show_conversation_helper
 
             conv_id = tool_args.get("conversation_id", "")
             if not conv_id:
@@ -2098,7 +2097,7 @@ def cmd_chat(args):
 
 def cmd_show(args):
     """Show a specific conversation"""
-    from ctk.core.helpers import show_conversation_helper
+    from ctk.core.conversation_display import show_conversation_helper
 
     db = ConversationDB(args.db)
 

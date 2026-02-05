@@ -1978,7 +1978,7 @@ Tags:"""
         # Parse arguments
         import shlex
 
-        from ctk.core.helpers import search_conversations_helper
+        from ctk.core.db_helpers import search_conversations_helper
 
         try:
             arg_list = shlex.split(args) if args else []
@@ -2084,7 +2084,7 @@ Tags:"""
         # Parse arguments
         import shlex
 
-        from ctk.core.helpers import list_conversations_helper
+        from ctk.core.db_helpers import list_conversations_helper
 
         try:
             arg_list = shlex.split(args) if args else []
@@ -2159,7 +2159,7 @@ Tags:"""
         import json
 
         from ctk.core.config import get_config
-        from ctk.core.helpers import get_ask_tools
+        from ctk.core.tools import get_ask_tools
 
         # Get LLM provider config
         cfg = get_config()
@@ -3947,11 +3947,11 @@ Available operations:
             if not has_system_prompt:
                 # Choose prompt based on whether tools are available
                 if self.tools_disabled:
-                    from ctk.core.helpers import get_ctk_system_prompt_no_tools
+                    from ctk.core.prompts import get_ctk_system_prompt_no_tools
 
                     ctk_prompt = get_ctk_system_prompt_no_tools(self.db, self.vfs_cwd)
                 else:
-                    from ctk.core.helpers import get_ctk_system_prompt
+                    from ctk.core.prompts import get_ctk_system_prompt
 
                     ctk_prompt = get_ctk_system_prompt(self.db, self.vfs_cwd)
                 # Insert system message at the root
@@ -3993,7 +3993,7 @@ Available operations:
                     and not self.tools_disabled
                 )
                 if ctk_tools_enabled:
-                    from ctk.core.helpers import get_ask_tools
+                    from ctk.core.tools import get_ask_tools
 
                     ctk_tools = get_ask_tools()
                     kwargs["tools"] = self.provider.format_tools_for_api(ctk_tools)
@@ -4111,7 +4111,7 @@ Available operations:
                                 and self.root
                                 and self.root.role == LLMMessageRole.SYSTEM
                             ):
-                                from ctk.core.helpers import \
+                                from ctk.core.prompts import \
                                     get_ctk_system_prompt_no_tools
 
                                 self.root.content = get_ctk_system_prompt_no_tools(
@@ -4169,7 +4169,7 @@ Available operations:
                     print(f"\n🔧 Executing {len(tool_calls)} tool call(s)...")
 
                     # Import pass-through check
-                    from ctk.core.helpers import is_pass_through_tool
+                    from ctk.core.tools import is_pass_through_tool
 
                     # CTK tool names for routing
                     ctk_tool_names = {

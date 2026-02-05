@@ -195,7 +195,7 @@ class SearchCommands:
                         conv_ids.add(parts[1])
 
                 # Load conversation summaries from database
-                from ctk.core.helpers import format_conversations_table
+                from ctk.core.formatting import format_conversations_table
 
                 all_summaries = self.db.list_conversations()
 
