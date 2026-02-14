@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 
+from ctk.core.constants import DEFAULT_TIMEOUT
 from ctk.integrations.llm.base import (
     AuthenticationError,
     ChatResponse,
@@ -55,7 +56,7 @@ class AnthropicProvider(LLMProvider):
         super().__init__(config)
         self.base_url = config.get("base_url", "https://api.anthropic.com").rstrip("/")
         self.api_key = config.get("api_key")
-        self.timeout = config.get("timeout", 120)
+        self.timeout = config.get("timeout", DEFAULT_TIMEOUT)
         self.default_max_tokens = config.get("max_tokens", 4096)
         self.api_version = "2023-06-01"
 

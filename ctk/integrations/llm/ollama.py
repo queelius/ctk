@@ -7,6 +7,8 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 
+from ctk.core.constants import (DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT,
+                                MODEL_LIST_TIMEOUT, SHORT_TIMEOUT)
 from ctk.integrations.llm.base import (ChatResponse, LLMProvider,
                                        LLMProviderError, Message, MessageRole,
                                        ModelInfo, ModelNotFoundError)
@@ -31,7 +33,7 @@ class OllamaProvider(LLMProvider):
         """
         super().__init__(config)
         self.base_url = config.get("base_url", "http://localhost:11434").rstrip("/")
-        self.timeout = config.get("timeout", 120)
+        self.timeout = config.get("timeout", DEFAULT_TIMEOUT)
 
         if not self.model:
             raise ValueError("Model name is required for Ollama provider")
@@ -224,7 +226,7 @@ class OllamaProvider(LLMProvider):
             LLMProviderError: On API errors
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
 
             result = response.json()
@@ -239,7 +241,7 @@ class OllamaProvider(LLMProvider):
                     show_response = requests.post(
                         f"{self.base_url}/api/show",
                         json={"name": model_data["name"]},
-                        timeout=5,
+                        timeout=HEALTH_CHECK_TIMEOUT,
                     )
                     if show_response.ok:
                         show_data = show_response.json()
@@ -252,9 +254,9 @@ class OllamaProvider(LLMProvider):
                                     try:
                                         context_window = int(value)
                                         break
-                                    except:
+                                    except (ValueError, TypeError):
                                         pass
-                except:
+                except (KeyError, TypeError, ValueError):
                     pass  # context_window remains None if we can't get it
 
                 models.append(
@@ -324,9 +326,9 @@ class OllamaProvider(LLMProvider):
             True if Ollama is available, False otherwise
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=2)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=SHORT_TIMEOUT)
             return response.ok
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False
 
     def supports_tool_calling(self) -> bool:

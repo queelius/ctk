@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from ctk.core.constants import EMBEDDING_TIMEOUT, MODEL_LIST_TIMEOUT, SHORT_TIMEOUT
 from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
                                               EmbeddingProviderError,
                                               EmbeddingResponse,
@@ -31,7 +32,7 @@ class OllamaEmbedding(EmbeddingProvider):
         """
         super().__init__(config)
         self.base_url = config.get("base_url", "http://localhost:11434").rstrip("/")
-        self.timeout = config.get("timeout", 60)
+        self.timeout = config.get("timeout", EMBEDDING_TIMEOUT)
 
         if not self.model:
             raise ValueError("Model name is required for Ollama embedding provider")
@@ -128,7 +129,7 @@ class OllamaEmbedding(EmbeddingProvider):
             EmbeddingProviderError: On API errors
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
 
             result = response.json()
@@ -186,7 +187,7 @@ class OllamaEmbedding(EmbeddingProvider):
             True if Ollama is available, False otherwise
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=2)
+            response = requests.get(f"{self.base_url}/api/tags", timeout=SHORT_TIMEOUT)
             return response.ok
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False

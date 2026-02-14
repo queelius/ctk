@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Iterator, List, Optional
 
+from ctk.core.constants import CHARS_PER_TOKEN
+
 
 class MessageRole(Enum):
     """Standard message roles across all providers"""
@@ -191,7 +193,7 @@ class LLMProvider(ABC):
         Returns:
             Estimated token count
         """
-        return len(text) // 4
+        return len(text) // CHARS_PER_TOKEN
 
     def supports_tool_calling(self) -> bool:
         """

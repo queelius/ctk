@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 
+from ctk.core.constants import DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT, MODEL_LIST_TIMEOUT
 from ctk.integrations.llm.base import (
     AuthenticationError,
     ChatResponse,
@@ -45,7 +46,7 @@ class OpenAIProvider(LLMProvider):
         self.base_url = config.get("base_url", "https://api.openai.com").rstrip("/")
         self.api_key = config.get("api_key")
         self.organization = config.get("organization")
-        self.timeout = config.get("timeout", 120)
+        self.timeout = config.get("timeout", DEFAULT_TIMEOUT)
 
         if not self.model:
             self.model = "gpt-3.5-turbo"
@@ -290,7 +291,7 @@ class OpenAIProvider(LLMProvider):
             response = requests.get(
                 f"{self.base_url}/v1/models",
                 headers=self._get_headers(),
-                timeout=30,
+                timeout=MODEL_LIST_TIMEOUT,
             )
 
             if not response.ok:
@@ -371,10 +372,10 @@ class OpenAIProvider(LLMProvider):
             response = requests.get(
                 f"{self.base_url}/v1/models",
                 headers=self._get_headers(),
-                timeout=5,
+                timeout=HEALTH_CHECK_TIMEOUT,
             )
             return response.ok
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False
 
     def supports_tool_calling(self) -> bool:
