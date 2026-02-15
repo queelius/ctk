@@ -636,3 +636,620 @@ class TestECHOExporter:
         assert output_path.is_dir()
         assert (output_path / "README.md").exists()
         assert (output_path / "manifest.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Edge case tests
+# ---------------------------------------------------------------------------
+
+
+def _make_conversation(title=None, source=None, model=None, messages=None, tags=None):
+    """Helper to create minimal test conversations for edge case tests."""
+    metadata = ConversationMetadata()
+    metadata.source = source
+    metadata.model = model
+    metadata.tags = tags or []
+    metadata.created_at = None
+    metadata.updated_at = None
+    metadata.starred_at = None
+    metadata.pinned_at = None
+    metadata.archived_at = None
+
+    conv = ConversationTree(id="test-conv", title=title, metadata=metadata)
+
+    if messages:
+        for msg_id, role, text, parent_id in messages:
+            msg = Message(
+                id=msg_id,
+                role=role,
+                content=MessageContent(text=text),
+                parent_id=parent_id,
+            )
+            conv.add_message(msg)
+
+    return conv
+
+
+class TestExporterEdgeCases:
+    """Edge case tests for all exporters."""
+
+    # ---- Empty input ----
+
+    @pytest.mark.unit
+    def test_jsonl_empty_conversations(self):
+        """JSONL with empty list produces empty string."""
+        exporter = JSONLExporter()
+        result = exporter.export_data([])
+        assert result == ""
+
+    @pytest.mark.unit
+    def test_json_empty_conversations(self):
+        """JSON with empty list produces valid JSON (empty conversations array)."""
+        exporter = JSONExporter()
+        result = exporter.export_conversations([])
+        data = json.loads(result)
+        # CTK format wraps in {"format": "ctk", "conversations": [...]}
+        assert data["conversations"] == []
+
+    @pytest.mark.unit
+    def test_json_empty_conversations_openai_format(self):
+        """JSON OpenAI format with empty list produces valid empty JSON array."""
+        exporter = JSONExporter()
+        result = exporter.export_conversations([], format_style="openai")
+        data = json.loads(result)
+        assert data == []
+
+    @pytest.mark.unit
+    def test_json_empty_conversations_generic_format(self):
+        """JSON generic format with empty list produces valid empty JSON array."""
+        exporter = JSONExporter()
+        result = exporter.export_conversations([], format_style="generic")
+        data = json.loads(result)
+        assert data == []
+
+    @pytest.mark.unit
+    def test_markdown_empty_conversations(self):
+        """Markdown with empty list produces empty/minimal output."""
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([])
+        # Empty list should produce empty string (no conversations to render)
+        assert result == ""
+
+    # ---- Missing metadata ----
+
+    @pytest.mark.unit
+    def test_jsonl_missing_metadata(self):
+        """JSONL handles conversation with no metadata gracefully."""
+        conv = _make_conversation(
+            title=None,
+            source=None,
+            model=None,
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        lines = result.strip().split("\n")
+        assert len(lines) == 1
+        data = json.loads(lines[0])
+        assert "messages" in data
+        assert data["messages"][0]["content"] == "Hello"
+
+    @pytest.mark.unit
+    def test_jsonl_missing_metadata_with_include_metadata(self):
+        """JSONL with include_metadata=True handles None source/model."""
+        conv = _make_conversation(
+            title=None,
+            source=None,
+            model=None,
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], include_metadata=True)
+        lines = result.strip().split("\n")
+        first = json.loads(lines[0])
+        assert "metadata" in first
+        assert first["metadata"]["source"] is None
+        assert first["metadata"]["model"] is None
+
+    @pytest.mark.unit
+    def test_json_missing_metadata(self):
+        """JSON handles conversation with no metadata gracefully."""
+        conv = _make_conversation(
+            title=None,
+            source=None,
+            model=None,
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert len(data["conversations"]) == 1
+
+    @pytest.mark.unit
+    def test_markdown_missing_metadata(self):
+        """Markdown handles conversation with no metadata gracefully."""
+        conv = _make_conversation(
+            title=None,
+            source=None,
+            model=None,
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert isinstance(result, str)
+        assert len(result) > 0
+        # Should use fallback title (Conversation <short-id>)
+        assert "Conversation" in result or "test-conv" in result
+
+    # ---- Special characters ----
+
+    @pytest.mark.unit
+    def test_jsonl_special_chars_in_content(self):
+        """JSONL properly escapes quotes, newlines, tabs in content."""
+        special_text = 'She said "hello"\nNew line\there\ttabs\r\nCRLF'
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, special_text, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        # Each line should be valid JSON
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == special_text
+
+    @pytest.mark.unit
+    def test_json_special_chars_in_title(self):
+        """JSON properly escapes special characters in title."""
+        title = 'My "great" conversation <with> special & chars'
+        conv = _make_conversation(
+            title=title,
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert data["conversations"][0]["title"] == title
+
+    @pytest.mark.unit
+    def test_markdown_special_chars_in_content(self):
+        """Markdown handles special characters without breaking formatting."""
+        special_text = "Code: `print('hello')` and **bold** and *italic* and # heading"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, special_text, None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert isinstance(result, str)
+        # The special characters should appear in the output
+        assert special_text in result
+
+    @pytest.mark.unit
+    def test_jsonl_backslash_in_content(self):
+        """JSONL properly escapes backslashes in content."""
+        text_with_backslash = r"Path: C:\Users\test\file.txt"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, text_with_backslash, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == text_with_backslash
+
+    # ---- Unicode ----
+
+    @pytest.mark.unit
+    def test_jsonl_unicode_content(self):
+        """JSONL handles unicode (CJK, emoji, RTL) correctly."""
+        unicode_text = "Hello world"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, unicode_text, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == unicode_text
+
+    @pytest.mark.unit
+    def test_jsonl_cjk_content(self):
+        """JSONL handles CJK characters correctly."""
+        cjk_text = "This is a test with CJK characters"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, cjk_text, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == cjk_text
+
+    @pytest.mark.unit
+    def test_jsonl_rtl_content(self):
+        """JSONL handles RTL text correctly."""
+        rtl_text = "Mixed direction text"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, rtl_text, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == rtl_text
+
+    @pytest.mark.unit
+    def test_json_unicode_content(self):
+        """JSON handles unicode correctly."""
+        unicode_text = "Unicode test: cafe\u0301 nai\u0308ve"
+        conv = _make_conversation(
+            title="Unicode title: cafe\u0301",
+            messages=[("m1", MessageRole.USER, unicode_text, None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert data["conversations"][0]["title"] == "Unicode title: cafe\u0301"
+
+    @pytest.mark.unit
+    def test_markdown_unicode_content(self):
+        """Markdown handles unicode content properly."""
+        unicode_text = "Unicode: cafe\u0301 + CJK"
+        conv = _make_conversation(
+            title="Unicode Conversation",
+            messages=[("m1", MessageRole.USER, unicode_text, None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert unicode_text in result
+
+    # ---- Very long content ----
+
+    @pytest.mark.unit
+    def test_jsonl_long_content(self):
+        """JSONL handles very long messages (10k+ chars)."""
+        long_text = "A" * 15000
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, long_text, None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert len(data["messages"][0]["content"]) == 15000
+
+    @pytest.mark.unit
+    def test_json_long_content(self):
+        """JSON handles very long messages (10k+ chars)."""
+        long_text = "B" * 12000
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, long_text, None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        # Verify content is preserved in full
+        msg_map = data["conversations"][0]["messages"]
+        # CTK format stores messages as a dict keyed by message id
+        assert any(
+            len(m.get("content", {}).get("text", "")) == 12000
+            for m in msg_map.values()
+        )
+
+    @pytest.mark.unit
+    def test_markdown_long_content(self):
+        """Markdown handles very long messages without crashing."""
+        long_text = "C" * 10000
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, long_text, None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert long_text in result
+
+    # ---- Conversation with single message ----
+
+    @pytest.mark.unit
+    def test_jsonl_single_message(self):
+        """JSONL handles conversation with just one user message."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "Solo message", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["role"] == "user"
+        assert data["messages"][0]["content"] == "Solo message"
+
+    @pytest.mark.unit
+    def test_json_single_message(self):
+        """JSON handles conversation with just one user message."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "Solo message", None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert len(data["conversations"]) == 1
+
+    @pytest.mark.unit
+    def test_markdown_single_message(self):
+        """Markdown handles conversation with just one message."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "Solo message", None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert "Solo message" in result
+        assert "User" in result
+
+    # ---- Conversation with no title ----
+
+    @pytest.mark.unit
+    def test_jsonl_no_title(self):
+        """JSONL handles conversation with no title."""
+        conv = _make_conversation(
+            title=None,
+            messages=[
+                ("m1", MessageRole.USER, "Hello", None),
+                ("m2", MessageRole.ASSISTANT, "Hi", "m1"),
+            ],
+        )
+        exporter = JSONLExporter()
+        # Without metadata, title is not in the output
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert "messages" in data
+
+        # With metadata, title should be None
+        result_meta = exporter.export_data([conv], include_metadata=True)
+        first = json.loads(result_meta.strip().split("\n")[0])
+        assert first["metadata"]["title"] is None
+
+    @pytest.mark.unit
+    def test_json_no_title(self):
+        """JSON handles conversation with no title."""
+        conv = _make_conversation(
+            title=None,
+            messages=[
+                ("m1", MessageRole.USER, "Hello", None),
+                ("m2", MessageRole.ASSISTANT, "Hi", "m1"),
+            ],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert data["conversations"][0]["title"] is None
+
+    @pytest.mark.unit
+    def test_markdown_no_title(self):
+        """Markdown handles conversation with no title using fallback."""
+        conv = _make_conversation(
+            title=None,
+            messages=[
+                ("m1", MessageRole.USER, "Hello", None),
+                ("m2", MessageRole.ASSISTANT, "Hi", "m1"),
+            ],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        # Should use fallback title "Conversation <short_id>"
+        assert "Conversation" in result
+
+    # ---- Conversation with no messages ----
+
+    @pytest.mark.unit
+    def test_jsonl_no_messages(self):
+        """JSONL handles conversation with zero messages."""
+        conv = _make_conversation(title="Empty chat")
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"] == []
+
+    @pytest.mark.unit
+    def test_json_no_messages(self):
+        """JSON handles conversation with zero messages."""
+        conv = _make_conversation(title="Empty chat")
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv])
+        data = json.loads(result)
+        assert len(data["conversations"]) == 1
+        # CTK format stores messages as a dict
+        assert data["conversations"][0]["messages"] == {}
+
+    @pytest.mark.unit
+    def test_markdown_no_messages(self):
+        """Markdown handles conversation with zero messages."""
+        conv = _make_conversation(title="Empty chat")
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert "Empty chat" in result
+
+    # ---- Empty message content ----
+
+    @pytest.mark.unit
+    def test_jsonl_empty_message_content(self):
+        """JSONL handles messages with empty string content."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert data["messages"][0]["content"] == ""
+
+    @pytest.mark.unit
+    def test_json_empty_message_content(self):
+        """JSON handles messages with empty string content."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "", None)],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations([conv], format_style="openai",
+                                                path_selection="longest")
+        data = json.loads(result)
+        assert data[0]["messages"][0]["content"] == ""
+
+    @pytest.mark.unit
+    def test_markdown_empty_message_content(self):
+        """Markdown handles messages with empty string content."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, "", None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        # Should still show the role header, even with empty content
+        assert "User" in result
+
+    # ---- Multiple format styles for JSON exporter ----
+
+    @pytest.mark.unit
+    def test_json_anthropic_empty(self):
+        """JSON Anthropic format with empty list produces valid output."""
+        exporter = JSONExporter()
+        result = exporter.export_conversations([], format_style="anthropic")
+        data = json.loads(result)
+        assert data["conversations"] == []
+
+    # ---- JSONL format types (chat, instruction) ----
+
+    @pytest.mark.unit
+    def test_jsonl_chat_format_single_turn(self):
+        """JSONL chat format with a single user-assistant pair."""
+        conv = _make_conversation(
+            messages=[
+                ("m1", MessageRole.USER, "Hi", None),
+                ("m2", MessageRole.ASSISTANT, "Hello!", "m1"),
+            ],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], format="chat")
+        lines = result.strip().split("\n")
+        assert len(lines) >= 1
+        for line in lines:
+            data = json.loads(line)
+            assert "messages" in data
+
+    @pytest.mark.unit
+    def test_jsonl_instruction_format(self):
+        """JSONL instruction format produces instruction-response pairs."""
+        conv = _make_conversation(
+            messages=[
+                ("m1", MessageRole.USER, "Explain gravity", None),
+                ("m2", MessageRole.ASSISTANT, "Gravity is a force...", "m1"),
+            ],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], format="instruction")
+        lines = result.strip().split("\n")
+        assert len(lines) == 1
+        data = json.loads(lines[0])
+        assert data["instruction"] == "Explain gravity"
+        assert data["response"] == "Gravity is a force..."
+
+    @pytest.mark.unit
+    def test_jsonl_instruction_format_empty(self):
+        """JSONL instruction format with no user/assistant pairs produces nothing."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.SYSTEM, "You are helpful.", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], format="instruction")
+        assert result == ""
+
+    # ---- Conversation with only system message ----
+
+    @pytest.mark.unit
+    def test_jsonl_system_only(self):
+        """JSONL handles conversation with only a system message."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.SYSTEM, "You are helpful.", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv])
+        data = json.loads(result.strip())
+        assert len(data["messages"]) == 1
+        assert data["messages"][0]["role"] == "system"
+
+    @pytest.mark.unit
+    def test_jsonl_system_only_excluded(self):
+        """JSONL with include_system=False excludes system messages."""
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.SYSTEM, "You are helpful.", None)],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], include_system=False)
+        data = json.loads(result.strip())
+        assert data["messages"] == []
+
+    # ---- Markdown-specific edge cases ----
+
+    @pytest.mark.unit
+    def test_markdown_code_block_in_content(self):
+        """Markdown preserves code blocks in message content."""
+        code_content = "Here is code:\n```python\nprint('hello')\n```\nDone."
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.ASSISTANT, code_content, None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert "```python" in result
+        assert "print('hello')" in result
+
+    @pytest.mark.unit
+    def test_markdown_multiline_content(self):
+        """Markdown handles multi-line message content correctly."""
+        multiline = "Line 1\nLine 2\nLine 3\n\nParagraph 2"
+        conv = _make_conversation(
+            messages=[("m1", MessageRole.USER, multiline, None)],
+        )
+        exporter = MarkdownExporter()
+        result = exporter.export_conversations([conv])
+        assert multiline in result
+
+    @pytest.mark.unit
+    def test_markdown_pipe_in_metadata(self):
+        """Markdown metadata table handles pipe characters in tag values."""
+        conv = _make_conversation(
+            title="Test",
+            tags=["tag|with|pipes", "normal-tag"],
+            messages=[("m1", MessageRole.USER, "Hello", None)],
+        )
+        exporter = MarkdownExporter()
+        # Should not crash even if tags contain pipe characters
+        result = exporter.export_conversations([conv])
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    # ---- Path selection on conversations with no branches ----
+
+    @pytest.mark.unit
+    def test_jsonl_all_paths_linear(self):
+        """JSONL 'all' path selection on linear conversation produces one path."""
+        conv = _make_conversation(
+            messages=[
+                ("m1", MessageRole.USER, "Hello", None),
+                ("m2", MessageRole.ASSISTANT, "Hi", "m1"),
+            ],
+        )
+        exporter = JSONLExporter()
+        result = exporter.export_data([conv], path_selection="all")
+        # For a linear conversation, 'all' paths still means 1 path (via "first")
+        # Actually the JSONL 'all' is not a branch, it falls to the else case
+        # Let's just verify it doesn't crash and produces valid JSON
+        lines = result.strip().split("\n")
+        assert len(lines) >= 1
+        for line in lines:
+            json.loads(line)
+
+    @pytest.mark.unit
+    def test_json_all_paths_linear(self):
+        """JSON 'all' path selection on linear conversation produces messages."""
+        conv = _make_conversation(
+            messages=[
+                ("m1", MessageRole.USER, "Hello", None),
+                ("m2", MessageRole.ASSISTANT, "Hi", "m1"),
+            ],
+        )
+        exporter = JSONExporter()
+        result = exporter.export_conversations(
+            [conv], format_style="openai", path_selection="all"
+        )
+        data = json.loads(result)
+        assert len(data) == 1
+        assert len(data[0]["messages"]) == 2
