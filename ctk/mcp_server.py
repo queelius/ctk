@@ -39,14 +39,15 @@ import mcp.types as types
 from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from ctk.core.constants import (MAX_ID_LENGTH, MAX_QUERY_LENGTH,
+                                MAX_RESULT_LIMIT, MAX_TITLE_LENGTH,
+                                TITLE_TRUNCATE_WIDTH, TITLE_TRUNCATE_WIDTH_SHORT)
+
 logger = logging.getLogger(__name__)
 
 
-# Input validation constants
-MAX_QUERY_LENGTH = 10000  # Maximum length for search queries
-MAX_TITLE_LENGTH = 1000  # Maximum length for conversation titles
-MAX_ID_LENGTH = 200  # Maximum length for conversation IDs
-MAX_LIMIT = 10000  # Maximum limit for result counts
+# Use MAX_RESULT_LIMIT as the local MAX_LIMIT for backward compatibility
+MAX_LIMIT = MAX_RESULT_LIMIT
 
 
 class ValidationError(Exception):
@@ -527,7 +528,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
             # Format results
             lines = [f"Found {len(results)} conversation(s):\n"]
             for i, conv in enumerate(results, 1):
-                title = (conv.title or "Untitled")[:60]
+                title = (conv.title or "Untitled")[:TITLE_TRUNCATE_WIDTH]
                 msg_count = (
                     conv.message_count if hasattr(conv, "message_count") else "?"
                 )
@@ -571,7 +572,7 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
             lines = [f"Recent conversations ({len(results)}):\n"]
             for i, conv in enumerate(results, 1):
-                title = (conv.title or "Untitled")[:50]
+                title = (conv.title or "Untitled")[:TITLE_TRUNCATE_WIDTH_SHORT]
                 date = ""
                 if hasattr(conv, "created_at") and conv.created_at:
                     date = conv.created_at.strftime("%Y-%m-%d")

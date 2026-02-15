@@ -20,6 +20,9 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from .constants import (AMBIGUITY_CHECK_LIMIT, DEFAULT_SEARCH_LIMIT,
+                        DEFAULT_TIMELINE_LIMIT, MIGRATION_LOCK_TIMEOUT,
+                        SEARCH_BUFFER, TITLE_MATCH_BOOST)
 from .db_models import (Base, ConversationModel, CurrentCommunityModel,
                         CurrentGraphModel, CurrentNodeMetricsModel,
                         EmbeddingModel, EmbeddingSessionModel, MessageModel,
@@ -157,7 +160,7 @@ class ConversationDB:
         lock_path = self.db_dir / ".migration.lock"
 
         try:
-            with migration_lock(lock_path, timeout=30.0):
+            with migration_lock(lock_path, timeout=MIGRATION_LOCK_TIMEOUT):
                 self._apply_migrations()
         except TimeoutError:
             logger.warning("Migration lock timeout - another process may be migrating")
@@ -477,7 +480,7 @@ class ConversationDB:
         query_text: str,
         title_only: bool = False,
         content_only: bool = False,
-        limit: int = 1000,
+        limit: int = DEFAULT_SEARCH_LIMIT,
     ) -> List[str]:
         """
         Search using FTS5 and return matching conversation IDs with relevance ranking.
@@ -514,7 +517,7 @@ class ConversationDB:
                             if conv_id not in matching_ids:
                                 matching_ids.add(conv_id)
                                 ranked_ids.append(
-                                    (conv_id, row[1] - 10)
+                                    (conv_id, row[1] - TITLE_MATCH_BOOST)
                                 )  # Boost title matches
                     except Exception as e:
                         logger.debug(f"FTS5 title search failed: {e}")
@@ -739,21 +742,21 @@ class ConversationDB:
             if conv:
                 return (conv[0], conv[1])
 
-            # 3. Slug prefix match - LIMIT 2 to detect ambiguity
+            # 3. Slug prefix match - LIMIT to detect ambiguity
             matches = (
                 session.query(ConversationModel.id, ConversationModel.slug)
                 .filter(ConversationModel.slug.startswith(identifier))
-                .limit(2)
+                .limit(AMBIGUITY_CHECK_LIMIT)
                 .all()
             )
             if len(matches) == 1:
                 return (matches[0][0], matches[0][1])
 
-            # 4. ID prefix match - LIMIT 2 to detect ambiguity
+            # 4. ID prefix match - LIMIT to detect ambiguity
             matches = (
                 session.query(ConversationModel.id, ConversationModel.slug)
                 .filter(ConversationModel.id.startswith(identifier))
-                .limit(2)
+                .limit(AMBIGUITY_CHECK_LIMIT)
                 .all()
             )
             if len(matches) == 1:
@@ -1080,7 +1083,7 @@ class ConversationDB:
                     query_text,
                     title_only=title_only,
                     content_only=content_only,
-                    limit=limit + offset + 100,
+                    limit=limit + offset + SEARCH_BUFFER,
                 )
                 if not fts_ids:
                     # No FTS5 matches - return empty rather than falling back to LIKE
@@ -1723,7 +1726,7 @@ class ConversationDB:
             return [{"source": source, "count": count} for source, count in results]
 
     def get_conversation_timeline(
-        self, granularity: str = "day", limit: int = 30
+        self, granularity: str = "day", limit: int = DEFAULT_TIMELINE_LIMIT
     ) -> List[Dict[str, Any]]:
         """Get conversation counts over time"""
         with self.session_scope() as session:
