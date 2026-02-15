@@ -223,8 +223,23 @@ Functions are spread across focused modules (the old `helpers.py` shim was delet
 - Integration tests in `tests/integration/test_cli.py` use old command names and are known-failing
 - `ConversationDB` context manager is for cleanup only; session is initialized in `__init__`
 
+### Exception Handling
+- Never use bare `except:` — always specify exception types
+- `except Exception:` acceptable only in cleanup/finally blocks with logging
+- HTTP errors: `requests.exceptions.RequestException`
+- JSON parsing: `json.JSONDecodeError`
+- File operations: `(IOError, OSError)`
+
+### Constants
+- Import timeouts/limits from `ctk/core/constants.py` instead of hardcoding
+- Key constants: `DEFAULT_TIMEOUT` (120s), `HEALTH_CHECK_TIMEOUT` (5s), `DEFAULT_SEARCH_LIMIT` (1000)
+
+### Shared Utilities
+- Timestamp parsing: `from ctk.core.utils import parse_timestamp`
+- JSON parsing: `from ctk.core.utils import try_parse_json`
+- Input validation: `from ctk.core.input_validation import validate_conversation_id, validate_file_path`
+
 ### Known Issues
-- Test coverage needs improvement
 - Plugin system needs additional security validation
 - Performance optimization needed for large databases (>100k conversations)
 
