@@ -11,6 +11,7 @@ from ctk.core.models import (ContentType, ConversationMetadata,
                              ConversationTree, MediaContent, Message,
                              MessageContent, MessageRole, ToolCall)
 from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
 
 
 class AnthropicImporter(ImporterPlugin):
@@ -90,38 +91,6 @@ class AnthropicImporter(ImporterPlugin):
 
         return model if model else "Claude"
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
-        """Parse timestamp from various formats"""
-        if timestamp is None:
-            return None
-
-        if isinstance(timestamp, datetime):
-            return timestamp
-
-        if isinstance(timestamp, (int, float)):
-            try:
-                # Handle milliseconds
-                if timestamp > 1e10:
-                    timestamp = timestamp / 1000
-                return datetime.fromtimestamp(timestamp)
-            except (ValueError, OSError, OverflowError):
-                return None
-
-        if isinstance(timestamp, str):
-            formats = [
-                "%Y-%m-%dT%H:%M:%S.%f%z",
-                "%Y-%m-%dT%H:%M:%S.%fZ",
-                "%Y-%m-%dT%H:%M:%S%z",
-                "%Y-%m-%dT%H:%M:%SZ",
-                "%Y-%m-%d %H:%M:%S",
-            ]
-            for fmt in formats:
-                try:
-                    return datetime.strptime(timestamp, fmt)
-                except (ValueError, TypeError):
-                    continue
-
-        return None
 
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         """Import Anthropic conversation data"""
@@ -149,9 +118,9 @@ class AnthropicImporter(ImporterPlugin):
                 format="anthropic",
                 source="Claude",
                 model=model,
-                created_at=self._parse_timestamp(conv_data.get("created_at"))
+                created_at=parse_timestamp(conv_data.get("created_at"))
                 or datetime.now(),
-                updated_at=self._parse_timestamp(conv_data.get("updated_at"))
+                updated_at=parse_timestamp(conv_data.get("updated_at"))
                 or datetime.now(),
                 tags=["anthropic", "claude"]
                 + (
@@ -292,7 +261,7 @@ class AnthropicImporter(ImporterPlugin):
                     id=msg_id,
                     role=role,
                     content=content,
-                    timestamp=self._parse_timestamp(msg_data.get("created_at")),
+                    timestamp=parse_timestamp(msg_data.get("created_at")),
                     parent_id=parent_id,
                     metadata={
                         "files": msg_data.get("files", []),

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
 
 
 class GeminiImporter(ImporterPlugin):
@@ -25,7 +26,7 @@ class GeminiImporter(ImporterPlugin):
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except:
+            except (json.JSONDecodeError, ValueError):
                 return False
 
         # Check for Gemini/Bard format markers
@@ -60,7 +61,9 @@ class GeminiImporter(ImporterPlugin):
             "palm-2": "PaLM 2",
         }
 
-        for key, value in model_map.items():
+        # Sort by key length descending so longer patterns match first
+        # (e.g. "gemini-pro-vision" before "gemini-pro")
+        for key, value in sorted(model_map.items(), key=lambda x: len(x[0]), reverse=True):
             if key in model.lower():
                 return value
 
@@ -94,9 +97,9 @@ class GeminiImporter(ImporterPlugin):
                 format="gemini",
                 source="Google Gemini",
                 model=model,
-                created_at=self._parse_timestamp(conv_data.get("created_at"))
+                created_at=parse_timestamp(conv_data.get("created_at"))
                 or datetime.now(),
-                updated_at=self._parse_timestamp(conv_data.get("updated_at"))
+                updated_at=parse_timestamp(conv_data.get("updated_at"))
                 or datetime.now(),
                 tags=["google", "gemini", model.lower().replace(" ", "-")],
                 custom_data={
@@ -151,7 +154,7 @@ class GeminiImporter(ImporterPlugin):
                     id=msg_id,
                     role=role,
                     content=content,
-                    timestamp=self._parse_timestamp(msg_data.get("timestamp")),
+                    timestamp=parse_timestamp(msg_data.get("timestamp")),
                     parent_id=parent_id,
                     metadata={
                         "candidates_count": msg_data.get("candidates_count"),
@@ -166,13 +169,3 @@ class GeminiImporter(ImporterPlugin):
 
         return conversations
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
-        """Parse timestamp"""
-        if isinstance(timestamp, (int, float)):
-            return datetime.fromtimestamp(timestamp)
-        if isinstance(timestamp, str):
-            try:
-                return datetime.fromisoformat(timestamp)
-            except:
-                return None
-        return None

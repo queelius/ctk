@@ -222,7 +222,7 @@ class JSONLImporter(ImporterPlugin):
                 for msg in messages_data:
                     if msg.get("role") in ["user", "human"]:
                         content = msg.get("content", "")
-                        if content:
+                        if content and isinstance(content, str):
                             # Take first 50 chars as title
                             title = content[:50] + ("..." if len(content) > 50 else "")
                             break

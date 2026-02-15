@@ -65,7 +65,11 @@ class OpenAIImporter(ImporterPlugin):
 
         if model:
             model_lower = model.lower()
-            for key, value in model_map.items():
+            # Sort by key length descending so longer patterns match first
+            # (e.g. "gpt-4-turbo" before "gpt-4", "gpt-4o-mini" before "gpt-4o")
+            for key, value in sorted(
+                model_map.items(), key=lambda x: len(x[0]), reverse=True
+            ):
                 if key in model_lower:
                     return value
             return model

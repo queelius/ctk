@@ -67,7 +67,7 @@ class CopilotImporter(ImporterPlugin):
                                 with open(path) as f:
                                     data = json.load(f)
                                     return "requests" in data or "creationDate" in data
-                            except:
+                            except (IOError, json.JSONDecodeError):
                                 return False
                 except (OSError, ValueError):
                     # Path is invalid or too long

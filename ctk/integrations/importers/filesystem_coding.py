@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
 
 
 class FilesystemCodingImporter(ImporterPlugin):
@@ -173,12 +174,12 @@ class FilesystemCodingImporter(ImporterPlugin):
                 format="copilot",
                 source="GitHub Copilot",
                 model="Copilot",
-                created_at=self._parse_timestamp(row.get("created_at"))
+                created_at=parse_timestamp(row.get("created_at"))
                 or datetime.now(),
-                updated_at=self._parse_timestamp(row.get("updated_at"))
+                updated_at=parse_timestamp(row.get("updated_at"))
                 or datetime.now(),
                 tags=["coding", "copilot", "github"],
-                custom={
+                custom_data={
                     "workspace": row.get("workspace"),
                     "language": row.get("language"),
                 },
@@ -208,7 +209,7 @@ class FilesystemCodingImporter(ImporterPlugin):
                         id=msg_id, role=role, content=content, parent_id=parent_id
                     )
 
-                    tree.add_message(message, parent_id=parent_id)
+                    tree.add_message(message)
                     parent_id = msg_id
 
             return tree
@@ -228,7 +229,7 @@ class FilesystemCodingImporter(ImporterPlugin):
                 model="Copilot",
                 created_at=datetime.now(),
                 tags=["coding", "copilot", "github"],
-                custom=data.get("metadata", {}),
+                custom_data=data.get("metadata", {}),
             )
 
             tree = ConversationTree(id=conv_id, title=title, metadata=metadata)
@@ -250,7 +251,7 @@ class FilesystemCodingImporter(ImporterPlugin):
                         content=req_content,
                         parent_id=parent_id,
                     )
-                    tree.add_message(req_msg, parent_id=parent_id)
+                    tree.add_message(req_msg)
                     parent_id = req_id
 
                 if "response" in turn:
@@ -265,7 +266,7 @@ class FilesystemCodingImporter(ImporterPlugin):
                         content=resp_content,
                         parent_id=parent_id,
                     )
-                    tree.add_message(resp_msg, parent_id=parent_id)
+                    tree.add_message(resp_msg)
                     parent_id = resp_id
 
             return tree if tree.message_map else None
@@ -352,16 +353,6 @@ class FilesystemCodingImporter(ImporterPlugin):
         # Generic parsing logic
         return None
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
-        """Parse various timestamp formats"""
-        if isinstance(timestamp, (int, float)):
-            return datetime.fromtimestamp(timestamp)
-        if isinstance(timestamp, str):
-            try:
-                return datetime.fromisoformat(timestamp)
-            except:
-                return None
-        return None
 
     @classmethod
     def scan_for_conversations(cls, base_path: Path = Path.home()) -> List[Path]:
