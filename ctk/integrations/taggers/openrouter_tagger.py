@@ -73,6 +73,6 @@ class OpenRouterTagger(BaseLLMTagger):
             if response.status_code == 200:
                 data = response.json()
                 return [model["id"] for model in data.get("data", [])]
-        except:
+        except (requests.exceptions.RequestException, ValueError):
             pass
         return []

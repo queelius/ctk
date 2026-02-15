@@ -209,7 +209,8 @@ class MCPClient:
         if name in self.session_contexts:
             try:
                 await self.session_contexts[name].__aexit__(None, None, None)
-            except:
+            except Exception:
+                # Suppress exceptions during cleanup to ensure full cleanup proceeds
                 pass
             del self.session_contexts[name]
 
@@ -219,7 +220,8 @@ class MCPClient:
         if name in self.stdio_contexts:
             try:
                 await self.stdio_contexts[name].__aexit__(None, None, None)
-            except:
+            except Exception:
+                # Suppress exceptions during cleanup to ensure full cleanup proceeds
                 pass
             del self.stdio_contexts[name]
 

@@ -40,7 +40,7 @@ class HugoExporter(ExporterPlugin):
         Export conversations as Hugo page bundles.
 
         Args:
-            file_path: Output directory (e.g., content/conversations/)
+            file_path: Output directory (e.g., /path/to/site/content/ai-logs)
             conversations: List of conversations to export
             **kwargs: Additional options:
                 - db_dir: Source database directory for media files
@@ -48,12 +48,13 @@ class HugoExporter(ExporterPlugin):
                 - path_selection: How to handle branching (longest, first, last)
                 - include_draft: Mark as draft (default: False)
                 - date_prefix: Include date in directory name (default: True)
+                - hugo_organize: Organization strategy - "none" (flat), "tags", "source", "date" (default: "date")
         """
         db_dir = kwargs.get("db_dir")
-        section = kwargs.get("section", "conversations")
         path_selection = kwargs.get("path_selection", "longest")
         include_draft = kwargs.get("include_draft", False)
         date_prefix = kwargs.get("date_prefix", True)
+        hugo_organize = kwargs.get("hugo_organize", "date")
 
         # Create output directory
         output_dir = Path(file_path)
@@ -62,9 +63,15 @@ class HugoExporter(ExporterPlugin):
         exported_count = 0
         for conv in conversations:
             try:
+                # Determine target directory based on organization strategy
+                target_dir = self._get_target_dir(
+                    conv, output_dir, hugo_organize
+                )
+                target_dir.mkdir(parents=True, exist_ok=True)
+
                 self._export_conversation(
                     conv,
-                    output_dir,
+                    target_dir,
                     db_dir=db_dir,
                     path_selection=path_selection,
                     include_draft=include_draft,
@@ -80,6 +87,69 @@ class HugoExporter(ExporterPlugin):
                 )
 
         print(f"Exported {exported_count} conversation(s) to {output_dir}")
+
+    def _get_target_dir(
+        self,
+        conv: ConversationTree,
+        base_dir: Path,
+        organize_strategy: str
+    ) -> Path:
+        """
+        Determine the target directory for a conversation based on organization strategy.
+
+        Args:
+            conv: Conversation to export
+            base_dir: Base output directory
+            organize_strategy: Organization strategy ("none", "tags", "source", "date")
+
+        Returns:
+            Path to target directory
+        """
+        if organize_strategy == "none":
+            # Flat structure - use base_dir directly
+            return base_dir
+
+        elif organize_strategy == "tags":
+            # Organize by tags - create subdirectory per tag
+            if conv.metadata.tags:
+                # Use first tag as primary category
+                tag = conv.metadata.tags[0]
+                # Sanitize tag for use as directory name
+                tag_dir = re.sub(r"[^\w\s-]", "", tag.lower())
+                tag_dir = re.sub(r"[\s_]+", "-", tag_dir).strip("-")
+                if not tag_dir:
+                    tag_dir = "untagged"
+                return base_dir / tag_dir
+            else:
+                # No tags - use "untagged"
+                return base_dir / "untagged"
+
+        elif organize_strategy == "source":
+            # Organize by source (Claude, ChatGPT, etc.)
+            if conv.metadata.source:
+                source = conv.metadata.source
+                # Sanitize source for use as directory name
+                source_dir = re.sub(r"[^\w\s-]", "", source.lower())
+                source_dir = re.sub(r"[\s_]+", "-", source_dir).strip("-")
+                if not source_dir:
+                    source_dir = "unknown"
+                return base_dir / source_dir
+            else:
+                # No source - use "unknown"
+                return base_dir / "unknown"
+
+        elif organize_strategy == "date":
+            # Organize by date
+            if conv.metadata.created_at:
+                date_str = conv.metadata.created_at.strftime("%Y/%m")
+                return base_dir / date_str
+            else:
+                # No date - use "undated"
+                return base_dir / "undated"
+
+        else:
+            # Default to base_dir
+            return base_dir
 
     def _export_conversation(
         self,
@@ -166,10 +236,7 @@ class HugoExporter(ExporterPlugin):
             lines.append(f"lastmod: {conv.metadata.updated_at.isoformat()}")
 
         # Draft status
-        if include_draft:
-            lines.append("draft: true")
-        else:
-            lines.append("draft: false")
+        lines.append(f"draft: {'true' if include_draft else 'false'}")
 
         # Tags from metadata
         if conv.metadata.tags:

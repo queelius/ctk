@@ -76,7 +76,7 @@ class OpenAITagger(BaseLLMTagger):
                 timeout=5,
             )
             return response.status_code == 200
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False
 
     def list_models(self) -> list:
@@ -93,6 +93,6 @@ class OpenAITagger(BaseLLMTagger):
             if response.status_code == 200:
                 data = response.json()
                 return [model["id"] for model in data.get("data", [])]
-        except:
+        except (requests.exceptions.RequestException, ValueError):
             pass
         return []

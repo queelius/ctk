@@ -32,9 +32,9 @@ class JSONLExporter(ExporterPlugin):
         path_selection = kwargs.get("path_selection", "longest")
         include_metadata = kwargs.get("include_metadata", False)
 
-        # Initialize sanitizer if requested
+        # Initialize sanitizer (enabled by default for security)
         sanitizer = None
-        if kwargs.get("sanitize", False):
+        if kwargs.get("sanitize", True):
             sanitizer = Sanitizer(enabled=True)
 
         for conv in conversations:

@@ -55,7 +55,7 @@ class OllamaTagger(BaseLLMTagger):
         try:
             response = requests.get(f"{self.base_url}/api/tags", timeout=5)
             return response.status_code == 200
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False
 
     def list_models(self) -> list:
@@ -65,6 +65,6 @@ class OllamaTagger(BaseLLMTagger):
             if response.status_code == 200:
                 data = response.json()
                 return [model["name"] for model in data.get("models", [])]
-        except:
+        except (requests.exceptions.RequestException, ValueError):
             pass
         return []

@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import List, Optional
 
 from ctk.core.database import ConversationDB
+from ctk.core.input_validation import (
+    ValidationError,
+    validate_file_path,
+    validate_conversation_id,
+    validate_path_selection,
+)
 from ctk.core.plugin import registry
 from ctk.core.sanitizer import Sanitizer
 
@@ -70,17 +76,17 @@ def cmd_import(args):
             return 1
 
     else:
-        # Normal file import
-        input_path = Path(args.input)
-        if not input_path.exists():
-            # If file doesn't exist and format is searchable, suggest auto mode
-            if args.format in auto_search_formats:
-                print(f"Error: File not found: {input_path}")
-                print(
-                    f"\nTip: Use 'ctk import auto --format {args.format}' to auto-search for {args.format} data"
-                )
-            else:
-                print(f"Error: File not found: {input_path}")
+        # Normal file import - validate input path (allow both files and directories)
+        try:
+            input_path = validate_file_path(
+                args.input,
+                must_exist=True,
+                allow_relative=True,
+                allow_dir=True,
+                allow_file=True
+            )
+        except ValidationError as e:
+            print(f"Error: Invalid input path: {e}")
             return 1
 
         # Handle directory imports (e.g., OpenAI export directories)
@@ -253,13 +259,19 @@ def cmd_export(args):
             if evaluated.missing_ids:
                 print(f"Warning: {len(evaluated.missing_ids)} conversations not found")
         elif args.ids:
-            # Export specific conversations
+            # Export specific conversations - validate IDs
             for conv_id in args.ids:
-                conv = db.load_conversation(conv_id)
+                try:
+                    validated_id = validate_conversation_id(conv_id, allow_partial=True)
+                except ValidationError as e:
+                    print(f"Error: Invalid conversation ID '{conv_id}': {e}")
+                    return 1
+
+                conv = db.load_conversation(validated_id)
                 if conv:
                     conversations.append(conv)
                 else:
-                    print(f"Warning: Conversation {conv_id} not found")
+                    print(f"Warning: Conversation {validated_id} not found")
         else:
             # Export all or filtered conversations
             conv_list = db.list_conversations(limit=export_limit)
@@ -304,9 +316,16 @@ def cmd_export(args):
             print(f"Available formats: {', '.join(registry.list_exporters())}")
             return 1
 
+        # Validate path_selection and export format
+        try:
+            path_selection = validate_path_selection(args.path_selection)
+        except ValidationError as e:
+            print(f"Error: Invalid path selection: {e}")
+            return 1
+
         export_kwargs = {
             "sanitize": args.sanitize,
-            "path_selection": args.path_selection,
+            "path_selection": path_selection,
             "include_metadata": args.include_metadata,
         }
 
@@ -327,6 +346,8 @@ def cmd_export(args):
             export_kwargs["include_draft"] = args.draft
         if hasattr(args, "date_prefix"):
             export_kwargs["date_prefix"] = args.date_prefix
+        if hasattr(args, "hugo_organize"):
+            export_kwargs["hugo_organize"] = args.hugo_organize
 
         # Add ECHO-specific options if present
         if hasattr(args, "include_db"):
@@ -343,9 +364,22 @@ def cmd_export(args):
         if hasattr(db, "db_dir") and db.db_dir:
             export_kwargs["db_dir"] = str(db.db_dir)
 
+        # Validate output path (for Hugo exports, this is a directory; for file formats, it's a file)
         try:
-            exporter.export_to_file(conversations, args.output, **export_kwargs)
-            print(f"Exported to {args.output}")
+            output_path = validate_file_path(
+                args.output,
+                must_exist=False,
+                allow_relative=True,
+                allow_dir=True,
+                allow_file=True
+            )
+        except ValidationError as e:
+            print(f"Error: Invalid output path: {e}")
+            return 1
+
+        try:
+            exporter.export_to_file(conversations, str(output_path), **export_kwargs)
+            print(f"Exported to {output_path}")
         except (PermissionError, OSError) as e:
             print(f"Error: Cannot write to output file: {e}")
             return 1
@@ -2102,13 +2136,25 @@ def cmd_show(args):
     db = ConversationDB(args.db)
 
     try:
-        # Determine which path to show based on args
+        # Validate conversation ID
+        try:
+            conv_id = validate_conversation_id(args.id, allow_partial=True)
+        except ValidationError as e:
+            print(f"Error: Invalid conversation ID: {e}")
+            return 1
+
+        # Determine which path to show based on args and validate
         path_selection = getattr(args, "path", "longest")  # Default to longest
+        try:
+            path_selection = validate_path_selection(path_selection)
+        except ValidationError as e:
+            print(f"Error: Invalid path selection: {e}")
+            return 1
 
         # Use shared helper to load conversation
         result = show_conversation_helper(
             db=db,
-            conv_id=args.id,
+            conv_id=conv_id,
             path_selection=path_selection,
             plain_output=getattr(args, "no_color", False),
             show_metadata=True,
@@ -2855,6 +2901,12 @@ def main():
         dest="date_prefix",
         default=True,
         help="Hugo: do not include date prefix in directory names",
+    )
+    export_parser.add_argument(
+        "--hugo-organize",
+        choices=["none", "tags", "source", "date"],
+        default="date",
+        help="Hugo: organize conversations into subdirectories (default: date). 'none' = flat, 'tags' = by tag, 'source' = by source, 'date' = by date",
     )
     # ECHO-specific options
     export_parser.add_argument(

@@ -44,7 +44,7 @@ class LocalTagger(BaseLLMTagger):
                 result = response.json()
                 return result["choices"][0]["message"]["content"]
 
-        except:
+        except (requests.exceptions.RequestException, KeyError, ValueError):
             # Try simpler completion endpoint
             try:
                 response = requests.post(
@@ -56,7 +56,7 @@ class LocalTagger(BaseLLMTagger):
                 if response.status_code == 200:
                     result = response.json()
                     return result.get("text", result.get("response", ""))
-            except:
+            except (requests.exceptions.RequestException, ValueError):
                 pass
 
         print(f"Could not connect to local LLM at {self.base_url}")
@@ -73,5 +73,5 @@ class LocalTagger(BaseLLMTagger):
             # Try models endpoint
             response = requests.get(f"{self.base_url}/v1/models", timeout=5)
             return response.status_code == 200
-        except:
+        except (requests.exceptions.RequestException, ConnectionError):
             return False

@@ -2682,7 +2682,7 @@ Available operations:
                     PathType.MESSAGE_NODE,
                 ]:
                     use_vfs = True
-            except:
+            except (AttributeError, ValueError, KeyError):
                 pass
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
@@ -2796,7 +2796,7 @@ Available operations:
                     PathType.MESSAGE_NODE,
                 ]:
                     use_vfs = True
-            except:
+            except (AttributeError, ValueError, KeyError):
                 pass
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
@@ -2909,7 +2909,7 @@ Available operations:
                     PathType.MESSAGE_NODE,
                 ]:
                     use_vfs = True
-            except:
+            except (AttributeError, ValueError, KeyError):
                 pass
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
@@ -3161,7 +3161,7 @@ Available operations:
                     PathType.MESSAGE_NODE,
                 ]:
                     use_vfs = True
-            except:
+            except (AttributeError, ValueError, KeyError):
                 pass
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
@@ -3407,7 +3407,7 @@ Available operations:
                     PathType.MESSAGE_NODE,
                 ]:
                     use_vfs = True
-            except:
+            except (AttributeError, ValueError, KeyError):
                 pass
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state

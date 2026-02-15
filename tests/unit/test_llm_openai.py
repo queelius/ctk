@@ -3,6 +3,7 @@ Tests for OpenAI LLM provider.
 """
 
 import json
+import requests
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
@@ -407,7 +408,7 @@ class TestOpenAIProviderAvailability:
         provider = OpenAIProvider({'api_key': 'key'})
 
         with patch('requests.get') as mock_get:
-            mock_get.side_effect = Exception("Connection failed")
+            mock_get.side_effect = requests.exceptions.ConnectionError("Connection failed")
 
             assert provider.is_available() is False
 
