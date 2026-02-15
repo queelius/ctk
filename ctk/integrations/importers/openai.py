@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
 from ctk.core.models import (ContentType, ConversationMetadata,
@@ -32,7 +33,7 @@ class OpenAIImporter(ImporterPlugin):
         if isinstance(data, str):
             try:
                 data = json.loads(data)
-            except:
+            except (json.JSONDecodeError, ValueError):
                 return False
 
         if isinstance(data, list) and data:
@@ -84,31 +85,107 @@ class OpenAIImporter(ImporterPlugin):
         # Remove None values
         return {k: v for k, v in metadata.items() if v is not None}
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
-        """Parse timestamp from various formats"""
-        if timestamp is None:
+
+    def _process_part(self, part) -> Optional[str]:
+        """Extract text from a single content part.
+
+        Args:
+            part: A content part - may be a string, dict, or other type.
+
+        Returns:
+            The extracted text string, or None if this part is not text-based.
+        """
+        if isinstance(part, str):
+            return part
+        if isinstance(part, dict):
+            if "text" in part:
+                return part["text"]
+            if "content" in part:
+                return str(part["content"])
             return None
-
-        if isinstance(timestamp, (int, float)):
-            try:
-                return datetime.fromtimestamp(timestamp)
-            except:
-                return None
-
-        if isinstance(timestamp, str):
-            formats = [
-                "%Y-%m-%dT%H:%M:%S.%f%z",
-                "%Y-%m-%dT%H:%M:%S.%fZ",
-                "%Y-%m-%dT%H:%M:%S%z",
-                "%Y-%m-%dT%H:%M:%SZ",
-            ]
-            for fmt in formats:
-                try:
-                    return datetime.strptime(timestamp, fmt)
-                except:
-                    continue
-
         return None
+
+    def _process_asset_pointer(self, part: dict, content: "MessageContent") -> None:
+        """Process an asset_pointer part and add resolved image to content.
+
+        Args:
+            part: A dict containing an 'asset_pointer' key.
+            content: The MessageContent to mutate (add image to).
+        """
+        asset_url = part.get("asset_pointer")
+        if not asset_url:
+            return
+
+        media_path = self._resolve_and_copy_image(asset_url)
+        if media_path is None:
+            return
+
+        # Safely get nested DALL-E prompt metadata
+        metadata = part.get("metadata") or {}
+        dalle_data = metadata.get("dalle") if isinstance(metadata, dict) else {}
+        prompt = dalle_data.get("prompt") if isinstance(dalle_data, dict) else None
+
+        content.add_image(url=media_path, caption=prompt)
+
+    def _process_image_url(self, part: dict, content: "MessageContent") -> None:
+        """Process an image_url part and add image to content.
+
+        Args:
+            part: A dict containing an 'image_url' key (string URL or dict).
+            content: The MessageContent to mutate (add image to).
+        """
+        img_data = part["image_url"]
+        if isinstance(img_data, str):
+            if img_data.startswith("file-service://"):
+                media_path = self._resolve_and_copy_image(img_data)
+                if media_path:
+                    content.add_image(url=media_path)
+            else:
+                content.add_image(url=img_data)
+        elif isinstance(img_data, dict):
+            url = img_data.get("url")
+            if not url:
+                return
+            if url.startswith("file-service://"):
+                media_path = self._resolve_and_copy_image(url)
+                if media_path:
+                    content.add_image(url=media_path, caption=img_data.get("detail"))
+            else:
+                content.add_image(url=url, caption=img_data.get("detail"))
+
+    def _process_tool_calls(self, content_data: dict, content: "MessageContent") -> None:
+        """Process tool_calls and function_call from content_data.
+
+        Args:
+            content_data: The content dict that may contain 'tool_calls' or 'function_call'.
+            content: The MessageContent to mutate (append to tool_calls).
+        """
+        if "tool_calls" in content_data:
+            for tool_data in content_data["tool_calls"]:
+                tool_call = ToolCall(
+                    id=tool_data.get("id", ""),
+                    name=tool_data.get("function", {}).get("name", ""),
+                    arguments=(
+                        json.loads(
+                            tool_data.get("function", {}).get("arguments", "{}")
+                        )
+                        if tool_data.get("function", {}).get("arguments")
+                        else {}
+                    ),
+                )
+                content.tool_calls.append(tool_call)
+
+        if "function_call" in content_data:
+            func_call = content_data["function_call"]
+            tool_call = ToolCall(
+                name=func_call.get("name", ""),
+                arguments=(
+                    json.loads(func_call.get("arguments", "{}"))
+                    if func_call.get("arguments")
+                    else {}
+                ),
+            )
+            content.tool_calls.append(tool_call)
 
     def _resolve_and_copy_image(self, file_service_url: str) -> Optional[str]:
         """
@@ -223,9 +300,9 @@ class OpenAIImporter(ImporterPlugin):
                 format="openai",
                 source="ChatGPT",
                 model=model,
-                created_at=self._parse_timestamp(conv_data.get("create_time"))
+                created_at=parse_timestamp(conv_data.get("create_time"))
                 or datetime.now(),
-                updated_at=self._parse_timestamp(conv_data.get("update_time"))
+                updated_at=parse_timestamp(conv_data.get("update_time"))
                 or datetime.now(),
                 tags=(
                     ["openai", model.lower().replace(" ", "-")] if model else ["openai"]
@@ -276,64 +353,16 @@ class OpenAIImporter(ImporterPlugin):
                     # Handle different part types
                     text_parts = []
                     for part in parts:
-                        if isinstance(part, str):
-                            text_parts.append(part)
+                        text = self._process_part(part)
+                        if text is not None:
+                            text_parts.append(text)
                         elif isinstance(part, dict):
-                            # Handle multimodal content
                             if "asset_pointer" in part:
-                                # This is an image or other media asset
-                                asset_url = part.get("asset_pointer")
-                                if asset_url:
-                                    # Resolve and copy image to media directory
-                                    media_path = self._resolve_and_copy_image(asset_url)
-                                    if media_path:
-                                        # Safely get nested metadata
-                                        metadata = part.get("metadata") or {}
-                                        dalle_data = (
-                                            metadata.get("dalle")
-                                            if isinstance(metadata, dict)
-                                            else {}
-                                        )
-                                        prompt = (
-                                            dalle_data.get("prompt")
-                                            if isinstance(dalle_data, dict)
-                                            else None
-                                        )
-                                        content.add_image(
-                                            url=media_path, caption=prompt
-                                        )
+                                self._process_asset_pointer(part, content)
                             elif "image_url" in part:
-                                # Direct image URL
-                                img_data = part["image_url"]
-                                if isinstance(img_data, str):
-                                    # Try to resolve if it's a file-service URL
-                                    if img_data.startswith("file-service://"):
-                                        media_path = self._resolve_and_copy_image(
-                                            img_data
-                                        )
-                                        if media_path:
-                                            content.add_image(url=media_path)
-                                    else:
-                                        content.add_image(url=img_data)
-                                elif isinstance(img_data, dict):
-                                    url = img_data.get("url")
-                                    if url and url.startswith("file-service://"):
-                                        media_path = self._resolve_and_copy_image(url)
-                                        if media_path:
-                                            content.add_image(
-                                                url=media_path,
-                                                caption=img_data.get("detail"),
-                                            )
-                                    else:
-                                        content.add_image(
-                                            url=url, caption=img_data.get("detail")
-                                        )
-                            elif "text" in part:
-                                text_parts.append(part["text"])
-                            elif "content" in part:
-                                text_parts.append(str(part["content"]))
+                                self._process_image_url(part, content)
 
-                            # Store original part in metadata
+                            # Store original part content type in metadata
                             if "content_type" in part:
                                 content.metadata["part_types"] = content.metadata.get(
                                     "part_types", []
@@ -346,35 +375,7 @@ class OpenAIImporter(ImporterPlugin):
                     content.parts = parts
 
                     # Handle tool/function calls
-                    if "tool_calls" in content_data:
-                        for tool_data in content_data["tool_calls"]:
-                            tool_call = ToolCall(
-                                id=tool_data.get("id", ""),
-                                name=tool_data.get("function", {}).get("name", ""),
-                                arguments=(
-                                    json.loads(
-                                        tool_data.get("function", {}).get(
-                                            "arguments", "{}"
-                                        )
-                                    )
-                                    if tool_data.get("function", {}).get("arguments")
-                                    else {}
-                                ),
-                            )
-                            content.tool_calls.append(tool_call)
-
-                    # Handle function calls (older format)
-                    if "function_call" in content_data:
-                        func_call = content_data["function_call"]
-                        tool_call = ToolCall(
-                            name=func_call.get("name", ""),
-                            arguments=(
-                                json.loads(func_call.get("arguments", "{}"))
-                                if func_call.get("arguments")
-                                else {}
-                            ),
-                        )
-                        content.tool_calls.append(tool_call)
+                    self._process_tool_calls(content_data, content)
 
                 elif isinstance(content_data, str):
                     content.text = content_data
@@ -392,7 +393,7 @@ class OpenAIImporter(ImporterPlugin):
                     id=msg_id,
                     role=role,
                     content=content,
-                    timestamp=self._parse_timestamp(msg_info.get("create_time")),
+                    timestamp=parse_timestamp(msg_info.get("create_time")),
                     parent_id=parent_id,
                     metadata={
                         "status": msg_info.get("status"),
