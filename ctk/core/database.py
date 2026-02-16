@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
 from sqlalchemy import and_, create_engine, func, or_, select, text
 from sqlalchemy.engine import Engine
@@ -1099,6 +1099,321 @@ class ConversationDB:
                     ConversationSummary.from_dict(conv.to_dict())
                     for conv in conversations
                 ]
+
+    def iter_conversations(
+        self,
+        limit: Optional[int] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+        chunk_size: int = 100,
+    ) -> "Generator[ConversationSummary, None, None]":
+        """
+        Generator version of list_conversations.
+
+        Yields ConversationSummary objects one at a time, enabling
+        memory-efficient processing of large result sets. Uses
+        yield_per() for efficient batched fetching from the database.
+
+        The session stays open for the generator's lifetime and is
+        closed when the generator is exhausted or explicitly closed.
+
+        Args:
+            limit: Maximum number of results (None = all)
+            source: Filter by source
+            project: Filter by project
+            tag: Filter by single tag name
+            tags: Filter by list of tags (any match)
+            model: Filter by model
+            archived: If True, only archived; if False, only non-archived
+            starred: If True, only starred; if False, only non-starred
+            pinned: If True, only pinned; if False, only non-pinned
+            include_archived: If True, include archived (default: exclude)
+            chunk_size: Number of rows to fetch per batch from the database
+
+        Yields:
+            ConversationSummary objects ordered by updated_at DESC
+        """
+        session = self.Session()
+        try:
+            query = session.query(ConversationModel)
+
+            # Apply filters
+            if source:
+                query = query.filter(ConversationModel.source == source)
+            if project:
+                query = query.filter(ConversationModel.project == project)
+            if model:
+                query = query.filter(ConversationModel.model == model)
+            if tag:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name == tag
+                )
+            if tags:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
+                )
+
+            # Archive filtering
+            if not include_archived and archived is None:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+            elif archived is True:
+                query = query.filter(ConversationModel.archived_at.isnot(None))
+            elif archived is False:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+
+            # Star filtering
+            if starred is True:
+                query = query.filter(ConversationModel.starred_at.isnot(None))
+            elif starred is False:
+                query = query.filter(ConversationModel.starred_at.is_(None))
+
+            # Pin filtering
+            if pinned is True:
+                query = query.filter(ConversationModel.pinned_at.isnot(None))
+            elif pinned is False:
+                query = query.filter(ConversationModel.pinned_at.is_(None))
+
+            # Ordering
+            query = query.order_by(
+                ConversationModel.updated_at.desc(),
+                ConversationModel.id.desc(),
+            )
+
+            if limit is not None:
+                query = query.limit(limit)
+
+            for conv in query.yield_per(chunk_size):
+                yield ConversationSummary.from_dict(conv.to_dict())
+        finally:
+            session.close()
+
+    def iter_search_results(
+        self,
+        query_text: str = None,
+        limit: int = None,
+        title_only: bool = False,
+        content_only: bool = False,
+        date_from: datetime = None,
+        date_to: datetime = None,
+        source: str = None,
+        project: str = None,
+        model: str = None,
+        tags: List[str] = None,
+        min_messages: int = None,
+        max_messages: int = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+        order_by: str = "updated_at",
+        ascending: bool = False,
+        chunk_size: int = 100,
+    ) -> "Generator[ConversationSummary, None, None]":
+        """
+        Generator version of search_conversations.
+
+        Yields ConversationSummary objects one at a time, enabling
+        memory-efficient processing of large result sets.
+
+        Note: Due to GROUP BY in the query (for message_count),
+        results are materialized from the database but yielded
+        one at a time to consumers.
+
+        Args:
+            query_text: Text to search for
+            limit: Maximum number of results (None = all)
+            title_only: Search only in titles
+            content_only: Search only in message content
+            date_from: Filter by created after date
+            date_to: Filter by created before date
+            source: Filter by source platform
+            project: Filter by project name
+            model: Filter by model used
+            tags: Filter by tags (any match)
+            min_messages: Minimum number of messages
+            max_messages: Maximum number of messages
+            archived: Filter by archived status
+            starred: Filter by starred status
+            pinned: Filter by pinned status
+            include_archived: Include archived conversations
+            order_by: Field to order by
+            ascending: Sort order
+            chunk_size: Batch size hint (used for future optimization)
+
+        Yields:
+            ConversationSummary objects
+        """
+        # Try FTS5 search first if text query provided
+        fts_ids = None
+        if query_text and self._has_fts5():
+            try:
+                search_limit = (limit or DEFAULT_SEARCH_LIMIT) + SEARCH_BUFFER
+                fts_ids = self._search_fts5(
+                    query_text,
+                    title_only=title_only,
+                    content_only=content_only,
+                    limit=search_limit,
+                )
+                if not fts_ids:
+                    return  # No FTS5 matches
+            except Exception as e:
+                logger.debug(f"FTS5 search failed, falling back to LIKE: {e}")
+                fts_ids = None
+
+        session = self.Session()
+        try:
+            # Base query with message count
+            query = session.query(
+                ConversationModel,
+                func.count(MessageModel.id).label("message_count"),
+            ).outerjoin(MessageModel)
+
+            # Text search
+            if query_text:
+                if fts_ids is not None:
+                    query = query.filter(ConversationModel.id.in_(fts_ids))
+                elif title_only:
+                    query = query.filter(
+                        ConversationModel.title.ilike(f"%{query_text}%")
+                    )
+                elif content_only:
+                    if "sqlite" in str(self.engine.url):
+                        query = query.filter(
+                            text(
+                                "json_extract(messages.content_json, '$.text') "
+                                "LIKE :query"
+                            )
+                        ).params(query=f"%{query_text}%")
+                    else:
+                        query = query.filter(
+                            MessageModel.content_json["text"].astext.ilike(
+                                f"%{query_text}%"
+                            )
+                        )
+                else:
+                    if "sqlite" in str(self.engine.url):
+                        query = query.filter(
+                            or_(
+                                ConversationModel.title.ilike(
+                                    f"%{query_text}%"
+                                ),
+                                text(
+                                    "json_extract(messages.content_json, "
+                                    "'$.text') LIKE :query"
+                                ),
+                            )
+                        ).params(query=f"%{query_text}%")
+                    else:
+                        query = query.filter(
+                            or_(
+                                ConversationModel.title.ilike(
+                                    f"%{query_text}%"
+                                ),
+                                MessageModel.content_json[
+                                    "text"
+                                ].astext.ilike(f"%{query_text}%"),
+                            )
+                        )
+
+            # Date filters
+            if date_from:
+                query = query.filter(
+                    ConversationModel.created_at >= date_from
+                )
+            if date_to:
+                query = query.filter(
+                    ConversationModel.created_at <= date_to
+                )
+
+            # Source, project, and model filters
+            if source:
+                query = query.filter(ConversationModel.source == source)
+            if project:
+                query = query.filter(ConversationModel.project == project)
+            if model:
+                query = query.filter(
+                    ConversationModel.model.ilike(f"%{model}%")
+                )
+
+            # Tag filters
+            if tags:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
+                )
+
+            # Archive filtering
+            if not include_archived and archived is None:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+            elif archived is True:
+                query = query.filter(
+                    ConversationModel.archived_at.isnot(None)
+                )
+            elif archived is False:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+
+            # Star filtering
+            if starred is True:
+                query = query.filter(
+                    ConversationModel.starred_at.isnot(None)
+                )
+            elif starred is False:
+                query = query.filter(ConversationModel.starred_at.is_(None))
+
+            # Pin filtering
+            if pinned is True:
+                query = query.filter(
+                    ConversationModel.pinned_at.isnot(None)
+                )
+            elif pinned is False:
+                query = query.filter(ConversationModel.pinned_at.is_(None))
+
+            # Group by for message count
+            query = query.group_by(ConversationModel.id)
+
+            # Message count filters
+            if min_messages is not None:
+                query = query.having(
+                    func.count(MessageModel.id) >= min_messages
+                )
+            if max_messages is not None:
+                query = query.having(
+                    func.count(MessageModel.id) <= max_messages
+                )
+
+            # Ordering
+            order_field = {
+                "created_at": ConversationModel.created_at,
+                "updated_at": ConversationModel.updated_at,
+                "title": ConversationModel.title,
+            }.get(order_by, ConversationModel.updated_at)
+
+            if ascending:
+                query = query.order_by(
+                    order_field.asc(), ConversationModel.id.asc()
+                )
+            else:
+                query = query.order_by(
+                    order_field.desc(), ConversationModel.id.desc()
+                )
+
+            if limit is not None:
+                query = query.limit(limit)
+
+            # GROUP BY prevents efficient yield_per, so materialize
+            # but yield one at a time for streaming consumer interface
+            for conv, msg_count in query.all():
+                conv_dict = conv.to_dict()
+                conv_dict["message_count"] = msg_count
+                yield ConversationSummary.from_dict(conv_dict)
+        finally:
+            session.close()
 
     def search_conversations(
         self,
