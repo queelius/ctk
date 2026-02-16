@@ -178,39 +178,39 @@ class TestCLIIntegration:
                 if os.path.exists(output_file.name):
                     os.unlink(output_file.name)
 
-    def test_list_command(self, temp_db):
-        """Test list command functionality"""
-        # Test that list command executes successfully
+    def test_query_command(self, temp_db):
+        """Test query command functionality (replaces old 'list')"""
+        # Test that query command executes successfully
         # Note: Rich Console output goes through its own mechanism,
         # so we verify success via return code rather than stdout.write
-        with patch("sys.argv", ["ctk", "list", "--db", temp_db]):
+        with patch("sys.argv", ["ctk", "query", "--db", temp_db]):
             result = main()
 
         assert result == 0
 
-    def test_list_command_json(self, temp_db):
-        """Test list command with JSON output"""
+    def test_query_command_json(self, temp_db):
+        """Test query command with JSON output (replaces old 'list --json')"""
         with patch("sys.stdout") as mock_stdout:
-            with patch("sys.argv", ["ctk", "list", "--db", temp_db, "--json"]):
+            with patch("sys.argv", ["ctk", "query", "--db", temp_db, "--format", "json"]):
                 result = main()
 
             assert result == 0
             mock_stdout.write.assert_called()
 
-    def test_search_command(self, temp_db):
-        """Test search command functionality"""
-        # Test that search command executes successfully
+    def test_query_search(self, temp_db):
+        """Test query command with search text (replaces old 'search')"""
+        # Test that query command with search text executes successfully
         # Note: Rich Console output goes through its own mechanism,
         # so we verify success via return code rather than stdout.write
-        with patch("sys.argv", ["ctk", "search", "Test", "--db", temp_db]):
+        with patch("sys.argv", ["ctk", "query", "Test", "--db", temp_db]):
             result = main()
 
         assert result == 0
 
-    def test_stats_command(self, temp_db):
-        """Test stats command functionality"""
+    def test_db_stats_command(self, temp_db):
+        """Test db stats command functionality (replaces old 'stats')"""
         with patch("sys.stdout") as mock_stdout:
-            with patch("sys.argv", ["ctk", "stats", "--db", temp_db]):
+            with patch("sys.argv", ["ctk", "db", "stats", temp_db]):
                 result = main()
 
             assert result == 0
@@ -262,7 +262,7 @@ class TestCLIIntegration:
     def test_verbose_flag(self, temp_db):
         """Test verbose logging flag"""
         with patch("ctk.cli.setup_logging") as mock_setup_logging:
-            with patch("sys.argv", ["ctk", "--verbose", "list", "--db", temp_db]):
+            with patch("sys.argv", ["ctk", "--verbose", "query", "--db", temp_db]):
                 main()
 
             # Verbose logging should be enabled
@@ -375,14 +375,29 @@ class TestCLIErrorHandling:
 
     def test_export_permission_error(self, temp_db):
         """Test handling of export file permission errors"""
-        # Try to export to a protected location
-        protected_output = "/root/protected.jsonl"
+        # Create a read-only directory to guarantee PermissionError
+        import stat
 
-        with patch("sys.argv", ["ctk", "export", protected_output, "--db", temp_db]):
-            result = main()
+        read_only_dir = tempfile.mkdtemp(suffix="_readonly")
+        protected_output = os.path.join(read_only_dir, "protected.jsonl")
+        try:
+            # Make directory read-only to prevent file creation
+            os.chmod(read_only_dir, stat.S_IRUSR | stat.S_IXUSR)
 
-        # Should handle error gracefully
-        assert result != 0
+            with patch(
+                "sys.argv",
+                ["ctk", "export", protected_output, "--db", temp_db, "--format", "jsonl"],
+            ):
+                result = main()
+
+            # Should handle error gracefully (return error code, not raise)
+            assert result != 0
+        finally:
+            # Restore write permissions for cleanup
+            os.chmod(read_only_dir, stat.S_IRWXU)
+            if os.path.exists(read_only_dir):
+                import shutil
+                shutil.rmtree(read_only_dir)
 
 
 @pytest.mark.integration
@@ -414,7 +429,7 @@ class TestCLIWorkflows:
                     assert result == 0
 
                 # Step 2: Verify data in database
-                with patch("sys.argv", ["ctk", "stats", "--db", db_dir]):
+                with patch("sys.argv", ["ctk", "db", "stats", db_dir]):
                     result = main()
                     assert result == 0
 
@@ -460,7 +475,7 @@ class TestCLIWorkflows:
             # Search for content
             # Note: Rich Console output goes through its own mechanism,
             # so we verify success via return code rather than stdout.write
-            with patch("sys.argv", ["ctk", "search", "Hello", "--db", db_dir]):
+            with patch("sys.argv", ["ctk", "query", "Hello", "--db", db_dir]):
                 result = main()
                 assert result == 0
 
