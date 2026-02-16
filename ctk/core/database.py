@@ -23,6 +23,7 @@ from sqlalchemy.pool import StaticPool
 from .constants import (AMBIGUITY_CHECK_LIMIT, DEFAULT_SEARCH_LIMIT,
                         DEFAULT_TIMELINE_LIMIT, MIGRATION_LOCK_TIMEOUT,
                         SEARCH_BUFFER, TITLE_MATCH_BOOST)
+from .pagination import decode_cursor, encode_cursor
 from .db_models import (Base, ConversationModel, CurrentCommunityModel,
                         CurrentGraphModel, CurrentNodeMetricsModel,
                         EmbeddingModel, EmbeddingSessionModel, MessageModel,
@@ -109,6 +110,17 @@ class ConversationDB:
             self.db_path = db_path
             connection_string = db_path
             self.engine = create_engine(connection_string, echo=echo)
+        elif db_path == ":memory:":
+            # True in-memory SQLite database (used in tests)
+            self.db_dir = None
+            self.db_path = ":memory:"
+            self.media_dir = None
+            self.engine = create_engine(
+                "sqlite:///:memory:",
+                echo=echo,
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
         else:
             # SQLite - use directory structure
             self.db_dir = Path(db_path)
@@ -948,13 +960,23 @@ class ConversationDB:
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
         include_archived: bool = False,
-    ) -> List[ConversationSummary]:
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+    ) -> Union[List["ConversationSummary"], "PaginatedResult"]:
         """
-        List conversations with optional filtering
+        List conversations with optional filtering.
+
+        Supports two pagination modes:
+        - Offset/limit (default): pass limit and offset params
+        - Cursor (keyset): pass cursor param (empty string = first page)
+
+        When cursor is provided, returns PaginatedResult with next_cursor.
+        When cursor is None, returns List[ConversationSummary] for backward
+        compatibility.
 
         Args:
-            limit: Maximum number of results (None = all)
-            offset: Number of results to skip
+            limit: Maximum number of results (None = all). Used with offset mode.
+            offset: Number of results to skip. Used with offset mode.
             source: Filter by source
             project: Filter by project
             tag: Filter by single tag name (deprecated, use tags)
@@ -964,10 +986,16 @@ class ConversationDB:
             starred: If True, show only starred; if False, only non-starred; if None, both
             pinned: If True, show only pinned; if False, only non-pinned; if None, both
             include_archived: If True, include archived conversations (default: exclude)
+            cursor: Pagination cursor (empty string = first page, None = offset mode)
+            page_size: Number of results per page (used with cursor mode)
 
         Returns:
-            List of ConversationSummary objects
+            List of ConversationSummary objects, or PaginatedResult when cursor is used
         """
+        from .models import PaginatedResult
+
+        use_cursor = cursor is not None
+
         with self.session_scope() as session:
             query = session.query(ConversationModel)
 
@@ -1009,20 +1037,68 @@ class ConversationDB:
             elif pinned is False:
                 query = query.filter(ConversationModel.pinned_at.is_(None))
 
-            # Order by: pinned first, then updated_at descending
-            query = query.order_by(
-                ConversationModel.pinned_at.desc().nullslast(),
-                ConversationModel.updated_at.desc(),
-            )
+            if use_cursor:
+                # Cursor-based (keyset) pagination
+                # Order by updated_at DESC, id DESC for deterministic ordering
+                query = query.order_by(
+                    ConversationModel.updated_at.desc(),
+                    ConversationModel.id.desc(),
+                )
 
-            # Apply pagination
-            if limit is not None:
-                query = query.limit(limit)
-            conversations = query.offset(offset).all()
+                # Apply cursor filter (skip items already seen)
+                if cursor:  # non-empty cursor = subsequent page
+                    cursor_ts, cursor_id = decode_cursor(cursor)
+                    # Format timestamp as string matching SQLite storage format
+                    # to avoid Python 3.12+ datetime adapter format mismatch
+                    # (isoformat uses 'T' separator, SQLite uses space)
+                    cursor_ts_str = cursor_ts.strftime("%Y-%m-%d %H:%M:%S")
+                    query = query.filter(
+                        or_(
+                            ConversationModel.updated_at < cursor_ts_str,
+                            and_(
+                                ConversationModel.updated_at == cursor_ts_str,
+                                ConversationModel.id < cursor_id,
+                            ),
+                        )
+                    )
 
-            return [
-                ConversationSummary.from_dict(conv.to_dict()) for conv in conversations
-            ]
+                # Fetch one extra to determine has_more
+                conversations = query.limit(page_size + 1).all()
+
+                has_more = len(conversations) > page_size
+                if has_more:
+                    conversations = conversations[:page_size]
+
+                items = [
+                    ConversationSummary.from_dict(conv.to_dict())
+                    for conv in conversations
+                ]
+
+                next_cursor = None
+                if has_more and items:
+                    last = conversations[-1]
+                    next_cursor = encode_cursor(last.updated_at, last.id)
+
+                return PaginatedResult(
+                    items=items,
+                    next_cursor=next_cursor,
+                    has_more=has_more,
+                )
+            else:
+                # Traditional offset/limit pagination
+                query = query.order_by(
+                    ConversationModel.pinned_at.desc().nullslast(),
+                    ConversationModel.updated_at.desc(),
+                )
+
+                if limit is not None:
+                    query = query.limit(limit)
+                conversations = query.offset(offset).all()
+
+                return [
+                    ConversationSummary.from_dict(conv.to_dict())
+                    for conv in conversations
+                ]
 
     def search_conversations(
         self,
@@ -1046,7 +1122,9 @@ class ConversationDB:
         include_archived: bool = False,
         order_by: str = "updated_at",
         ascending: bool = False,
-    ) -> List[ConversationSummary]:
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+    ) -> Union[List["ConversationSummary"], "PaginatedResult"]:
         """
         Advanced search with multiple filters
 
@@ -1073,8 +1151,12 @@ class ConversationDB:
             ascending: Sort order
 
         Returns:
-            List of ConversationSummary objects
+            List of ConversationSummary objects, or PaginatedResult when cursor is used
         """
+        from .models import PaginatedResult
+
+        use_cursor = cursor is not None
+
         # Try FTS5 search first if text query provided and FTS5 available
         fts_ids = None
         if query_text and self._has_fts5():
@@ -1220,36 +1302,98 @@ class ConversationDB:
                         )
                     )
 
-            # Ordering
-            if order_by == "message_count":
-                # Special case for message count ordering
+            # Resolve order field
+            order_field = {
+                "created_at": ConversationModel.created_at,
+                "updated_at": ConversationModel.updated_at,
+                "title": ConversationModel.title,
+            }.get(order_by, ConversationModel.updated_at)
+
+            if use_cursor:
+                # Cursor-based (keyset) pagination
+                # Apply cursor filter
+                if cursor:  # non-empty = subsequent page
+                    cursor_ts, cursor_id = decode_cursor(cursor)
+                    # Format timestamp as string matching SQLite storage format
+                    cursor_ts_str = cursor_ts.strftime("%Y-%m-%d %H:%M:%S")
+                    if ascending:
+                        query = query.filter(
+                            or_(
+                                order_field > cursor_ts_str,
+                                and_(
+                                    order_field == cursor_ts_str,
+                                    ConversationModel.id > cursor_id,
+                                ),
+                            )
+                        )
+                    else:
+                        query = query.filter(
+                            or_(
+                                order_field < cursor_ts_str,
+                                and_(
+                                    order_field == cursor_ts_str,
+                                    ConversationModel.id < cursor_id,
+                                ),
+                            )
+                        )
+
+                # Order with id as tiebreaker for determinism
                 if ascending:
-                    query = query.order_by(text("message_count ASC"))
+                    query = query.order_by(
+                        order_field.asc(), ConversationModel.id.asc()
+                    )
                 else:
-                    query = query.order_by(text("message_count DESC"))
+                    query = query.order_by(
+                        order_field.desc(), ConversationModel.id.desc()
+                    )
+
+                results = query.limit(page_size + 1).all()
+
+                has_more = len(results) > page_size
+                if has_more:
+                    results = results[:page_size]
+
+                items = []
+                for conv, msg_count in results:
+                    conv_dict = conv.to_dict()
+                    conv_dict["message_count"] = msg_count
+                    items.append(ConversationSummary.from_dict(conv_dict))
+
+                next_cursor = None
+                if has_more and results:
+                    last_conv = results[-1][0]
+                    last_sort_val = getattr(
+                        last_conv, order_by, last_conv.updated_at
+                    )
+                    next_cursor = encode_cursor(last_sort_val, last_conv.id)
+
+                return PaginatedResult(
+                    items=items,
+                    next_cursor=next_cursor,
+                    has_more=has_more,
+                )
             else:
-                order_field = {
-                    "created_at": ConversationModel.created_at,
-                    "updated_at": ConversationModel.updated_at,
-                    "title": ConversationModel.title,
-                }.get(order_by, ConversationModel.updated_at)
-
-                if ascending:
-                    query = query.order_by(order_field.asc())
+                # Traditional offset/limit pagination
+                if order_by == "message_count":
+                    if ascending:
+                        query = query.order_by(text("message_count ASC"))
+                    else:
+                        query = query.order_by(text("message_count DESC"))
                 else:
-                    query = query.order_by(order_field.desc())
+                    if ascending:
+                        query = query.order_by(order_field.asc())
+                    else:
+                        query = query.order_by(order_field.desc())
 
-            # Apply pagination
-            results = query.offset(offset).limit(limit).all()
+                results = query.offset(offset).limit(limit).all()
 
-            # Convert to ConversationSummary objects
-            output = []
-            for conv, msg_count in results:
-                conv_dict = conv.to_dict()
-                conv_dict["message_count"] = msg_count
-                output.append(ConversationSummary.from_dict(conv_dict))
+                output = []
+                for conv, msg_count in results:
+                    conv_dict = conv.to_dict()
+                    conv_dict["message_count"] = msg_count
+                    output.append(ConversationSummary.from_dict(conv_dict))
 
-            return output
+                return output
 
     def delete_conversation(self, conversation_id: str) -> bool:
         """

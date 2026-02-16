@@ -484,6 +484,24 @@ class ConversationSummary:
 
 
 @dataclass
+class PaginatedResult:
+    """Result of a paginated query with cursor support."""
+
+    items: List[ConversationSummary]
+    next_cursor: Optional[str] = None
+    has_more: bool = False
+
+    def __len__(self):
+        return len(self.items)
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __bool__(self):
+        return len(self.items) > 0
+
+
+@dataclass
 class ConversationTree:
     """Tree-structured conversation representation"""
 
