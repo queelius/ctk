@@ -509,6 +509,10 @@ def cmd_query(args):
     # Use the search helper
     from .core.db_helpers import search_conversations_helper
 
+    # Cursor pagination: --cursor flag (empty string = first page)
+    cursor = getattr(args, "cursor", None)
+    page_size = getattr(args, "page_size", 50)
+
     return search_conversations_helper(
         db=db,
         query=args.text,
@@ -534,6 +538,8 @@ def cmd_query(args):
         order_by=args.order_by or "updated_at",
         ascending=args.asc if hasattr(args, "asc") else False,
         output_format=args.format,
+        cursor=cursor,
+        page_size=page_size,
     )
 
 
@@ -3110,6 +3116,13 @@ def main():
         default="updated_at",
     )
     query_parser.add_argument("--asc", action="store_true", help="Sort ascending")
+    # Cursor pagination
+    query_parser.add_argument(
+        "--cursor", help="Pagination cursor (use value from previous page's next_cursor)"
+    )
+    query_parser.add_argument(
+        "--page-size", type=int, default=50, help="Results per page when using --cursor (default: 50)"
+    )
 
     # SQL command - direct SQL queries with Rich output
     sql_parser = subparsers.add_parser("sql", help="Execute SQL queries on database")

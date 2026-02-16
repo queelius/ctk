@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from .formatting import format_conversations_table
+from .models import PaginatedResult
 
 if TYPE_CHECKING:
     from .database import ConversationDB
@@ -26,6 +27,8 @@ def list_conversations_helper(
     project: Optional[str] = None,
     model: Optional[str] = None,
     tags: Optional[str] = None,
+    cursor: Optional[str] = None,
+    page_size: int = 50,
 ) -> int:
     """
     List conversations with filtering.
@@ -42,6 +45,8 @@ def list_conversations_helper(
         project: Filter by project
         model: Filter by model
         tags: Comma-separated tags
+        cursor: Pagination cursor (empty string = first page, None = no pagination)
+        page_size: Number of results per page when using cursor
 
     Returns:
         0 on success, 1 on error
@@ -67,21 +72,46 @@ def list_conversations_helper(
     if pinned:
         filter_args["pinned"] = True
 
+    # Add cursor pagination if requested
+    if cursor is not None:
+        filter_args["cursor"] = cursor
+        filter_args["page_size"] = page_size
+
     conversations = db.list_conversations(**filter_args)
 
-    if not conversations:
-        print("No conversations found")
-        return 0
+    # Handle PaginatedResult vs plain list
+    if isinstance(conversations, PaginatedResult):
+        items = conversations.items
+        if not items:
+            print("No conversations found")
+            return 0
 
-    # Display format
-    if json_output:
-        # Convert to dicts
-        conv_dicts = [
-            c.to_dict() if hasattr(c, "to_dict") else c for c in conversations
-        ]
-        print(json.dumps(conv_dicts, indent=2, default=str))
+        if json_output:
+            conv_dicts = [
+                c.to_dict() if hasattr(c, "to_dict") else c for c in items
+            ]
+            output = {
+                "items": conv_dicts,
+                "next_cursor": conversations.next_cursor,
+                "has_more": conversations.has_more,
+            }
+            print(json.dumps(output, indent=2, default=str))
+        else:
+            format_conversations_table(items, show_message_count=False)
+            if conversations.has_more and conversations.next_cursor:
+                print(f"\nNext page: --cursor {conversations.next_cursor}")
     else:
-        format_conversations_table(conversations, show_message_count=False)
+        if not conversations:
+            print("No conversations found")
+            return 0
+
+        if json_output:
+            conv_dicts = [
+                c.to_dict() if hasattr(c, "to_dict") else c for c in conversations
+            ]
+            print(json.dumps(conv_dicts, indent=2, default=str))
+        else:
+            format_conversations_table(conversations, show_message_count=False)
 
     return 0
 
@@ -109,6 +139,8 @@ def search_conversations_helper(
     order_by: str = "updated_at",
     ascending: bool = False,
     output_format: str = "table",
+    cursor: Optional[str] = None,
+    page_size: int = 50,
 ) -> int:
     """
     Search conversations with filtering.
@@ -136,6 +168,8 @@ def search_conversations_helper(
         order_by: Sort field
         ascending: Sort direction
         output_format: 'table', 'json', or 'csv'
+        cursor: Pagination cursor (empty string = first page, None = no pagination)
+        page_size: Number of results per page when using cursor
 
     Returns:
         0 on success, 1 on error
@@ -172,26 +206,63 @@ def search_conversations_helper(
     if pinned:
         search_args["pinned"] = True
 
+    # Add cursor pagination if requested
+    if cursor is not None:
+        search_args["cursor"] = cursor
+        search_args["page_size"] = page_size
+
     results = db.search_conversations(**search_args)
 
-    if not results:
-        print("No conversations found matching criteria")
-        return 0
+    # Handle PaginatedResult vs plain list
+    if isinstance(results, PaginatedResult):
+        items = results.items
+        if not items:
+            print("No conversations found matching criteria")
+            return 0
 
-    # Display results
-    if output_format == "json":
-        conv_dicts = [c.to_dict() if hasattr(c, "to_dict") else c for c in results]
-        print(json.dumps(conv_dicts, indent=2, default=str))
-    elif output_format == "csv":
-        print("ID,Title,Messages,Source,Model,Created,Updated")
-        for conv in results:
-            conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
-            print(
-                f"{conv_dict['id']},{conv_dict.get('title', 'Untitled')},{conv_dict.get('message_count', 0)},"
-                f"{conv_dict.get('source', '')},{conv_dict.get('model', '')},"
-                f"{conv_dict.get('created_at', '')},{conv_dict.get('updated_at', '')}"
-            )
-    else:  # default table format
-        format_conversations_table(results, show_message_count=True)
+        if output_format == "json":
+            conv_dicts = [
+                c.to_dict() if hasattr(c, "to_dict") else c for c in items
+            ]
+            output = {
+                "items": conv_dicts,
+                "next_cursor": results.next_cursor,
+                "has_more": results.has_more,
+            }
+            print(json.dumps(output, indent=2, default=str))
+        elif output_format == "csv":
+            print("ID,Title,Messages,Source,Model,Created,Updated")
+            for conv in items:
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+                print(
+                    f"{conv_dict['id']},{conv_dict.get('title', 'Untitled')},{conv_dict.get('message_count', 0)},"
+                    f"{conv_dict.get('source', '')},{conv_dict.get('model', '')},"
+                    f"{conv_dict.get('created_at', '')},{conv_dict.get('updated_at', '')}"
+                )
+        else:  # default table format
+            format_conversations_table(items, show_message_count=True)
+            if results.has_more and results.next_cursor:
+                print(f"\nNext page: --cursor {results.next_cursor}")
+    else:
+        if not results:
+            print("No conversations found matching criteria")
+            return 0
+
+        if output_format == "json":
+            conv_dicts = [
+                c.to_dict() if hasattr(c, "to_dict") else c for c in results
+            ]
+            print(json.dumps(conv_dicts, indent=2, default=str))
+        elif output_format == "csv":
+            print("ID,Title,Messages,Source,Model,Created,Updated")
+            for conv in results:
+                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+                print(
+                    f"{conv_dict['id']},{conv_dict.get('title', 'Untitled')},{conv_dict.get('message_count', 0)},"
+                    f"{conv_dict.get('source', '')},{conv_dict.get('model', '')},"
+                    f"{conv_dict.get('created_at', '')},{conv_dict.get('updated_at', '')}"
+                )
+        else:  # default table format
+            format_conversations_table(results, show_message_count=True)
 
     return 0

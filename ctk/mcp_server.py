@@ -255,6 +255,10 @@ async def handle_list_tools() -> list[types.Tool]:
                         "description": "Maximum results to return (default: 10)",
                         "default": 10,
                     },
+                    "cursor": {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response's next_cursor. Use empty string for first page.",
+                    },
                 },
                 "required": [],
             },
@@ -281,6 +285,10 @@ async def handle_list_tools() -> list[types.Tool]:
                         "type": "integer",
                         "description": "Maximum results to return (default: 20)",
                         "default": 20,
+                    },
+                    "cursor": {
+                        "type": "string",
+                        "description": "Pagination cursor from previous response's next_cursor. Use empty string for first page.",
                     },
                 },
                 "required": [],
@@ -500,24 +508,40 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
                 or 10
             )
+            cursor = validate_string(arguments.get("cursor"), "cursor", MAX_QUERY_LENGTH)
 
             db = get_db()
 
+            # Build common kwargs
+            search_kwargs = {
+                "starred": starred,
+                "pinned": pinned,
+                "archived": archived,
+                "limit": limit,
+            }
+            if cursor is not None:
+                search_kwargs["cursor"] = cursor
+                search_kwargs["page_size"] = limit
+
             # Search
             if query:
-                results = db.search_conversations(
-                    query_text=query,
-                    starred=starred,
-                    pinned=pinned,
-                    archived=archived,
-                    limit=limit,
-                )
+                search_kwargs["query_text"] = query
+                results = db.search_conversations(**search_kwargs)
             else:
-                results = db.list_conversations(
-                    starred=starred, pinned=pinned, archived=archived, limit=limit
-                )
+                results = db.list_conversations(**search_kwargs)
 
-            if not results:
+            # Handle PaginatedResult vs plain list
+            from ctk.core.models import PaginatedResult
+            if isinstance(results, PaginatedResult):
+                items = results.items
+                next_cursor = results.next_cursor
+                has_more = results.has_more
+            else:
+                items = results
+                next_cursor = None
+                has_more = False
+
+            if not items:
                 return [
                     types.TextContent(
                         type="text",
@@ -526,8 +550,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 ]
 
             # Format results
-            lines = [f"Found {len(results)} conversation(s):\n"]
-            for i, conv in enumerate(results, 1):
+            lines = [f"Found {len(items)} conversation(s):\n"]
+            for i, conv in enumerate(items, 1):
                 title = (conv.title or "Untitled")[:TITLE_TRUNCATE_WIDTH]
                 msg_count = (
                     conv.message_count if hasattr(conv, "message_count") else "?"
@@ -547,6 +571,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
 
             lines.append(f"\nUse get_conversation with ID to view full content.")
+            if has_more and next_cursor:
+                lines.append(f"\nnext_cursor: {next_cursor}")
 
             return [types.TextContent(type="text", text="\n".join(lines))]
 
@@ -561,17 +587,38 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
                 )
                 or 20
             )
+            cursor = validate_string(arguments.get("cursor"), "cursor", MAX_QUERY_LENGTH)
 
             db = get_db()
-            results = db.list_conversations(
-                starred=starred, pinned=pinned, archived=archived, limit=limit
-            )
 
-            if not results:
+            list_kwargs = {
+                "starred": starred,
+                "pinned": pinned,
+                "archived": archived,
+                "limit": limit,
+            }
+            if cursor is not None:
+                list_kwargs["cursor"] = cursor
+                list_kwargs["page_size"] = limit
+
+            results = db.list_conversations(**list_kwargs)
+
+            # Handle PaginatedResult vs plain list
+            from ctk.core.models import PaginatedResult
+            if isinstance(results, PaginatedResult):
+                items = results.items
+                next_cursor = results.next_cursor
+                has_more = results.has_more
+            else:
+                items = results
+                next_cursor = None
+                has_more = False
+
+            if not items:
                 return [types.TextContent(type="text", text="No conversations found.")]
 
-            lines = [f"Recent conversations ({len(results)}):\n"]
-            for i, conv in enumerate(results, 1):
+            lines = [f"Recent conversations ({len(items)}):\n"]
+            for i, conv in enumerate(items, 1):
                 title = (conv.title or "Untitled")[:TITLE_TRUNCATE_WIDTH_SHORT]
                 date = ""
                 if hasattr(conv, "created_at") and conv.created_at:
@@ -587,6 +634,9 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
 
                 flag_str = "".join(flags) + " " if flags else ""
                 lines.append(f"[{i}] {conv.id[:8]} {date} {flag_str}{title}")
+
+            if has_more and next_cursor:
+                lines.append(f"\nnext_cursor: {next_cursor}")
 
             return [types.TextContent(type="text", text="\n".join(lines))]
 
