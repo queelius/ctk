@@ -358,7 +358,9 @@ class VFSNavigator:
 
     def _list_chats(self) -> List[VFSEntry]:
         """List /chats/ directory"""
-        conversations = self.db.list_conversations()
+        from .constants import VFS_LIST_LIMIT
+
+        conversations = self.db.list_conversations(limit=VFS_LIST_LIMIT)
 
         entries = []
         for conv in conversations:
@@ -694,32 +696,26 @@ class VFSNavigator:
             week_start = today_start - timedelta(days=today_start.weekday())
             month_start = today_start.replace(day=1)
 
-            # Get all conversations and filter by date
-            all_convs = self.db.list_conversations()
+            # Use date_from filter via search_conversations to avoid loading all
+            date_from = None
+            date_to = None
+            if period == "today":
+                date_from = today_start
+            elif period == "this-week":
+                date_from = week_start
+                date_to = today_start
+            elif period == "this-month":
+                date_from = month_start
+                date_to = week_start
+            elif period == "older":
+                date_to = month_start
 
-            filtered = []
-            for conv in all_convs:
-                # Use created_at for "recent" filtering (not updated_at)
-                # This shows truly recent conversations, not batch-updated ones
-                conv_date = conv.created_at or conv.updated_at
-                if not conv_date:
-                    continue
-
-                if period == "today":
-                    if conv_date >= today_start:
-                        filtered.append(conv)
-                elif period == "this-week":
-                    if week_start <= conv_date < today_start:
-                        filtered.append(conv)
-                elif period == "this-month":
-                    if month_start <= conv_date < week_start:
-                        filtered.append(conv)
-                elif period == "older":
-                    if conv_date < month_start:
-                        filtered.append(conv)
+            all_convs = self.db.search_conversations(
+                date_from=date_from, date_to=date_to, limit=1000
+            )
 
             entries = []
-            for conv in filtered:
+            for conv in all_convs:
                 entries.append(
                     VFSEntry(
                         name=conv.id,
@@ -747,15 +743,10 @@ class VFSNavigator:
         /source/openai/ shows conversations from OpenAI
         """
         if len(segments) == 1:
-            # /source/ - list all sources
-            all_convs = self.db.list_conversations()
-            sources = set()
-            for conv in all_convs:
-                if conv.source:
-                    sources.add(conv.source)
-
+            # /source/ - list all sources (uses SQL DISTINCT, not loading all convs)
+            sources = self.db.get_distinct_sources()
             return [
-                VFSEntry(name=source, is_directory=True) for source in sorted(sources)
+                VFSEntry(name=source, is_directory=True) for source in sources
             ]
         else:
             # /source/<name>/ - list conversations from source
@@ -791,14 +782,9 @@ class VFSNavigator:
         /model/gpt-4/ shows conversations using GPT-4
         """
         if len(segments) == 1:
-            # /model/ - list all models
-            all_convs = self.db.list_conversations()
-            models = set()
-            for conv in all_convs:
-                if conv.model:
-                    models.add(conv.model)
-
-            return [VFSEntry(name=model, is_directory=True) for model in sorted(models)]
+            # /model/ - list all models (uses SQL DISTINCT, not loading all convs)
+            models = self.db.get_distinct_models()
+            return [VFSEntry(name=model, is_directory=True) for model in models]
         else:
             # /model/<name>/ - list conversations using model
             model_name = segments[1]

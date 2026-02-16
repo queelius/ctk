@@ -1861,6 +1861,34 @@ class ConversationDB:
 
         return new_id
 
+    def get_distinct_sources(self) -> List[str]:
+        """Return sorted list of distinct non-null source values.
+
+        Uses SQL DISTINCT instead of loading all conversations into memory.
+        """
+        with self.session_scope() as session:
+            rows = (
+                session.query(ConversationModel.source)
+                .filter(ConversationModel.source.isnot(None))
+                .distinct()
+                .all()
+            )
+            return sorted(row[0] for row in rows)
+
+    def get_distinct_models(self) -> List[str]:
+        """Return sorted list of distinct non-null model values.
+
+        Uses SQL DISTINCT instead of loading all conversations into memory.
+        """
+        with self.session_scope() as session:
+            rows = (
+                session.query(ConversationModel.model)
+                .filter(ConversationModel.model.isnot(None))
+                .distinct()
+                .all()
+            )
+            return sorted(row[0] for row in rows)
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get database statistics

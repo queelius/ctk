@@ -1040,22 +1040,13 @@ class TestVFSNavigatorRecentListing:
             source="test",
             model="test",
         )
-        old_conv = Mock(
-            id="conv_old",
-            title="Old",
-            created_at=now - timedelta(days=5),
-            updated_at=now - timedelta(days=5),
-            tags=[],
-            starred_at=None,
-            pinned_at=None,
-            archived_at=None,
-            source="test",
-            model="test",
-        )
-        mock_db.list_conversations.return_value = [today_conv, old_conv]
+        mock_db.search_conversations.return_value = [today_conv]
 
         entries = navigator._list_recent(["recent", "today"])
 
+        mock_db.search_conversations.assert_called_once()
+        call_kwargs = mock_db.search_conversations.call_args[1]
+        assert "date_from" in call_kwargs
         assert len(entries) == 1
         assert entries[0].conversation_id == "conv_today"
 
@@ -1075,12 +1066,15 @@ class TestVFSNavigatorRecentListing:
             source="test",
             model="test",
         )
-        mock_db.list_conversations.return_value = [this_week_conv]
+        mock_db.search_conversations.return_value = [this_week_conv]
 
         entries = navigator._list_recent(["recent", "this-week"])
 
-        # Should show conversations from this week but not today
-        assert len(entries) >= 0  # Depends on current day of week
+        mock_db.search_conversations.assert_called_once()
+        call_kwargs = mock_db.search_conversations.call_args[1]
+        assert "date_from" in call_kwargs
+        assert "date_to" in call_kwargs
+        assert len(entries) == 1
 
     @pytest.mark.unit
     def test_list_recent_this_month(self, navigator, mock_db):
@@ -1098,12 +1092,15 @@ class TestVFSNavigatorRecentListing:
             source="test",
             model="test",
         )
-        mock_db.list_conversations.return_value = [this_month_conv]
+        mock_db.search_conversations.return_value = [this_month_conv]
 
         entries = navigator._list_recent(["recent", "this-month"])
 
-        # Filtering logic depends on current date
-        assert isinstance(entries, list)
+        mock_db.search_conversations.assert_called_once()
+        call_kwargs = mock_db.search_conversations.call_args[1]
+        assert "date_from" in call_kwargs
+        assert "date_to" in call_kwargs
+        assert len(entries) == 1
 
     @pytest.mark.unit
     def test_list_recent_older(self, navigator, mock_db):
@@ -1121,16 +1118,21 @@ class TestVFSNavigatorRecentListing:
             source="test",
             model="test",
         )
-        mock_db.list_conversations.return_value = [old_conv]
+        mock_db.search_conversations.return_value = [old_conv]
 
         entries = navigator._list_recent(["recent", "older"])
 
+        mock_db.search_conversations.assert_called_once()
+        call_kwargs = mock_db.search_conversations.call_args[1]
+        assert "date_to" in call_kwargs
         assert len(entries) == 1
         assert entries[0].conversation_id == "conv_old"
 
     @pytest.mark.unit
     def test_list_recent_handles_none_dates(self, navigator, mock_db):
         """Test recent listing handles conversations with None dates"""
+        # DB-level filtering now handles date filtering, so if the DB
+        # returns a conversation with None dates, it gets included
         conv_no_date = Mock(
             id="conv_none",
             title="No Date",
@@ -1143,12 +1145,13 @@ class TestVFSNavigatorRecentListing:
             source="test",
             model="test",
         )
-        mock_db.list_conversations.return_value = [conv_no_date]
+        mock_db.search_conversations.return_value = [conv_no_date]
 
         entries = navigator._list_recent(["recent", "today"])
 
-        # Should filter out conversations without dates
-        assert len(entries) == 0
+        # DB handles filtering; results from search_conversations are used directly
+        mock_db.search_conversations.assert_called_once()
+        assert isinstance(entries, list)
 
 
 class TestVFSNavigatorSourceListing:
@@ -1167,15 +1170,11 @@ class TestVFSNavigatorSourceListing:
     @pytest.mark.unit
     def test_list_source_root_shows_sources(self, navigator, mock_db):
         """Test /source shows all unique sources"""
-        convs = [
-            Mock(id="c1", source="openai", model="gpt-4"),
-            Mock(id="c2", source="anthropic", model="claude"),
-            Mock(id="c3", source="openai", model="gpt-3.5"),
-        ]
-        mock_db.list_conversations.return_value = convs
+        mock_db.get_distinct_sources.return_value = ["anthropic", "openai"]
 
         entries = navigator._list_source(["source"])
 
+        mock_db.get_distinct_sources.assert_called_once()
         assert len(entries) == 2  # openai and anthropic
         names = [e.name for e in entries]
         assert "openai" in names
@@ -1206,12 +1205,8 @@ class TestVFSNavigatorSourceListing:
 
     @pytest.mark.unit
     def test_list_source_root_filters_none(self, navigator, mock_db):
-        """Test source listing filters out None sources"""
-        convs = [
-            Mock(id="c1", source="openai", model="gpt-4"),
-            Mock(id="c2", source=None, model="unknown"),
-        ]
-        mock_db.list_conversations.return_value = convs
+        """Test source listing filters out None sources (handled by DB method)"""
+        mock_db.get_distinct_sources.return_value = ["openai"]
 
         entries = navigator._list_source(["source"])
 
@@ -1235,15 +1230,11 @@ class TestVFSNavigatorModelListing:
     @pytest.mark.unit
     def test_list_model_root_shows_models(self, navigator, mock_db):
         """Test /model shows all unique models"""
-        convs = [
-            Mock(id="c1", source="openai", model="gpt-4"),
-            Mock(id="c2", source="openai", model="gpt-3.5"),
-            Mock(id="c3", source="anthropic", model="gpt-4"),  # Duplicate model name
-        ]
-        mock_db.list_conversations.return_value = convs
+        mock_db.get_distinct_models.return_value = ["gpt-3.5", "gpt-4"]
 
         entries = navigator._list_model(["model"])
 
+        mock_db.get_distinct_models.assert_called_once()
         assert len(entries) == 2  # gpt-4 and gpt-3.5
         names = [e.name for e in entries]
         assert "gpt-4" in names
@@ -1274,12 +1265,8 @@ class TestVFSNavigatorModelListing:
 
     @pytest.mark.unit
     def test_list_model_root_filters_none(self, navigator, mock_db):
-        """Test model listing filters out None models"""
-        convs = [
-            Mock(id="c1", source="openai", model="gpt-4"),
-            Mock(id="c2", source="unknown", model=None),
-        ]
-        mock_db.list_conversations.return_value = convs
+        """Test model listing filters out None models (handled by DB method)"""
+        mock_db.get_distinct_models.return_value = ["gpt-4"]
 
         entries = navigator._list_model(["model"])
 
@@ -1289,12 +1276,7 @@ class TestVFSNavigatorModelListing:
     @pytest.mark.unit
     def test_list_model_root_sorted(self, navigator, mock_db):
         """Test model listing is sorted alphabetically"""
-        convs = [
-            Mock(id="c1", source="test", model="zeta"),
-            Mock(id="c2", source="test", model="alpha"),
-            Mock(id="c3", source="test", model="beta"),
-        ]
-        mock_db.list_conversations.return_value = convs
+        mock_db.get_distinct_models.return_value = ["alpha", "beta", "zeta"]
 
         entries = navigator._list_model(["model"])
 

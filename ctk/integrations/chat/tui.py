@@ -1545,28 +1545,13 @@ You don't need to create directories before tagging - this is mainly for documen
         try:
             tree = None
 
-            # If ID is partial (< 36 chars), do prefix matching
+            # If ID is partial (< 36 chars), use DB-level prefix resolution
             if len(conv_id) < 36:
-                # Search for conversations with IDs starting with this prefix
-                all_convs = self.db.list_conversations(
-                    limit=None, include_archived=True
-                )
-                matches = [c for c in all_convs if c.id.startswith(conv_id)]
-
-                if len(matches) == 0:
-                    print(f"Error: No conversation found matching '{conv_id}'")
+                resolved_id = self.db.resolve_conversation(conv_id)
+                if not resolved_id:
+                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
                     return
-                elif len(matches) > 1:
-                    print(f"Error: Multiple conversations match '{conv_id}':")
-                    for match in matches[:5]:
-                        print(f"  - {match.id[:8]}... {match.title}")
-                    print(
-                        "Please provide more characters to uniquely identify the conversation"
-                    )
-                    return
-                else:
-                    # Exactly one match - load it
-                    conv_id = matches[0].id
+                conv_id = resolved_id
 
             # Load the conversation (either full ID or resolved prefix)
             tree = self.db.load_conversation(conv_id)
@@ -1607,25 +1592,13 @@ You don't need to create directories before tagging - this is mainly for documen
             # Try loading to confirm it exists and get title
             tree = self.db.load_conversation(conv_id)
 
-            # If not found and ID is partial, search for matches
+            # If not found and ID is partial, use DB-level prefix resolution
             if not tree and len(conv_id) < 36:
-                all_convs = self.db.list_conversations(limit=1000)
-                matches = [c for c in all_convs if c.id.startswith(conv_id)]
-
-                if len(matches) == 0:
-                    print(f"Error: No conversation found matching '{conv_id}'")
+                resolved_id = self.db.resolve_conversation(conv_id)
+                if not resolved_id:
+                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
                     return
-                elif len(matches) > 1:
-                    print(f"Error: Multiple conversations match '{conv_id}':")
-                    for match in matches[:5]:
-                        print(f"  - {match.id[:8]}... {match.title}")
-                    print(
-                        "Please provide more characters to uniquely identify the conversation"
-                    )
-                    return
-                else:
-                    # Exactly one match
-                    tree = self.db.load_conversation(matches[0].id)
+                tree = self.db.load_conversation(resolved_id)
 
             if not tree:
                 print(f"Error: Conversation {conv_id} not found")
@@ -3713,25 +3686,13 @@ Available operations:
             if len(conv_id) == 36:
                 tree = self.db.load_conversation(conv_id)
 
-            # If not found or ID is partial, search for matches
+            # If not found or ID is partial, use DB-level prefix resolution
             if not tree:
-                all_convs = self.db.list_conversations(limit=1000)
-                matches = [c for c in all_convs if c.id.startswith(conv_id)]
-
-                if len(matches) == 0:
-                    print(f"Error: No conversation found matching '{conv_id}'")
+                resolved_id = self.db.resolve_conversation(conv_id)
+                if not resolved_id:
+                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
                     return
-                elif len(matches) > 1:
-                    print(f"Error: Multiple conversations match '{conv_id}':")
-                    for match in matches[:5]:
-                        print(f"  - {match.id[:8]}... {match.title}")
-                    print(
-                        "Please provide more characters to uniquely identify the conversation"
-                    )
-                    return
-                else:
-                    # Exactly one match - load it
-                    tree = self.db.load_conversation(matches[0].id)
+                tree = self.db.load_conversation(resolved_id)
 
             if not tree:
                 print(f"Error: Conversation {conv_id} not found")

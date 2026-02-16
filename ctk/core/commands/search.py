@@ -197,7 +197,7 @@ class SearchCommands:
                 # Load conversation summaries from database
                 from ctk.core.formatting import format_conversations_table
 
-                all_summaries = self.db.list_conversations()
+                all_summaries = self.db.list_conversations(limit=len(conv_ids) + 10)
 
                 # Filter to only the matching conversations
                 conversations = [s for s in all_summaries if s.id in conv_ids]
@@ -261,8 +261,11 @@ class SearchCommands:
             conversations = [self.db.load_conversation(cid) for cid in conv_ids]
             conversations = [c for c in conversations if c]  # Filter None
         else:
-            # Get all conversations
-            all_convs = self.db.list_conversations()
+            # Get conversations with limit to avoid loading entire DB
+            from ctk.core.constants import SEARCH_CONVERSATIONS_LIMIT
+
+            fetch_limit = limit or SEARCH_CONVERSATIONS_LIMIT
+            all_convs = self.db.list_conversations(limit=fetch_limit)
             conversations = [self.db.load_conversation(c.id) for c in all_convs]
 
         # Search each conversation

@@ -21,6 +21,8 @@ DEFAULT_TIMELINE_LIMIT = 30  # Timeline query default limit
 SEARCH_BUFFER = 100          # Extra records fetched for post-filtering
 TITLE_MATCH_BOOST = 10       # Boost factor for title matches in search
 AMBIGUITY_CHECK_LIMIT = 2    # Max matches to check for ambiguous IDs
+VFS_LIST_LIMIT = 1000        # Default limit for VFS directory listings
+SEARCH_CONVERSATIONS_LIMIT = 500  # Default limit for search command conversations
 
 # --- Input Validation Limits ---
 
