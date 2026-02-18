@@ -79,6 +79,9 @@ logs/
 .env
 .env.local
 
+# Claude Code MCP config (contains local paths)
+.mcp.json
+
 # Temporary files
 tmp/
 temp/

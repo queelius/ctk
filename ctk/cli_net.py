@@ -545,7 +545,6 @@ def cmd_links(args):
 
         # Save graph
         import os
-        import tempfile
 
         graph_dir = os.path.join(os.path.dirname(args.db), ".ctk_graphs")
         os.makedirs(graph_dir, exist_ok=True)
@@ -555,11 +554,14 @@ def cmd_links(args):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         graph_file = os.path.join(graph_dir, f"graph_{timestamp}.json")
 
-        graph.save(graph_file)
+        import json
+
+        with open(graph_file, "w") as f:
+            json.dump(graph.to_dict(), f, indent=2)
         console.print(f"[green]✓[/green] Saved graph to {graph_file}")
 
         # Save metadata to database
-        db.save_graph_metadata(
+        db.save_current_graph(
             graph_file_path=graph_file,
             threshold=args.threshold,
             max_links_per_node=args.max_links,
