@@ -245,6 +245,14 @@ class ChatTUI:
             )
             self.command_dispatcher.register_commands(search_commands)
 
+            # Register semantic search commands
+            from ctk.core.commands.semantic import create_semantic_commands
+
+            semantic_commands = create_semantic_commands(
+                self.db, self.vfs_navigator, tui_instance=self
+            )
+            self.command_dispatcher.register_commands(semantic_commands)
+
         # Register chat commands (always available, even without db)
         from ctk.core.commands.chat import create_chat_commands
 

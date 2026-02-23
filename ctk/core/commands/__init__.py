@@ -14,6 +14,7 @@ Commands are organized by category:
 - llm.py: temp, model, models, regenerate, retry, stream
 - session.py: clear, new-chat, system, context, user, stats
 - tree_nav.py: fork, branch, merge, goto-*, where, alternatives
+- semantic.py: semantic search/similar, index build/status/clear
 """
 
 from typing import Callable, Dict
@@ -34,6 +35,7 @@ __all__ = [
     "create_llm_commands",
     "create_session_commands",
     "create_tree_nav_commands",
+    "create_semantic_commands",
 ]
 
 # Lazy imports for command factories
@@ -79,4 +81,8 @@ def create_session_commands(*args, **kwargs):
 
 def create_tree_nav_commands(*args, **kwargs):
     from .tree_nav import create_tree_nav_commands as _create
+    return _create(*args, **kwargs)
+
+def create_semantic_commands(*args, **kwargs):
+    from .semantic import create_semantic_commands as _create
     return _create(*args, **kwargs)
