@@ -6,11 +6,7 @@ from typing import Dict, List, Optional
 import mcp.types as types
 
 from ctk.core.constants import MAX_ID_LENGTH, MAX_TITLE_LENGTH
-from ctk.interfaces.mcp.validation import (
-    ValidationError,
-    validate_boolean,
-    validate_string,
-)
+from ctk.interfaces.mcp.validation import validate_boolean, validate_string
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +114,10 @@ def format_conversation_for_output(conv, include_content: bool = True) -> str:
 TOOLS: List[types.Tool] = [
     types.Tool(
         name="get_conversation",
-        description="Get full content of a specific conversation by ID. Use partial IDs (first 6-8 chars) for convenience.",
+        description=(
+            "Get full content of a specific conversation by ID."
+            " Use partial IDs (first 6-8 chars) for convenience."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -213,14 +212,10 @@ TOOLS: List[types.Tool] = [
 # --- Handler Functions ---
 
 
-async def handle_get_conversation(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_get_conversation(arguments: dict, db) -> list[types.TextContent]:
     """Handle get_conversation tool call."""
     # Validate inputs
-    conv_id = validate_string(
-        arguments.get("id"), "id", MAX_ID_LENGTH, required=True
-    )
+    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     include_content = validate_boolean(
         arguments.get("include_content"), "include_content"
     )
@@ -229,9 +224,7 @@ async def handle_get_conversation(
 
     if not conv_id:
         return [
-            types.TextContent(
-                type="text", text="Error: conversation ID is required"
-            )
+            types.TextContent(type="text", text="Error: conversation ID is required")
         ]
 
     # Resolve partial ID
@@ -240,7 +233,10 @@ async def handle_get_conversation(
         return [
             types.TextContent(
                 type="text",
-                text=f"Error: Could not find conversation with ID '{conv_id}'. ID may be ambiguous or not exist.",
+                text=(
+                    f"Error: Could not find conversation with ID"
+                    f" '{conv_id}'. ID may be ambiguous or not exist."
+                ),
             )
         ]
 
@@ -258,14 +254,10 @@ async def handle_get_conversation(
     return [types.TextContent(type="text", text=output)]
 
 
-async def handle_star_conversation(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_star_conversation(arguments: dict, db) -> list[types.TextContent]:
     """Handle star_conversation tool call."""
     # Validate inputs
-    conv_id = validate_string(
-        arguments.get("id"), "id", MAX_ID_LENGTH, required=True
-    )
+    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     starred = validate_boolean(arguments.get("starred"), "starred")
     if starred is None:
         starred = True
@@ -288,20 +280,14 @@ async def handle_star_conversation(
         ]
     else:
         return [
-            types.TextContent(
-                type="text", text=f"Unstarred conversation {full_id[:8]}"
-            )
+            types.TextContent(type="text", text=f"Unstarred conversation {full_id[:8]}")
         ]
 
 
-async def handle_pin_conversation(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_pin_conversation(arguments: dict, db) -> list[types.TextContent]:
     """Handle pin_conversation tool call."""
     # Validate inputs
-    conv_id = validate_string(
-        arguments.get("id"), "id", MAX_ID_LENGTH, required=True
-    )
+    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     pinned = validate_boolean(arguments.get("pinned"), "pinned")
     if pinned is None:
         pinned = True
@@ -324,20 +310,14 @@ async def handle_pin_conversation(
         ]
     else:
         return [
-            types.TextContent(
-                type="text", text=f"Unpinned conversation {full_id[:8]}"
-            )
+            types.TextContent(type="text", text=f"Unpinned conversation {full_id[:8]}")
         ]
 
 
-async def handle_archive_conversation(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_archive_conversation(arguments: dict, db) -> list[types.TextContent]:
     """Handle archive_conversation tool call."""
     # Validate inputs
-    conv_id = validate_string(
-        arguments.get("id"), "id", MAX_ID_LENGTH, required=True
-    )
+    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     archived = validate_boolean(arguments.get("archived"), "archived")
     if archived is None:
         archived = True
@@ -366,14 +346,10 @@ async def handle_archive_conversation(
         ]
 
 
-async def handle_set_title(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_set_title(arguments: dict, db) -> list[types.TextContent]:
     """Handle set_title tool call."""
     # Validate inputs
-    conv_id = validate_string(
-        arguments.get("id"), "id", MAX_ID_LENGTH, required=True
-    )
+    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     title = validate_string(
         arguments.get("title"), "title", MAX_TITLE_LENGTH, required=True
     )

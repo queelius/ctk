@@ -1,6 +1,7 @@
 """MCP handler modules for CTK tools."""
 
-from ctk.interfaces.mcp.handlers import analysis, conversation, metadata, search
+from ctk.interfaces.mcp.handlers import (analysis, conversation, metadata,
+                                         search)
 
 # Collect all tools from handler modules
 ALL_TOOLS = search.TOOLS + conversation.TOOLS + metadata.TOOLS + analysis.TOOLS

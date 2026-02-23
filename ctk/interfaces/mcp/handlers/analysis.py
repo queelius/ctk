@@ -7,10 +7,7 @@ import mcp.types as types
 import numpy as np
 
 from ctk.core.constants import MAX_ID_LENGTH, MAX_QUERY_LENGTH
-from ctk.interfaces.mcp.validation import (
-    validate_integer,
-    validate_string,
-)
+from ctk.interfaces.mcp.validation import validate_integer, validate_string
 
 logger = logging.getLogger(__name__)
 
@@ -148,18 +145,13 @@ TOOLS: List[types.Tool] = [
 # --- Handler Functions ---
 
 
-async def handle_find_similar(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_find_similar(arguments: dict, db) -> list[types.TextContent]:
     """Handle find_similar tool call."""
     conv_id_input = validate_string(
         arguments.get("id"), "id", MAX_ID_LENGTH, required=True
     )
     top_k = (
-        validate_integer(
-            arguments.get("top_k"), "top_k", min_val=1, max_val=100
-        )
-        or 10
+        validate_integer(arguments.get("top_k"), "top_k", min_val=1, max_val=100) or 10
     )
     threshold = arguments.get("threshold", 0.1)
     if isinstance(threshold, str):
@@ -235,18 +227,13 @@ async def handle_find_similar(
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def handle_semantic_search(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]:
     """Handle semantic_search tool call."""
     query = validate_string(
         arguments.get("query"), "query", MAX_QUERY_LENGTH, required=True
     )
     top_k = (
-        validate_integer(
-            arguments.get("top_k"), "top_k", min_val=1, max_val=100
-        )
-        or 10
+        validate_integer(arguments.get("top_k"), "top_k", min_val=1, max_val=100) or 10
     )
 
     all_embs = _check_embeddings_exist(db)
@@ -257,14 +244,10 @@ async def handle_semantic_search(
     provider_name = all_embs[0].get("provider", "tfidf")
 
     try:
-        from ctk.core.similarity import (
-            ConversationEmbedder,
-            ConversationEmbeddingConfig,
-        )
-        from ctk.integrations.embeddings.base import (
-            AggregationStrategy,
-            ChunkingStrategy,
-        )
+        from ctk.core.similarity import (ConversationEmbedder,
+                                         ConversationEmbeddingConfig)
+        from ctk.integrations.embeddings.base import (AggregationStrategy,
+                                                      ChunkingStrategy)
 
         config = ConversationEmbeddingConfig(
             provider=provider_name,
@@ -313,11 +296,7 @@ async def handle_semantic_search(
 
     except Exception as e:
         logger.error(f"Failed to embed query: {e}")
-        return [
-            types.TextContent(
-                type="text", text=f"Error embedding query: {e}"
-            )
-        ]
+        return [types.TextContent(type="text", text=f"Error embedding query: {e}")]
 
     # Compare against all stored embeddings
     results = []
@@ -353,9 +332,7 @@ async def handle_semantic_search(
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def handle_get_network_summary(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_get_network_summary(arguments: dict, db) -> list[types.TextContent]:
     """Handle get_network_summary tool call."""
     threshold = arguments.get("threshold", 0.3)
     if isinstance(threshold, str):
@@ -408,9 +385,7 @@ async def handle_get_network_summary(
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def handle_get_clusters(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_get_clusters(arguments: dict, db) -> list[types.TextContent]:
     """Handle get_clusters tool call."""
     algorithm = arguments.get("algorithm", "label_propagation")
 
@@ -463,12 +438,8 @@ async def handle_get_clusters(
         clusters[idx] = list(comm)
 
     lines = [f"Found {len(clusters)} cluster(s):\n"]
-    for cluster_id, members in sorted(
-        clusters.items(), key=lambda x: -len(x[1])
-    ):
-        lines.append(
-            f"Cluster {cluster_id + 1} ({len(members)} conversations):"
-        )
+    for cluster_id, members in sorted(clusters.items(), key=lambda x: -len(x[1])):
+        lines.append(f"Cluster {cluster_id + 1} ({len(members)} conversations):")
         for cid in members[:5]:  # Show first 5
             title = _get_conversation_title(db, cid, max_len=40)
             lines.append(f"  {cid[:8]} {title}")

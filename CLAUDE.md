@@ -71,6 +71,7 @@ Two-mode system entered via `ctk chat`:
 | `settings.py` | Settings commands |
 | `database.py` | Database commands |
 | `llm.py` | LLM commands |
+| `semantic.py` | semantic (search, similar), index (build, status, clear) |
 
 Pipe support (`ls | grep pattern | head 5`), env vars (`$CWD`, `$MODEL`, `$PROVIDER`, `$CONV_ID`), tab completion.
 
@@ -98,7 +99,7 @@ Auto-discovers importers/exporters in `ctk/integrations/`. Registry pattern with
 
 **Fluent Python API** (`ctk/api.py`): `CTK` class with builder pattern — `CTK("db.db").search("python").limit(10).get()`
 
-**MCP Server** (`ctk/mcp_server.py`): Standalone MCP server exposing conversation operations to Claude Code and other MCP clients. Run via `python -m ctk.mcp_server`.
+**MCP Server** (`ctk/interfaces/mcp/`): Modular MCP server with handler modules for search, conversation, metadata, and analysis (semantic search, similarity, clustering). 13 tools total. Entry point: `python -m ctk.mcp_server` (thin wrapper). Handlers in `ctk/interfaces/mcp/handlers/`.
 
 **View System** (`ctk/core/views.py`): YAML-based named collections. Selection types: `ITEMS`, `QUERY`, `SQL`, `UNION/INTERSECT/SUBTRACT`. CLI: `ctk view create/list/show/eval`.
 
@@ -146,7 +147,7 @@ starred = to_bool(starred_val) if starred_val is not None else None
 
 ### Testing
 - Unit tests in `tests/unit/`, integration tests in `tests/integration/`
-- ~2021 unit tests pass, 1 pre-existing failure (test_taggers)
+- ~2300 unit tests pass, 1 pre-existing failure (test_taggers)
 - 9 integration test failures (pre-existing, old CLI command names)
 - Coverage threshold: 59% (enforced in pytest.ini via `--cov-fail-under=59`)
 - Well-tested modules: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)

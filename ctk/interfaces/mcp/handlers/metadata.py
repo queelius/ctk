@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 TOOLS: List[types.Tool] = [
     types.Tool(
         name="get_statistics",
-        description="Get database statistics: total conversations, messages, starred/pinned/archived counts, sources, models.",
+        description=(
+            "Get database statistics: total conversations, messages,"
+            " starred/pinned/archived counts, sources, models."
+        ),
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     types.Tool(
@@ -27,9 +30,7 @@ TOOLS: List[types.Tool] = [
 # --- Handler Functions ---
 
 
-async def handle_get_statistics(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_get_statistics(arguments: dict, db) -> list[types.TextContent]:
     """Handle get_statistics tool call."""
     stats = db.get_statistics()
 
@@ -52,16 +53,12 @@ async def handle_get_statistics(
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def handle_get_tags(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_get_tags(arguments: dict, db) -> list[types.TextContent]:
     """Handle get_tags tool call."""
     tags = db.get_all_tags()
 
     if not tags:
-        return [
-            types.TextContent(type="text", text="No tags found in database.")
-        ]
+        return [types.TextContent(type="text", text="No tags found in database.")]
 
     lines = ["Tags in database:\n"]
     # tags is List[Dict] with 'name' and 'usage_count' keys

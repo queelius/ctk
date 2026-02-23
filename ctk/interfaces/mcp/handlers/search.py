@@ -5,18 +5,11 @@ from typing import Dict, List
 
 import mcp.types as types
 
-from ctk.core.constants import (
-    MAX_QUERY_LENGTH,
-    MAX_RESULT_LIMIT,
-    TITLE_TRUNCATE_WIDTH,
-    TITLE_TRUNCATE_WIDTH_SHORT,
-)
-from ctk.interfaces.mcp.validation import (
-    ValidationError,
-    validate_boolean,
-    validate_integer,
-    validate_string,
-)
+from ctk.core.constants import (MAX_QUERY_LENGTH, MAX_RESULT_LIMIT,
+                                TITLE_TRUNCATE_WIDTH,
+                                TITLE_TRUNCATE_WIDTH_SHORT)
+from ctk.interfaces.mcp.validation import (validate_boolean,
+                                           validate_integer, validate_string)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +21,10 @@ MAX_LIMIT = MAX_RESULT_LIMIT
 TOOLS: List[types.Tool] = [
     types.Tool(
         name="search_conversations",
-        description="Search conversations by text query. Returns matching conversations with IDs, titles, and message counts.",
+        description=(
+            "Search conversations by text query. Returns matching"
+            " conversations with IDs, titles, and message counts."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -55,7 +51,10 @@ TOOLS: List[types.Tool] = [
                 },
                 "cursor": {
                     "type": "string",
-                    "description": "Pagination cursor from previous response's next_cursor. Use empty string for first page.",
+                    "description": (
+                        "Pagination cursor from previous"
+                        " response's next_cursor."
+                    ),
                 },
             },
             "required": [],
@@ -86,7 +85,10 @@ TOOLS: List[types.Tool] = [
                 },
                 "cursor": {
                     "type": "string",
-                    "description": "Pagination cursor from previous response's next_cursor. Use empty string for first page.",
+                    "description": (
+                        "Pagination cursor from previous"
+                        " response's next_cursor."
+                    ),
                 },
             },
             "required": [],
@@ -98,21 +100,15 @@ TOOLS: List[types.Tool] = [
 # --- Handler Functions ---
 
 
-async def handle_search_conversations(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_search_conversations(arguments: dict, db) -> list[types.TextContent]:
     """Handle search_conversations tool call."""
     # Validate inputs
-    query = (
-        validate_string(arguments.get("query"), "query", MAX_QUERY_LENGTH) or ""
-    )
+    query = validate_string(arguments.get("query"), "query", MAX_QUERY_LENGTH) or ""
     starred = validate_boolean(arguments.get("starred"), "starred")
     pinned = validate_boolean(arguments.get("pinned"), "pinned")
     archived = validate_boolean(arguments.get("archived"), "archived")
     limit = (
-        validate_integer(
-            arguments.get("limit"), "limit", min_val=1, max_val=MAX_LIMIT
-        )
+        validate_integer(arguments.get("limit"), "limit", min_val=1, max_val=MAX_LIMIT)
         or 10
     )
     cursor = validate_string(arguments.get("cursor"), "cursor", MAX_QUERY_LENGTH)
@@ -159,9 +155,7 @@ async def handle_search_conversations(
     lines = [f"Found {len(items)} conversation(s):\n"]
     for i, conv in enumerate(items, 1):
         title = (conv.title or "Untitled")[:TITLE_TRUNCATE_WIDTH]
-        msg_count = (
-            conv.message_count if hasattr(conv, "message_count") else "?"
-        )
+        msg_count = conv.message_count if hasattr(conv, "message_count") else "?"
 
         flags = []
         if hasattr(conv, "starred_at") and conv.starred_at:
@@ -172,29 +166,23 @@ async def handle_search_conversations(
             flags.append("\U0001f4e6")
 
         flag_str = "".join(flags) + " " if flags else ""
-        lines.append(
-            f"[{i}] {conv.id[:8]} - {flag_str}{title} ({msg_count} msgs)"
-        )
+        lines.append(f"[{i}] {conv.id[:8]} - {flag_str}{title} ({msg_count} msgs)")
 
-    lines.append(f"\nUse get_conversation with ID to view full content.")
+    lines.append("\nUse get_conversation with ID to view full content.")
     if has_more and next_cursor:
         lines.append(f"\nnext_cursor: {next_cursor}")
 
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
-async def handle_list_conversations(
-    arguments: dict, db
-) -> list[types.TextContent]:
+async def handle_list_conversations(arguments: dict, db) -> list[types.TextContent]:
     """Handle list_conversations tool call."""
     # Validate inputs
     starred = validate_boolean(arguments.get("starred"), "starred")
     pinned = validate_boolean(arguments.get("pinned"), "pinned")
     archived = validate_boolean(arguments.get("archived"), "archived")
     limit = (
-        validate_integer(
-            arguments.get("limit"), "limit", min_val=1, max_val=MAX_LIMIT
-        )
+        validate_integer(arguments.get("limit"), "limit", min_val=1, max_val=MAX_LIMIT)
         or 20
     )
     cursor = validate_string(arguments.get("cursor"), "cursor", MAX_QUERY_LENGTH)

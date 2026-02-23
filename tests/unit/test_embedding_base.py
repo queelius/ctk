@@ -3,13 +3,10 @@
 import numpy as np
 import pytest
 
-from ctk.integrations.embeddings.base import (
-    AggregationStrategy,
-    ChunkingStrategy,
-    EmbeddingProvider,
-    EmbeddingProviderError,
-    EmbeddingResponse,
-)
+from ctk.integrations.embeddings.base import (AggregationStrategy,
+                                              ChunkingStrategy,
+                                              EmbeddingProvider,
+                                              EmbeddingResponse)
 
 
 class ConcreteProvider(EmbeddingProvider):
@@ -20,9 +17,11 @@ class ConcreteProvider(EmbeddingProvider):
         self._dimensions = dimensions
 
     def embed(self, text, **kwargs):
-        vec = [float(ord(c) % 10) / 10 for c in text[:self._dimensions]]
+        vec = [float(ord(c) % 10) / 10 for c in text[: self._dimensions]]
         vec += [0.0] * (self._dimensions - len(vec))
-        return EmbeddingResponse(embedding=vec, model="test", dimensions=self._dimensions)
+        return EmbeddingResponse(
+            embedding=vec, model="test", dimensions=self._dimensions
+        )
 
     def embed_batch(self, texts, **kwargs):
         return [self.embed(t) for t in texts]
@@ -70,7 +69,9 @@ class TestAggregationStrategies:
         np.testing.assert_allclose(result, [4.0, 5.0, 6.0])
 
     def test_concatenate(self, provider, embeddings):
-        result = provider.aggregate_embeddings(embeddings, AggregationStrategy.CONCATENATE)
+        result = provider.aggregate_embeddings(
+            embeddings, AggregationStrategy.CONCATENATE
+        )
         np.testing.assert_allclose(result, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
 
     def test_first(self, provider, embeddings):

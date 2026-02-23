@@ -1,36 +1,22 @@
-"""Tests for ctk/core/similarity.py — ConversationEmbedder, SimilarityComputer, ConversationGraphBuilder."""
+"""Tests for ctk/core/similarity.py."""
 
 import json
 import os
-import tempfile
 
 import numpy as np
 import pytest
 
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-)
-from ctk.core.similarity import (
-    ConversationEmbedder,
-    ConversationEmbeddingConfig,
-    ConversationGraph,
-    ConversationGraphBuilder,
-    ConversationLink,
-    SimilarityComputer,
-    SimilarityMetric,
-    SimilarityResult,
-)
-from ctk.integrations.embeddings.base import (
-    AggregationStrategy,
-    ChunkingStrategy,
-    EmbeddingProvider,
-    EmbeddingResponse,
-)
-
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
+from ctk.core.similarity import (ConversationEmbedder,
+                                 ConversationEmbeddingConfig,
+                                 ConversationGraph, ConversationGraphBuilder,
+                                 ConversationLink, SimilarityComputer,
+                                 SimilarityMetric, SimilarityResult)
+from ctk.integrations.embeddings.base import (AggregationStrategy,
+                                              ChunkingStrategy,
+                                              EmbeddingProvider,
+                                              EmbeddingResponse)
 
 # ==================== Mock Provider ====================
 
@@ -50,7 +36,9 @@ class MockEmbeddingProvider(EmbeddingProvider):
 
     def embed(self, text: str, **kwargs) -> EmbeddingResponse:
         vec = self._text_to_vec(text)
-        return EmbeddingResponse(embedding=vec, model="mock", dimensions=self.DIMENSIONS)
+        return EmbeddingResponse(
+            embedding=vec, model="mock", dimensions=self.DIMENSIONS
+        )
 
     def embed_batch(self, texts, **kwargs):
         return [self.embed(t) for t in texts]
@@ -261,13 +249,17 @@ class TestConversationEmbedder:
 
     def test_embed_conversation_nonzero(self, embedder, conv_python):
         result = embedder.embed_conversation(conv_python)
-        assert np.any(result != 0), "Non-empty conversation should produce non-zero embedding"
+        assert np.any(
+            result != 0
+        ), "Non-empty conversation should produce non-zero embedding"
 
     def test_embed_empty_conversation_returns_zeros(self, embedder, conv_empty):
         # Empty conversation with no title, no tags, no messages -> zero vector
         result = embedder.embed_conversation(conv_empty)
         assert isinstance(result, np.ndarray)
-        np.testing.assert_array_equal(result, np.zeros(MockEmbeddingProvider.DIMENSIONS))
+        np.testing.assert_array_equal(
+            result, np.zeros(MockEmbeddingProvider.DIMENSIONS)
+        )
 
     def test_embed_conversation_deterministic(self, embedder, conv_python):
         emb1 = embedder.embed_conversation(conv_python)
@@ -287,14 +279,18 @@ class TestConversationEmbedder:
         emb1 = embedder.embed_conversation(conv_python)
         emb2 = embedder.embed_conversation(conv_cooking)
         # They should not be identical
-        assert not np.allclose(emb1, emb2), "Different conversations should produce different embeddings"
+        assert not np.allclose(
+            emb1, emb2
+        ), "Different conversations should produce different embeddings"
 
     def test_include_title_setting(self, mock_provider, conv_python):
         config_with = ConversationEmbeddingConfig(include_title=True)
         config_without = ConversationEmbeddingConfig(include_title=False)
 
         emb_with = ConversationEmbedder(config=config_with, provider=mock_provider)
-        emb_without = ConversationEmbedder(config=config_without, provider=mock_provider)
+        emb_without = ConversationEmbedder(
+            config=config_without, provider=mock_provider
+        )
 
         result_with = emb_with.embed_conversation(conv_python)
         result_without = emb_without.embed_conversation(conv_python)
@@ -307,7 +303,9 @@ class TestConversationEmbedder:
         config_without = ConversationEmbeddingConfig(include_tags=False)
 
         emb_with = ConversationEmbedder(config=config_with, provider=mock_provider)
-        emb_without = ConversationEmbedder(config=config_without, provider=mock_provider)
+        emb_without = ConversationEmbedder(
+            config=config_without, provider=mock_provider
+        )
 
         result_with = emb_with.embed_conversation(conv_python)
         result_without = emb_without.embed_conversation(conv_python)
@@ -352,8 +350,12 @@ class TestConversationEmbedder:
     def test_message_weight_by_role(self, embedder):
         """User messages should get weight 2.0, assistant 1.0 by default."""
         user_msg = Message(role=MessageRole.USER, content=MessageContent(text="test"))
-        assistant_msg = Message(role=MessageRole.ASSISTANT, content=MessageContent(text="test"))
-        system_msg = Message(role=MessageRole.SYSTEM, content=MessageContent(text="test"))
+        assistant_msg = Message(
+            role=MessageRole.ASSISTANT, content=MessageContent(text="test")
+        )
+        system_msg = Message(
+            role=MessageRole.SYSTEM, content=MessageContent(text="test")
+        )
 
         assert embedder._compute_message_weight(user_msg) == 2.0
         assert embedder._compute_message_weight(assistant_msg) == 1.0
@@ -403,7 +405,11 @@ class TestConversationEmbedder:
     def test_extract_text_chunks_includes_tags(self, embedder, conv_python):
         """Tags should appear as a joined text chunk."""
         chunks = embedder._extract_text_chunks(conv_python)
-        tag_chunks = [(text, w) for text, w in chunks if "python" in text and "programming" in text]
+        tag_chunks = [
+            (text, w)
+            for text, w in chunks
+            if "python" in text and "programming" in text
+        ]
         assert len(tag_chunks) >= 1
 
     def test_extract_text_chunks_no_title_for_empty(self, embedder, conv_empty):
@@ -416,6 +422,7 @@ class TestConversationEmbedder:
         config = ConversationEmbeddingConfig(provider="tfidf")
         embedder = ConversationEmbedder(config=config)
         from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+
         assert isinstance(embedder.provider, TFIDFEmbedding)
 
     def test_load_provider_unknown_raises(self):
@@ -430,7 +437,11 @@ class TestConversationEmbedder:
             id="no-meta",
             title=None,
             metadata=ConversationMetadata(
-                source="test", model="test-model", tags=[], created_at=None, updated_at=None
+                source="test",
+                model="test-model",
+                tags=[],
+                created_at=None,
+                updated_at=None,
             ),
         )
         msg = Message(role=MessageRole.USER, content=MessageContent(text="hello world"))
@@ -550,7 +561,9 @@ class TestSimilarityComputer:
         sc = SimilarityComputer(embedder=embedder, metric=SimilarityMetric.EUCLIDEAN)
         assert sc.metric == SimilarityMetric.EUCLIDEAN
 
-    def test_compute_similarity_between_conversations(self, embedder, conv_python, conv_cooking):
+    def test_compute_similarity_between_conversations(
+        self, embedder, conv_python, conv_cooking
+    ):
         sc = SimilarityComputer(embedder=embedder)
         result = sc.compute_similarity(conv_python, conv_cooking)
         assert isinstance(result, SimilarityResult)
@@ -650,7 +663,9 @@ class TestSimilarityComputer:
             for j in range(3):
                 assert matrix[i, j] == pytest.approx(matrix[j, i], abs=1e-6)
 
-    def test_compute_similarity_matrix_values_in_range(self, embedder, three_conversations):
+    def test_compute_similarity_matrix_values_in_range(
+        self, embedder, three_conversations
+    ):
         sc = SimilarityComputer(embedder=embedder)
         matrix = sc.compute_similarity_matrix(three_conversations)
         # All cosine similarities should be between -1 and 1
@@ -663,7 +678,9 @@ class TestSimilarityComputer:
         assert matrix.shape == (1, 1)
         assert matrix[0, 0] == pytest.approx(1.0, abs=1e-6)
 
-    def test_find_similar_with_candidates(self, embedder, conv_python, three_conversations):
+    def test_find_similar_with_candidates(
+        self, embedder, conv_python, three_conversations
+    ):
         sc = SimilarityComputer(embedder=embedder)
         results = sc.find_similar(
             conv_python,
@@ -714,7 +731,9 @@ class TestSimilarityComputer:
         with pytest.raises(ValueError, match="Database required"):
             sc._get_embedding("some-id", use_cache=False)
 
-    def test_similar_conversations_score_higher(self, embedder, conv_python, conv_python_similar, conv_cooking):
+    def test_similar_conversations_score_higher(
+        self, embedder, conv_python, conv_python_similar, conv_cooking
+    ):
         """Python conversations should be more similar to each other than to cooking."""
         sc = SimilarityComputer(embedder=embedder)
         sim_python_python2 = sc.compute_similarity(conv_python, conv_python_similar)
@@ -775,8 +794,6 @@ class TestConversationGraph:
         assert G["b"]["c"]["weight"] == 0.5
 
     def test_to_networkx_empty(self):
-        import networkx as nx
-
         graph = ConversationGraph(nodes=["a", "b"], links=[])
         G = graph.to_networkx()
         assert G.number_of_nodes() == 2
@@ -838,7 +855,9 @@ class TestConversationGraphBuilder:
         assert len(graph.nodes) == 3
         assert graph.metadata["total_nodes"] == 3
 
-    def test_build_graph_nodes_are_conversation_objects(self, embedder, three_conversations):
+    def test_build_graph_nodes_are_conversation_objects(
+        self, embedder, three_conversations
+    ):
         """When ConversationTree objects are passed, nodes are the objects themselves."""
         sc = SimilarityComputer(embedder=embedder)
         builder = ConversationGraphBuilder(sc)
@@ -889,7 +908,9 @@ class TestConversationGraphBuilder:
         assert graph.metadata["total_nodes"] == 3
         assert "total_links" in graph.metadata
 
-    def test_build_graph_link_weights_above_threshold(self, embedder, three_conversations):
+    def test_build_graph_link_weights_above_threshold(
+        self, embedder, three_conversations
+    ):
         threshold = 0.5
         sc = SimilarityComputer(embedder=embedder)
         builder = ConversationGraphBuilder(sc)
@@ -920,7 +941,9 @@ class TestConversationGraphBuilder:
         seen = set()
         for link in graph.links:
             pair = frozenset([str(link.source_id), str(link.target_id)])
-            assert pair not in seen, f"Duplicate link: {link.source_id} <-> {link.target_id}"
+            assert (
+                pair not in seen
+            ), f"Duplicate link: {link.source_id} <-> {link.target_id}"
             seen.add(pair)
 
     def test_build_graph_single_conversation(self, embedder, conv_python):
@@ -939,10 +962,10 @@ class TestConversationGraphBuilder:
         with pytest.raises(ValueError, match="Database required"):
             builder.build_graph(conversations=None)
 
-    def test_build_graph_converts_to_networkx_with_string_ids(self, embedder, three_conversations):
+    def test_build_graph_converts_to_networkx_with_string_ids(
+        self, embedder, three_conversations
+    ):
         """build_graph with string IDs allows conversion to NetworkX."""
-        import networkx as nx
-
         # build_graph is typed List[str] for conversations param.
         # When ConversationTree objects are passed, compute_similarity_matrix
         # works (it accepts Union[ConversationTree, str]), but the graph nodes
@@ -992,18 +1015,30 @@ class TestSimilarityEndToEnd:
         builder = ConversationGraphBuilder(sc)
 
         convs = [
-            _make_conversation("c1", "Python Lists", [
-                ("user", "How do I create a list in Python?"),
-                ("assistant", "Use square brackets: my_list = [1, 2, 3]"),
-            ]),
-            _make_conversation("c2", "Python Dicts", [
-                ("user", "How do I create a dictionary in Python?"),
-                ("assistant", "Use curly braces: my_dict = {'key': 'value'}"),
-            ]),
-            _make_conversation("c3", "Baking Bread", [
-                ("user", "How do I bake sourdough bread?"),
-                ("assistant", "You need a starter, flour, water, and salt."),
-            ]),
+            _make_conversation(
+                "c1",
+                "Python Lists",
+                [
+                    ("user", "How do I create a list in Python?"),
+                    ("assistant", "Use square brackets: my_list = [1, 2, 3]"),
+                ],
+            ),
+            _make_conversation(
+                "c2",
+                "Python Dicts",
+                [
+                    ("user", "How do I create a dictionary in Python?"),
+                    ("assistant", "Use curly braces: my_dict = {'key': 'value'}"),
+                ],
+            ),
+            _make_conversation(
+                "c3",
+                "Baking Bread",
+                [
+                    ("user", "How do I bake sourdough bread?"),
+                    ("assistant", "You need a starter, flour, water, and salt."),
+                ],
+            ),
         ]
 
         # Build graph
@@ -1017,7 +1052,9 @@ class TestSimilarityEndToEnd:
         assert "links" in d
         assert len(d["links"]) > 0
 
-    def test_multiple_metrics_produce_results(self, mock_provider, conv_python, conv_cooking):
+    def test_multiple_metrics_produce_results(
+        self, mock_provider, conv_python, conv_cooking
+    ):
         """All supported metrics should produce valid results."""
         config = ConversationEmbeddingConfig(provider="mock")
         embedder = ConversationEmbedder(config=config, provider=mock_provider)
@@ -1028,7 +1065,9 @@ class TestSimilarityEndToEnd:
             assert isinstance(result.similarity, float), f"Metric {metric} failed"
             assert result.method == metric.value
 
-    def test_similarity_matrix_matches_pairwise(self, mock_provider, three_conversations):
+    def test_similarity_matrix_matches_pairwise(
+        self, mock_provider, three_conversations
+    ):
         """Matrix entries should match individual pairwise computations."""
         config = ConversationEmbeddingConfig(provider="mock")
         embedder = ConversationEmbedder(config=config, provider=mock_provider)
@@ -1039,10 +1078,12 @@ class TestSimilarityEndToEnd:
         # Verify matrix[i][j] matches compute_similarity
         for i in range(3):
             for j in range(i + 1, 3):
-                result = sc.compute_similarity(three_conversations[i], three_conversations[j])
-                assert matrix[i, j] == pytest.approx(result.similarity, abs=1e-6), (
-                    f"Matrix[{i},{j}] = {matrix[i, j]} != pairwise {result.similarity}"
+                result = sc.compute_similarity(
+                    three_conversations[i], three_conversations[j]
                 )
+                assert matrix[i, j] == pytest.approx(
+                    result.similarity, abs=1e-6
+                ), f"Matrix[{i},{j}] = {matrix[i, j]} != pairwise {result.similarity}"
 
     def test_empty_graph_export_cytoscape(self, tmp_path):
         """Empty graph should still export valid Cytoscape JSON."""
@@ -1056,7 +1097,9 @@ class TestSimilarityEndToEnd:
 
     def test_single_message_conversation(self, mock_provider):
         """A conversation with a single message should embed fine."""
-        config = ConversationEmbeddingConfig(provider="mock", include_title=False, include_tags=False)
+        config = ConversationEmbeddingConfig(
+            provider="mock", include_title=False, include_tags=False
+        )
         embedder = ConversationEmbedder(config=config, provider=mock_provider)
         conv = _make_conversation("single", "Single", [("user", "Hello")])
         result = embedder.embed_conversation(conv)
@@ -1067,7 +1110,9 @@ class TestSimilarityEndToEnd:
         """Conversation with many messages should embed without error."""
         config = ConversationEmbeddingConfig(provider="mock")
         embedder = ConversationEmbedder(config=config, provider=mock_provider)
-        messages = [(("user" if i % 2 == 0 else "assistant"), f"Message {i}") for i in range(50)]
+        messages = [
+            (("user" if i % 2 == 0 else "assistant"), f"Message {i}") for i in range(50)
+        ]
         conv = _make_conversation("many", "Many Messages", messages)
         result = embedder.embed_conversation(conv)
         assert isinstance(result, np.ndarray)

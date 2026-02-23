@@ -8,7 +8,6 @@ with the MCP Server, and implements dispatch.
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import mcp.server.stdio
 import mcp.types as types
