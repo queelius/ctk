@@ -44,6 +44,10 @@ class TestMCPServerToolDefinitions:
             "archive_conversation",
             "set_title",
             "get_tags",
+            "find_similar",
+            "semantic_search",
+            "get_network_summary",
+            "get_clusters",
         }
 
         assert tool_names == expected_tools
