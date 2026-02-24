@@ -107,3 +107,4 @@ test.db/
 
 # Benchmark data
 .benchmarks/site/
+.worktrees/
