@@ -2297,9 +2297,21 @@ body[data-theme="dark"] .hljs {
     background: var(--border-color);
 }
 
-.streaming .message-content::after {
+.streaming .message-content.waiting::after {
+    content: 'Waiting for response...';
+    color: var(--text-secondary);
+    font-style: italic;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.streaming .message-content:not(.waiting)::after {
     content: '\u2588';
     animation: blink 0.7s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
 }
 
 @keyframes blink {
@@ -3631,6 +3643,13 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
     const msgEl = document.querySelector('[data-msg-id="' + assistantMsg.id + '"]');
     if (msgEl) msgEl.classList.add('streaming');
 
+    // Show waiting indicator until first token arrives
+    const contentEl = msgEl ? msgEl.querySelector('.message-content') : null;
+    if (contentEl) {
+        contentEl.textContent = '';
+        contentEl.classList.add('waiting');
+    }
+
     // Add stop button during streaming
     let stopBtn = null;
     if (msgEl) {
@@ -3643,9 +3662,13 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
 
     try {
         let fullContent = '';
-        const contentEl = msgEl ? msgEl.querySelector('.message-content') : null;
+        let firstToken = true;
 
         for await (const token of chatClient.sendMessage(contextPath)) {
+            if (firstToken && contentEl) {
+                contentEl.classList.remove('waiting');
+                firstToken = false;
+            }
             fullContent += token;
             if (contentEl) contentEl.textContent = fullContent;
         }
