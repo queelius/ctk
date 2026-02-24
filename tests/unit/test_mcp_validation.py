@@ -2,13 +2,9 @@
 
 import pytest
 
-from ctk.interfaces.mcp.validation import (
-    ValidationError,
-    validate_boolean,
-    validate_conversation_id,
-    validate_integer,
-    validate_string,
-)
+from ctk.interfaces.mcp.validation import (ValidationError, validate_boolean,
+                                           validate_conversation_id,
+                                           validate_integer, validate_string)
 
 
 class TestValidateString:

@@ -261,18 +261,10 @@ def cmd_embeddings(args):
 
         # Fit TF-IDF if needed
         if args.provider == "tfidf":
+            from ctk.core.similarity import extract_conversation_text
+
             console.print("Fitting TF-IDF on corpus...")
-            corpus = []
-            for conv in conversations:
-                text_parts = []
-                if conv.title:
-                    text_parts.append(conv.title)
-                for msg in conv.message_map.values():
-                    if hasattr(msg.content, "get_text"):
-                        text_parts.append(msg.content.get_text())
-                    elif hasattr(msg.content, "text"):
-                        text_parts.append(msg.content.text)
-                corpus.append(" ".join(text_parts))
+            corpus = [extract_conversation_text(conv) for conv in conversations]
 
             embedder.provider.fit(corpus)
             console.print(
@@ -546,7 +538,8 @@ def cmd_links(args):
         # Save graph
         import os
 
-        graph_dir = os.path.join(os.path.dirname(args.db), ".ctk_graphs")
+        db_dir = os.path.dirname(os.path.abspath(args.db))
+        graph_dir = os.path.join(db_dir, ".ctk_graphs")
         os.makedirs(graph_dir, exist_ok=True)
 
         from datetime import datetime
@@ -560,9 +553,12 @@ def cmd_links(args):
             json.dump(graph.to_dict(), f, indent=2)
         console.print(f"[green]✓[/green] Saved graph to {graph_file}")
 
+        # Store path relative to db_dir so it survives directory moves
+        relative_path = os.path.relpath(graph_file, db_dir)
+
         # Save metadata to database
         db.save_current_graph(
-            graph_file_path=graph_file,
+            graph_file_path=relative_path,
             threshold=args.threshold,
             max_links_per_node=args.max_links,
             embedding_session_id=session["id"],
@@ -608,7 +604,7 @@ def cmd_network(args):
                                                save_network_metrics_to_db)
 
         # Load graph from file
-        graph_path = graph_metadata["graph_file_path"]
+        graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
         try:
             G = load_graph_from_file(graph_path)
         except FileNotFoundError:
@@ -633,6 +629,45 @@ def cmd_network(args):
     return 0
 
 
+def _resolve_graph_path(db, stored_path):
+    """Resolve a graph file path, which may be relative to db_dir or CWD.
+
+    Tries multiple resolution strategies for backwards compatibility:
+    1. Absolute path — use as-is
+    2. Relative to db_dir (new convention: "graphs/file.json")
+    3. Relative to db_dir's parent (old convention: "dbname/graphs/file.json")
+    4. Relative to CWD (legacy fallback)
+    """
+    import os
+
+    if os.path.isabs(stored_path):
+        return stored_path
+
+    db_dir = str(db.db_dir.resolve()) if db.db_dir else None
+
+    # Try db_dir-relative (new convention)
+    if db_dir:
+        candidate = os.path.join(db_dir, stored_path)
+        if os.path.exists(candidate):
+            return candidate
+
+    # Try db_dir parent-relative (old convention stored from parent dir)
+    if db_dir:
+        candidate = os.path.join(os.path.dirname(db_dir), stored_path)
+        if os.path.exists(candidate):
+            return candidate
+
+    # Try CWD-relative (legacy)
+    candidate = os.path.abspath(stored_path)
+    if os.path.exists(candidate):
+        return candidate
+
+    # Nothing found — return db_dir-relative for error message
+    if db_dir:
+        return os.path.join(db_dir, stored_path)
+    return stored_path
+
+
 def _load_graph(db, console):
     """Helper to load graph from database"""
     from ctk.core.network_analysis import load_graph_from_file
@@ -642,7 +677,7 @@ def _load_graph(db, console):
         console.print("[red]Error: No graph found. Run 'ctk net links' first.[/red]")
         return None, None
 
-    graph_path = graph_metadata["graph_file_path"]
+    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
     try:
         G = load_graph_from_file(graph_path)
         return G, graph_metadata

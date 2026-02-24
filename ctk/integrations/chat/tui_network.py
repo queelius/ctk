@@ -1,9 +1,14 @@
 """Network/similarity commands extracted from ChatTUI."""
 
 import json
+from typing import Optional, Tuple
+
+import networkx as nx
 
 
-def handle_net_command(db, args, current_conversation_id=None, navigator=None, vfs_cwd=None):
+def handle_net_command(
+    db, args, current_conversation_id=None, navigator=None, vfs_cwd=None
+):
     """Handle network/similarity subcommands.
 
     Args:
@@ -43,7 +48,9 @@ def handle_net_command(db, args, current_conversation_id=None, navigator=None, v
         _handle_embeddings(db, subargs, console)
 
     elif subcmd == "similar":
-        _handle_similar(db, subargs, console, current_conversation_id, navigator, vfs_cwd)
+        _handle_similar(
+            db, subargs, console, current_conversation_id, navigator, vfs_cwd
+        )
 
     elif subcmd == "links":
         _handle_links(db, subargs, console)
@@ -71,6 +78,72 @@ def handle_net_command(db, args, current_conversation_id=None, navigator=None, v
         print(
             "Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers"
         )
+
+
+def _resolve_graph_path(db, stored_path: str) -> str:
+    """Resolve a graph file path, which may be relative to db_dir or CWD.
+
+    Tries multiple resolution strategies for backwards compatibility:
+    1. Absolute path — use as-is
+    2. Relative to db_dir (new convention: "graphs/file.json")
+    3. Relative to db_dir's parent (old convention: "dbname/graphs/file.json")
+    4. Relative to CWD (legacy fallback)
+    """
+    from pathlib import Path
+
+    p = Path(stored_path)
+    if p.is_absolute():
+        return stored_path
+
+    db_dir = db.db_dir.resolve() if db.db_dir else None
+
+    # Try db_dir-relative (new convention)
+    if db_dir:
+        candidate = db_dir / stored_path
+        if candidate.exists():
+            return str(candidate)
+
+    # Try db_dir parent-relative (old convention stored from parent dir)
+    if db_dir:
+        candidate = db_dir.parent / stored_path
+        if candidate.exists():
+            return str(candidate)
+
+    # Try CWD-relative (legacy)
+    candidate = Path.cwd() / stored_path
+    if candidate.exists():
+        return str(candidate)
+
+    # Nothing found — return db_dir-relative for error message
+    if db_dir:
+        return str(db_dir / stored_path)
+    return stored_path
+
+
+def _load_graph(db) -> Optional[Tuple[nx.Graph, dict]]:
+    """Load graph from database, handling missing files gracefully.
+
+    Returns:
+        (graph, metadata) tuple, or None if graph unavailable.
+    """
+    from ctk.core.network_analysis import load_graph_from_file
+
+    graph_metadata = db.get_current_graph()
+    if not graph_metadata:
+        print("Error: No graph found. Run 'net links' first.")
+        return None
+
+    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
+    try:
+        G = load_graph_from_file(graph_path)
+        return G, graph_metadata
+    except FileNotFoundError:
+        print(f"Error: Graph file not found: {graph_path}")
+        print("Run 'net links --rebuild' to regenerate the graph")
+        return None
+    except (IOError, OSError, json.JSONDecodeError) as e:
+        print(f"Error loading graph: {e}")
+        return None
 
 
 def _handle_embeddings(db, subargs, console):
@@ -225,20 +298,14 @@ def _handle_embeddings(db, subargs, console):
 
     # Fit TF-IDF if using that provider
     if provider == "tfidf":
+        from ctk.core.similarity import extract_conversation_text
+
         print("Fitting TF-IDF on corpus...")
         corpus_texts = []
         for conv_summary in conversations:
             conv = db.load_conversation(conv_summary.id)
             if conv:
-                text_parts = []
-                if conv.title:
-                    text_parts.append(conv.title)
-                if conv.metadata.tags:
-                    text_parts.append(" ".join(conv.metadata.tags))
-                for msg in conv.message_map.values():
-                    if hasattr(msg.content, "text") and msg.content.text:
-                        text_parts.append(msg.content.text)
-                corpus_texts.append(" ".join(text_parts))
+                corpus_texts.append(extract_conversation_text(conv))
 
         embedder.provider.fit(corpus_texts)
         print(f"Fitted with {embedder.provider.get_dimensions()} features")
@@ -246,6 +313,7 @@ def _handle_embeddings(db, subargs, console):
     # Embed conversations
     print("Embedding conversations...")
     count = 0
+    skipped = 0
     for conv_summary in conversations:
         conv = db.load_conversation(conv_summary.id)
         if conv:
@@ -259,6 +327,7 @@ def _handle_embeddings(db, subargs, console):
                     aggregation_strategy="weighted_mean",
                 )
                 if existing is not None:
+                    skipped += 1
                     continue
 
             embedding = embedder.embed_conversation(conv)
@@ -273,7 +342,10 @@ def _handle_embeddings(db, subargs, console):
             )
             count += 1
 
-    print(f"Embedded {count} conversations")
+    if skipped > 0:
+        print(f"Embedded {count} new, skipped {skipped} already embedded. Use --force to re-embed.")
+    else:
+        print(f"Embedded {count} conversations")
 
     # Save embedding session metadata
     filters_dict = {}
@@ -307,7 +379,9 @@ def _handle_embeddings(db, subargs, console):
     print(f"Saved embedding session (ID: {session_id})")
 
 
-def _handle_similar(db, subargs, console, current_conversation_id=None, navigator=None, vfs_cwd=None):
+def _handle_similar(
+    db, subargs, console, current_conversation_id=None, navigator=None, vfs_cwd=None
+):
     """Handle 'net similar' subcommand."""
     import shlex
 
@@ -434,9 +508,7 @@ def _handle_similar(db, subargs, console, current_conversation_id=None, navigato
 
         embedder.provider.fit(corpus_texts)
 
-    similarity = SimilarityComputer(
-        embedder, metric=SimilarityMetric.COSINE, db=db
-    )
+    similarity = SimilarityComputer(embedder, metric=SimilarityMetric.COSINE, db=db)
 
     # Find similar
     results = similarity.find_similar(
@@ -584,8 +656,7 @@ def _handle_links(db, subargs, console):
         provider=session["provider"],
         chunking=ChunkingStrategy.MESSAGE,
         aggregation=AggregationStrategy.WEIGHTED_MEAN,
-        role_weights=session.get("role_weights")
-        or {"user": 2.0, "assistant": 1.0},
+        role_weights=session.get("role_weights") or {"user": 2.0, "assistant": 1.0},
         include_title=True,
         include_tags=True,
     )
@@ -611,11 +682,11 @@ def _handle_links(db, subargs, console):
 
     # Create graphs directory in database directory
     if db.db_dir:
-        graphs_dir = db.db_dir / "graphs"
+        db_dir = db.db_dir.resolve()
     else:
-        # For non-file databases, use current directory
-        graphs_dir = Path("graphs")
+        db_dir = Path.cwd()
 
+    graphs_dir = db_dir / "graphs"
     graphs_dir.mkdir(exist_ok=True)
 
     # Generate filename with timestamp
@@ -629,9 +700,12 @@ def _handle_links(db, subargs, console):
 
     print(f"Saved to: {graph_path}")
 
+    # Store path relative to db_dir so it survives directory moves
+    relative_path = str(graph_path.relative_to(db_dir))
+
     # Save graph metadata to database
     db.save_current_graph(
-        graph_file_path=str(graph_path),
+        graph_file_path=relative_path,
         threshold=threshold,
         max_links_per_node=max_links,
         embedding_session_id=session["id"],
@@ -674,7 +748,7 @@ def _handle_network(db, subargs):
                                            save_network_metrics_to_db)
 
     # Load graph from file
-    graph_path = graph_metadata["graph_file_path"]
+    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
     try:
         G = load_graph_from_file(graph_path)
     except FileNotFoundError:
@@ -701,8 +775,6 @@ def _handle_network(db, subargs):
 
 def _handle_clusters(db, subargs):
     """Handle 'net clusters' subcommand."""
-    from ctk.core.network_analysis import load_graph_from_file
-
     # Parse options
     algorithm = "louvain"
     min_size = 2
@@ -726,16 +798,12 @@ def _handle_clusters(db, subargs):
                 i += 1
 
     # Load graph
-    graph_metadata = db.get_current_graph()
-    if not graph_metadata:
-        print("Error: No graph found. Run 'net links' first.")
+    result = _load_graph(db)
+    if result is None:
         return
+    G, graph_metadata = result
 
-    G = load_graph_from_file(graph_metadata["graph_file_path"])
     print(f"Detecting communities using {algorithm}...")
-
-    # Community detection
-    import networkx as nx
 
     if algorithm == "louvain":
         try:
@@ -746,13 +814,11 @@ def _handle_clusters(db, subargs):
 
             communities = list(greedy_modularity_communities(G))
     elif algorithm == "label_propagation":
-        from networkx.algorithms.community import \
-            label_propagation_communities
+        from networkx.algorithms.community import label_propagation_communities
 
         communities = list(label_propagation_communities(G))
     else:
-        from networkx.algorithms.community import \
-            greedy_modularity_communities
+        from networkx.algorithms.community import greedy_modularity_communities
 
         communities = list(greedy_modularity_communities(G))
 
@@ -777,10 +843,10 @@ def _handle_clusters(db, subargs):
         print()
 
 
-def _handle_neighbors(db, subargs, current_conversation_id=None, navigator=None, vfs_cwd=None):
+def _handle_neighbors(
+    db, subargs, current_conversation_id=None, navigator=None, vfs_cwd=None
+):
     """Handle 'net neighbors' subcommand."""
-    from ctk.core.network_analysis import load_graph_from_file
-
     # Parse options
     conv_id = None
     depth = 1
@@ -861,20 +927,16 @@ def _handle_neighbors(db, subargs, current_conversation_id=None, navigator=None,
                 return
 
     # Load graph
-    graph_metadata = db.get_current_graph()
-    if not graph_metadata:
-        print("Error: No graph found. Run 'net links' first.")
+    result = _load_graph(db)
+    if result is None:
         return
-
-    G = load_graph_from_file(graph_metadata["graph_file_path"])
+    G, graph_metadata = result
 
     if conv_id not in G:
         print(f"Conversation {conv_id[:8]}... not in graph")
         return
 
     # Get neighbors
-    import networkx as nx
-
     if depth == 1:
         neighbors = set(G.neighbors(conv_id))
     else:
@@ -903,9 +965,7 @@ def _handle_neighbors(db, subargs, current_conversation_id=None, navigator=None,
     for nid in neighbors:
         conv = db.load_conversation(nid)
         title = conv.title if conv else "(untitled)"
-        weight = (
-            G[conv_id][nid].get("weight", 0) if G.has_edge(conv_id, nid) else 0
-        )
+        weight = G[conv_id][nid].get("weight", 0) if G.has_edge(conv_id, nid) else 0
         neighbor_data.append((nid, title, weight))
 
     neighbor_data.sort(key=lambda x: x[2], reverse=True)
@@ -920,8 +980,6 @@ def _handle_neighbors(db, subargs, current_conversation_id=None, navigator=None,
 
 def _handle_path(db, subargs, navigator=None):
     """Handle 'net path' subcommand."""
-    from ctk.core.network_analysis import load_graph_from_file
-
     # Parse source and target
     if not subargs or len(subargs.split()) < 2:
         print("Error: path requires source and target IDs")
@@ -956,12 +1014,10 @@ def _handle_path(db, subargs, navigator=None):
             pass
 
     # Load graph
-    graph_metadata = db.get_current_graph()
-    if not graph_metadata:
-        print("Error: No graph found. Run 'net links' first.")
+    result = _load_graph(db)
+    if result is None:
         return
-
-    G = load_graph_from_file(graph_metadata["graph_file_path"])
+    G, graph_metadata = result
 
     if source_id not in G:
         print(f"Source {source_id[:8]}... not in graph")
@@ -971,8 +1027,6 @@ def _handle_path(db, subargs, navigator=None):
         return
 
     # Find path
-    import networkx as nx
-
     try:
         path = nx.shortest_path(G, source_id, target_id)
     except nx.NetworkXNoPath:
@@ -997,8 +1051,6 @@ def _handle_path(db, subargs, navigator=None):
 
 def _handle_central(db, subargs):
     """Handle 'net central' subcommand."""
-    from ctk.core.network_analysis import load_graph_from_file
-
     # Parse options
     metric = "degree"
     top_k = 10
@@ -1022,16 +1074,12 @@ def _handle_central(db, subargs):
                 i += 1
 
     # Load graph
-    graph_metadata = db.get_current_graph()
-    if not graph_metadata:
-        print("Error: No graph found. Run 'net links' first.")
+    result = _load_graph(db)
+    if result is None:
         return
-
-    G = load_graph_from_file(graph_metadata["graph_file_path"])
+    G, graph_metadata = result
 
     print(f"Computing {metric} centrality...")
-
-    import networkx as nx
 
     if metric == "degree":
         centrality = nx.degree_centrality(G)
@@ -1061,8 +1109,6 @@ def _handle_central(db, subargs):
 
 def _handle_outliers(db, subargs):
     """Handle 'net outliers' subcommand."""
-    from ctk.core.network_analysis import load_graph_from_file
-
     # Parse options
     top_k = 10
 
@@ -1082,14 +1128,10 @@ def _handle_outliers(db, subargs):
                 i += 1
 
     # Load graph
-    graph_metadata = db.get_current_graph()
-    if not graph_metadata:
-        print("Error: No graph found. Run 'net links' first.")
+    result = _load_graph(db)
+    if result is None:
         return
-
-    G = load_graph_from_file(graph_metadata["graph_file_path"])
-
-    import networkx as nx
+    G, graph_metadata = result
 
     centrality = nx.degree_centrality(G)
     sorted_nodes = sorted(centrality.items(), key=lambda x: x[1])

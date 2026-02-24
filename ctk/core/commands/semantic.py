@@ -11,19 +11,11 @@ import numpy as np
 
 from ctk.core.command_dispatcher import CommandResult
 from ctk.core.database import ConversationDB
+from ctk.core.similarity import cosine_similarity, extract_conversation_text
 from ctk.core.vfs import VFSPathParser
 from ctk.core.vfs_navigator import VFSNavigator
 
 logger = logging.getLogger(__name__)
-
-
-def _cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
-    """Compute cosine similarity between two vectors."""
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-    if norm1 == 0 or norm2 == 0:
-        return 0.0
-    return float(np.dot(vec1, vec2) / (norm1 * norm2))
 
 
 class SemanticCommands:
@@ -131,7 +123,7 @@ class SemanticCommands:
                 conv_id = emb_dict["conversation_id"]
                 emb_vec = np.array(emb_dict["embedding"])
 
-                score = _cosine_similarity(query_vec, emb_vec)
+                score = cosine_similarity(query_vec, emb_vec)
                 if score > 0.0:
                     results.append((conv_id, score))
 
@@ -236,7 +228,7 @@ class SemanticCommands:
                     continue
 
                 other_vec = np.array(emb_dict["embedding"])
-                score = _cosine_similarity(target_vec, other_vec)
+                score = cosine_similarity(target_vec, other_vec)
                 if score > 0.0:
                     results.append((other_id, score))
 
@@ -285,6 +277,9 @@ class SemanticCommands:
         """
         Extract text from conversations for TF-IDF fitting.
 
+        Uses the shared extract_conversation_text() to ensure consistent
+        text extraction across index build, TUI search, and MCP search.
+
         Args:
             embeddings: List of embedding dicts from database
 
@@ -296,19 +291,7 @@ class SemanticCommands:
             conv_id = emb_dict["conversation_id"]
             conv = self.db.load_conversation(conv_id)
             if conv:
-                # Build text from messages
-                parts = []
-                if conv.title:
-                    parts.append(conv.title)
-                for msg in conv.message_map.values():
-                    content = msg.content
-                    if isinstance(content, str):
-                        parts.append(content)
-                    elif hasattr(content, "get_text"):
-                        parts.append(content.get_text())
-                    else:
-                        parts.append(str(content))
-                texts.append(" ".join(parts))
+                texts.append(extract_conversation_text(conv))
             else:
                 texts.append("")
         return texts
@@ -440,21 +423,8 @@ class IndexCommands:
                     output="No conversations to index.",
                 )
 
-            # Extract texts for TF-IDF fitting
-            texts = []
-            for conv in conversations:
-                parts = []
-                if conv.title:
-                    parts.append(conv.title)
-                for msg in conv.message_map.values():
-                    content = msg.content
-                    if isinstance(content, str):
-                        parts.append(content)
-                    elif hasattr(content, "get_text"):
-                        parts.append(content.get_text())
-                    else:
-                        parts.append(str(content))
-                texts.append(" ".join(parts))
+            # Extract texts for TF-IDF fitting (canonical extraction)
+            texts = [extract_conversation_text(conv) for conv in conversations]
 
             # Fit TF-IDF and generate embeddings
             config = ConversationEmbeddingConfig(provider="tfidf")
@@ -497,7 +467,8 @@ class IndexCommands:
         """
         try:
             all_embeddings = self.db.get_all_embeddings()
-            total_conversations = len(self.db.list_conversations(limit=100000))
+            stats = self.db.get_statistics()
+            total_conversations = stats.get("total_conversations", 0)
 
             if not all_embeddings:
                 return CommandResult(

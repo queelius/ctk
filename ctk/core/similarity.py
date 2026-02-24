@@ -20,6 +20,64 @@ from ctk.integrations.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider)
 
+
+# ==================== Shared Utilities ====================
+
+
+def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+    """
+    Compute cosine similarity between two vectors.
+
+    Returns 0.0 for zero vectors or mismatched shapes.
+    """
+    if vec_a.shape != vec_b.shape:
+        return 0.0
+    n1 = float(np.linalg.norm(vec_a))
+    n2 = float(np.linalg.norm(vec_b))
+    if n1 == 0 or n2 == 0:
+        return 0.0
+    return float(np.dot(vec_a, vec_b) / (n1 * n2))
+
+
+def extract_conversation_text(conversation) -> str:
+    """
+    Extract text from a conversation for embedding.
+
+    Uses message_map.values() to include ALL messages (not just longest path).
+    This is the canonical text extraction — use this everywhere to ensure
+    TF-IDF vectors are computed in the same feature space.
+
+    Args:
+        conversation: ConversationTree or similar object with title and message_map
+
+    Returns:
+        Single text string combining title and all message content
+    """
+    parts = []
+    if hasattr(conversation, "title") and conversation.title:
+        parts.append(conversation.title)
+
+    message_source = None
+    if hasattr(conversation, "message_map"):
+        message_source = conversation.message_map.values()
+    elif hasattr(conversation, "messages"):
+        message_source = conversation.messages
+
+    if message_source:
+        for msg in message_source:
+            content = msg.content if hasattr(msg, "content") else msg
+            if isinstance(content, str):
+                parts.append(content)
+            elif hasattr(content, "get_text"):
+                parts.append(content.get_text())
+            elif hasattr(content, "text") and content.text:
+                parts.append(content.text)
+            else:
+                parts.append(str(content) if content else "")
+
+    return " ".join(parts)
+
+
 # ==================== Configuration ====================
 
 

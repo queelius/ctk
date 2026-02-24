@@ -122,6 +122,52 @@ def validate_integer(
     raise ValidationError(f"'{name}' must be an integer, got {type(value).__name__}")
 
 
+def validate_float(
+    value: Any, name: str, min_val: float = 0.0, max_val: float = 1.0
+) -> Optional[float]:
+    """
+    Validate a float parameter.
+
+    Args:
+        value: Value to validate
+        name: Parameter name for error messages
+        min_val: Minimum allowed value
+        max_val: Maximum allowed value
+
+    Returns:
+        Validated float or None
+
+    Raises:
+        ValidationError: If validation fails
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        raise ValidationError(f"'{name}' must be a number, got boolean")
+
+    if isinstance(value, (int, float)):
+        fval = float(value)
+        if fval < min_val or fval > max_val:
+            raise ValidationError(
+                f"'{name}' must be between {min_val} and {max_val}, got {fval}"
+            )
+        return fval
+
+    if isinstance(value, str):
+        try:
+            fval = float(value)
+            if fval < min_val or fval > max_val:
+                raise ValidationError(
+                    f"'{name}' must be between {min_val} and {max_val}, got {fval}"
+                )
+            return fval
+        except ValueError:
+            pass
+
+    raise ValidationError(f"'{name}' must be a number, got {type(value).__name__}")
+
+
 def validate_conversation_id(value: Any, name: str = "id") -> str:
     """
     Validate a conversation ID.
