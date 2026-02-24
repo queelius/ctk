@@ -616,6 +616,13 @@ class HTMLExporter(ExporterPlugin):
                     <label><input type="checkbox" id="showTimestamps" checked> Show message timestamps</label>
                     <label><input type="checkbox" id="compactMode"> Compact view</label>
 
+                    <h3>AI Chat</h3>
+                    <p class="help-text">Configure a local LLM endpoint (Ollama, LM Studio, etc.) to continue conversations in the browser.</p>
+                    <label>Endpoint: <input type="text" id="chatEndpoint" placeholder="http://localhost:11434/v1" style="width: 100%;"></label>
+                    <label>Model: <input type="text" id="chatModel" placeholder="e.g. llama3.2, mistral" style="width: 100%;"></label>
+                    <label>Temperature: <input type="number" id="chatTemperature" min="0" max="2" step="0.1" value="0.7" style="width: 4rem;"></label>
+                    <label>System Prompt: <textarea id="chatSystemPrompt" rows="3" style="width: 100%; font-family: inherit;" placeholder="Optional system prompt for all chats"></textarea></label>
+
                     <h3>Data Management</h3>
                     <button id="clearLocalStorage" class="btn btn-danger">Clear All Local Data</button>
                     <p class="help-text">This will remove all favorites, annotations, collections, and preferences.</p>
@@ -2604,6 +2611,32 @@ function setupEventListeners() {
         state.save('preferences');
     });
 
+    // AI Chat settings
+    const chatEndpointEl = document.getElementById('chatEndpoint');
+    const chatModelEl = document.getElementById('chatModel');
+    const chatTempEl = document.getElementById('chatTemperature');
+    const chatPromptEl = document.getElementById('chatSystemPrompt');
+
+    const chatSettings = state.preferences.chat || {};
+    if (chatEndpointEl) chatEndpointEl.value = chatSettings.endpoint || 'http://localhost:11434/v1';
+    if (chatModelEl) chatModelEl.value = chatSettings.model || '';
+    if (chatTempEl) chatTempEl.value = chatSettings.temperature !== undefined ? chatSettings.temperature : 0.7;
+    if (chatPromptEl) chatPromptEl.value = chatSettings.systemPrompt || '';
+
+    ['chatEndpoint', 'chatModel', 'chatTemperature', 'chatSystemPrompt'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', () => {
+                if (!state.preferences.chat) state.preferences.chat = {};
+                state.preferences.chat.endpoint = chatEndpointEl.value;
+                state.preferences.chat.model = chatModelEl.value;
+                state.preferences.chat.temperature = parseFloat(chatTempEl.value) || 0.7;
+                state.preferences.chat.systemPrompt = chatPromptEl.value;
+                state.save('preferences');
+            });
+        }
+    });
+
     // Collections
     document.getElementById('newCollectionBtn').addEventListener('click', createCollection);
 
@@ -2815,6 +2848,19 @@ function applyPreferences() {
         document.getElementById('fontSizeSlider').value = state.preferences.fontSize;
         document.getElementById('fontSizeValue').textContent = state.preferences.fontSize + 'px';
         document.documentElement.style.fontSize = state.preferences.fontSize + 'px';
+    }
+
+    // Restore chat settings
+    if (state.preferences.chat) {
+        const cs = state.preferences.chat;
+        const ep = document.getElementById('chatEndpoint');
+        const mo = document.getElementById('chatModel');
+        const te = document.getElementById('chatTemperature');
+        const sp = document.getElementById('chatSystemPrompt');
+        if (ep) ep.value = cs.endpoint || 'http://localhost:11434/v1';
+        if (mo) mo.value = cs.model || '';
+        if (te) te.value = cs.temperature !== undefined ? cs.temperature : 0.7;
+        if (sp) sp.value = cs.systemPrompt || '';
     }
 }
 

@@ -115,3 +115,35 @@ class TestChatCSS:
         exporter = HTMLExporter()
         css = exporter._get_css()
         assert ".streaming" in css
+
+
+class TestChatSettings:
+    """Test that AI Chat settings are in the settings modal."""
+
+    def _get_html(self):
+        exporter = HTMLExporter()
+        return exporter._generate_html([], stats={}, theme="light")
+
+    def test_settings_modal_has_chat_section(self):
+        html = self._get_html()
+        assert "AI Chat" in html
+
+    def test_settings_has_endpoint_input(self):
+        html = self._get_html()
+        assert "chatEndpoint" in html
+
+    def test_settings_has_model_input(self):
+        html = self._get_html()
+        assert "chatModel" in html
+
+    def test_settings_has_temperature_input(self):
+        html = self._get_html()
+        assert "chatTemperature" in html
+
+    def test_settings_has_system_prompt_input(self):
+        html = self._get_html()
+        assert "chatSystemPrompt" in html
+
+    def test_default_endpoint_value(self):
+        html = self._get_html()
+        assert "localhost:11434" in html
