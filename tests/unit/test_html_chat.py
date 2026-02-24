@@ -1,5 +1,4 @@
 """Tests for HTML export chat/tree features."""
-import pytest
 from ctk.integrations.exporters.html import HTMLExporter
 
 
