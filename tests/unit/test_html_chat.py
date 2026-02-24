@@ -61,3 +61,57 @@ class TestPathBasedRendering:
         exporter = HTMLExporter()
         js = exporter._get_javascript()
         assert "chat_branches_" in js
+
+
+class TestChatClientJS:
+    """Test that ChatClient JS class is included."""
+
+    def test_chat_client_class_exists(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "class ChatClient" in js
+
+    def test_chat_client_has_send_method(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "sendMessage" in js
+
+    def test_chat_client_has_abort(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "AbortController" in js
+
+    def test_chat_client_uses_streaming(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "stream" in js
+        assert "chat/completions" in js
+
+    def test_chat_client_reads_settings_from_preferences(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "preferences.chat" in js
+
+
+class TestChatCSS:
+    """Test that CSS includes styles for chat components."""
+
+    def test_css_has_branch_indicator_styles(self):
+        exporter = HTMLExporter()
+        css = exporter._get_css()
+        assert ".branch-indicator" in css
+
+    def test_css_has_chat_input_styles(self):
+        exporter = HTMLExporter()
+        css = exporter._get_css()
+        assert ".chat-input-area" in css
+
+    def test_css_has_chat_message_styles(self):
+        exporter = HTMLExporter()
+        css = exporter._get_css()
+        assert ".chat-message" in css
+
+    def test_css_has_streaming_indicator(self):
+        exporter = HTMLExporter()
+        css = exporter._get_css()
+        assert ".streaming" in css

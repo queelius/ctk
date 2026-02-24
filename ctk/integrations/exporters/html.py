@@ -2148,6 +2148,171 @@ body[data-theme="dark"] .hljs {
 .app-footer a:hover {
     text-decoration: underline;
 }
+
+/* ==================== Branch Navigation ==================== */
+.branch-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-radius: 0.25rem;
+    width: fit-content;
+}
+
+.branch-nav-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.75rem;
+}
+
+.branch-nav-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: white;
+}
+
+.branch-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.branch-label {
+    min-width: 6rem;
+    text-align: center;
+}
+
+/* ==================== Chat Input ==================== */
+.chat-input-area {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+}
+
+.chat-input-area textarea {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 2.5rem;
+    max-height: 8rem;
+}
+
+.chat-input-area textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.chat-send-btn, .chat-stop-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.chat-send-btn {
+    background: var(--accent);
+    color: white;
+}
+
+.chat-send-btn:hover {
+    opacity: 0.9;
+}
+
+.chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.chat-stop-btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.chat-stop-btn:hover {
+    opacity: 0.9;
+}
+
+.chat-config-hint {
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px dashed var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+/* ==================== Chat Messages ==================== */
+.chat-message {
+    border-left: 3px solid var(--accent);
+    opacity: 0.95;
+}
+
+.chat-message .message-role::after {
+    content: ' (local)';
+    font-size: 0.75rem;
+    opacity: 0.6;
+}
+
+.chat-continuation-separator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.chat-continuation-separator::before,
+.chat-continuation-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.streaming .message-content::after {
+    content: '\u2588';
+    animation: blink 0.7s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.chat-error {
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.25rem;
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: 0.25rem;
+    color: #e74c3c;
+    font-size: 0.85rem;
+}
+
+.inline-reply-area {
+    margin: 0.5rem 0;
+}
 """
 
     def _get_javascript(self) -> str:
@@ -2838,6 +3003,101 @@ class ConversationTree {
         }
     }
 }
+
+// ==================== Chat Client ====================
+class ChatClient {
+    constructor() {
+        this.controller = null;
+    }
+
+    getSettings() {
+        const chat = state.preferences.chat || {};
+        return {
+            endpoint: chat.endpoint || 'http://localhost:11434/v1',
+            model: chat.model || '',
+            temperature: chat.temperature !== undefined ? chat.temperature : 0.7,
+            systemPrompt: chat.systemPrompt || ''
+        };
+    }
+
+    async *sendMessage(messages) {
+        const settings = this.getSettings();
+        if (!settings.model) {
+            throw new Error('MODEL_NOT_CONFIGURED');
+        }
+
+        this.controller = new AbortController();
+
+        const apiMessages = [];
+        if (settings.systemPrompt) {
+            apiMessages.push({ role: 'system', content: settings.systemPrompt });
+        }
+        messages.forEach(m => {
+            apiMessages.push({ role: m.role, content: m.content });
+        });
+
+        const url = settings.endpoint.replace(/\\/+$/, '') + '/chat/completions';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: apiMessages,
+                stream: true,
+                temperature: settings.temperature
+            }),
+            signal: this.controller.signal
+        });
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            if (response.status === 404 && text.includes('model')) {
+                throw new Error('MODEL_NOT_FOUND:' + settings.model);
+            }
+            throw new Error('API_ERROR:' + response.status + ' ' + text);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith('data: ')) continue;
+                    const data = trimmed.slice(6);
+                    if (data === '[DONE]') return;
+                    try {
+                        const parsed = JSON.parse(data);
+                        const content = parsed.choices?.[0]?.delta?.content;
+                        if (content) yield content;
+                    } catch (e) {
+                        // Skip malformed SSE chunks
+                    }
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+    }
+
+    abort() {
+        if (this.controller) {
+            this.controller.abort();
+            this.controller = null;
+        }
+    }
+}
+
+const chatClient = new ChatClient();
 
 function renderConversationList() {
     let filtered = getFilteredConversations();
