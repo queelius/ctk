@@ -2771,6 +2771,72 @@ function getFilteredConversations() {
     });
 }
 
+// ==================== Conversation Tree ====================
+class ConversationTree {
+    constructor(messages) {
+        this.messages = new Map();
+        this.childrenMap = new Map();
+        this.roots = [];
+
+        messages.forEach(msg => {
+            this.messages.set(msg.id, msg);
+            if (!this.childrenMap.has(msg.id)) {
+                this.childrenMap.set(msg.id, []);
+            }
+        });
+
+        messages.forEach(msg => {
+            if (msg.parent_id && this.messages.has(msg.parent_id)) {
+                this.childrenMap.get(msg.parent_id).push(msg.id);
+            } else if (!msg.parent_id) {
+                this.roots.push(msg.id);
+            }
+        });
+    }
+
+    getChildren(msgId) {
+        return this.childrenMap.get(msgId) || [];
+    }
+
+    getPathToRoot(msgId) {
+        const path = [];
+        let current = msgId;
+        while (current) {
+            const msg = this.messages.get(current);
+            if (!msg) break;
+            path.unshift(msg);
+            current = msg.parent_id;
+        }
+        return path;
+    }
+
+    getDefaultPath() {
+        if (this.roots.length === 0) return [];
+        const path = [];
+        let currentId = this.roots[0];
+        while (currentId) {
+            const msg = this.messages.get(currentId);
+            if (!msg) break;
+            path.push(msg);
+            const children = this.getChildren(currentId);
+            currentId = children.length > 0 ? children[0] : null;
+        }
+        return path;
+    }
+
+    addMessage(msg) {
+        this.messages.set(msg.id, msg);
+        if (!this.childrenMap.has(msg.id)) {
+            this.childrenMap.set(msg.id, []);
+        }
+        if (msg.parent_id && this.childrenMap.has(msg.parent_id)) {
+            this.childrenMap.get(msg.parent_id).push(msg.id);
+        } else if (!msg.parent_id) {
+            this.roots.push(msg.id);
+        }
+    }
+}
+
 function renderConversationList() {
     let filtered = getFilteredConversations();
 
