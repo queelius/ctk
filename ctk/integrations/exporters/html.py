@@ -2158,6 +2158,8 @@ class AppState {
     constructor() {
         this.conversations = [...CONVERSATIONS];
         this.currentConv = null;
+        this.currentTree = null;
+        this.currentPath = [];
         this.currentTab = 'search';
         this.filters = {
             source: '',
@@ -3005,9 +3007,23 @@ function showConversation(conv) {
 
     container.appendChild(header);
 
-    // Messages
-    conv.messages.forEach(msg => {
+    // Merge localStorage branches into message list
+    const localKey = 'chat_branches_' + conv.id;
+    const localBranches = JSON.parse(localStorage.getItem(localKey) || '[]');
+    const allMessages = [...conv.messages, ...localBranches];
+
+    // Build tree and render selected path
+    const tree = new ConversationTree(allMessages);
+    state.currentTree = tree;
+    state.currentPath = tree.getDefaultPath();
+
+    state.currentPath.forEach(msg => {
         const messageDiv = createMessageElement(conv, msg);
+        const children = tree.getChildren(msg.id);
+        if (children.length > 1) {
+            const indicator = createBranchIndicator(msg, children, tree, conv);
+            messageDiv.appendChild(indicator);
+        }
         container.appendChild(messageDiv);
     });
 }
@@ -3015,6 +3031,7 @@ function showConversation(conv) {
 function createMessageElement(conv, msg) {
     const div = document.createElement('div');
     div.className = `message ${msg.role}`;
+    div.dataset.msgId = msg.id;
 
     const header = document.createElement('div');
     header.className = 'message-header';
@@ -3117,6 +3134,63 @@ function createMessageElement(conv, msg) {
     }
 
     return div;
+}
+
+function createBranchIndicator(parentMsg, childIds, tree, conv) {
+    const currentChild = state.currentPath.find(m =>
+        childIds.includes(m.id)
+    );
+    const currentIndex = currentChild ? childIds.indexOf(currentChild.id) : 0;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'branch-indicator';
+
+    const label = document.createElement('span');
+    label.className = 'branch-label';
+    label.textContent = 'Branch ' + (currentIndex + 1) + ' of ' + childIds.length;
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'branch-nav-btn';
+    prevBtn.textContent = '\u25C0';
+    prevBtn.disabled = currentIndex === 0;
+    prevBtn.addEventListener('click', () => {
+        switchBranch(parentMsg.id, childIds[currentIndex - 1], tree, conv);
+    });
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'branch-nav-btn';
+    nextBtn.textContent = '\u25B6';
+    nextBtn.disabled = currentIndex === childIds.length - 1;
+    nextBtn.addEventListener('click', () => {
+        switchBranch(parentMsg.id, childIds[currentIndex + 1], tree, conv);
+    });
+
+    indicator.appendChild(prevBtn);
+    indicator.appendChild(label);
+    indicator.appendChild(nextBtn);
+    return indicator;
+}
+
+function switchBranch(parentMsgId, newChildId, tree, conv) {
+    const pathToParent = tree.getPathToRoot(parentMsgId);
+    let path = [...pathToParent];
+    let currentId = newChildId;
+    while (currentId) {
+        const msg = tree.messages.get(currentId);
+        if (!msg) break;
+        path.push(msg);
+        const children = tree.getChildren(currentId);
+        currentId = children.length > 0 ? children[0] : null;
+    }
+    state.currentPath = path;
+    showConversation(conv);
+}
+
+function clearLocalBranches(convId) {
+    localStorage.removeItem('chat_branches_' + convId);
+    if (state.currentConv && state.currentConv.id === convId) {
+        showConversation(state.currentConv);
+    }
 }
 
 function renderTimeline() {
