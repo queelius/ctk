@@ -93,6 +93,15 @@ Auto-discovers importers/exporters in `ctk/integrations/`. Registry pattern with
 
 **Exporters** (`ctk/integrations/exporters/`): json, jsonl, markdown, html, hugo, csv, echo
 
+**HTML Exporter Chat Features** (`ctk/integrations/exporters/html.py`): The HTML exporter produces self-contained interactive HTML files with tree-aware chat continuation. Key JS components embedded in the export:
+- **ConversationTree** JS class: mirrors Python `ConversationTree` — builds `childrenMap`/`roots` from `parent_id`, methods: `getChildren()`, `getPathToRoot()`, `getDefaultPath()`, `addMessage()`
+- **ChatClient** JS class: async SSE streaming to OpenAI-compatible endpoints (`/v1/chat/completions`), `AbortController` for cancellation
+- **Path-based rendering**: `showConversation(conv, pathLeafId)` renders selected tree path with branch indicators (`Branch N of M [prev][next]`)
+- **Chat input**: Reply buttons on assistant messages, quick continue at bottom, inline reply areas
+- **localStorage persistence**: chat branches saved under `chat_branches_${convId}`, merged on page load
+- **Settings UI**: AI Chat section with endpoint (default `localhost:11434`), model, temperature, system prompt
+- Tests: `tests/unit/test_html_chat.py` (39 tests)
+
 **Flow**: Import: File → Format Detection → Importer → ConversationTree → Database. Export: Database → ConversationTree → Path Selection → Exporter → Output.
 
 ### Other Key Components

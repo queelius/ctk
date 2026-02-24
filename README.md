@@ -437,7 +437,7 @@ content/conversations/
     images/         # Copied media files
 ```
 
-### Export to HTML5 (Interactive App)
+### Export to HTML5 (Interactive App with Chat)
 ```bash
 # Single self-contained HTML file (default, recommended)
 ctk export archive.html --format html --db chats.db
@@ -449,6 +449,15 @@ ctk export archive.html --format html --db chats.db --media-dir media
 # Multi-file export (requires web server)
 ctk export archive/ --format html --db chats.db --no-embed
 ```
+
+The HTML export includes **tree-aware chat continuation** — continue conversations with a local LLM directly in the exported HTML:
+- **Branch navigation**: Navigate branching conversations with prev/next indicators
+- **Chat with local LLM**: Reply to any assistant message or continue at the end (Ollama, LM Studio, or any OpenAI-compatible endpoint)
+- **Streaming responses**: Token-by-token SSE streaming with stop button
+- **Persistent branches**: New chat branches saved to localStorage
+- **Configurable**: Settings for endpoint, model, temperature, and system prompt
+
+> **Note:** Chat requires serving the HTML via HTTP (e.g., `python -m http.server`) and a running local LLM endpoint.
 
 ## 🌳 Understanding the Tree Structure
 
@@ -572,8 +581,9 @@ sanitizer.add_rule(SanitizationRule(
 - **jsonl** - JSONL for fine-tuning (multiple formats)
 - **json** - Native CTK format, OpenAI, Anthropic, or generic JSON
 - **markdown** - Human-readable with tree visualization
-- **html** - Interactive HTML5 app with browsing, search, and media gallery
+- **html** - Interactive HTML5 app with browsing, search, tree-aware chat, and media gallery
 - **hugo** - Hugo page bundles for static site generation
+- **csv** - Tabular export (conversation and message modes)
 
 ### List Available Plugins
 ```bash
@@ -652,16 +662,17 @@ CTK uses SQLite with the following structure:
 - [x] Views system for curated collections (YAML DSL, queries, set operations)
 - [x] Per-file markdown export (directory output)
 - [x] VFS integration for views (`/views/` directory)
+- [x] Semantic search with TF-IDF embeddings (MCP + TUI)
+- [x] HTML export tree-aware chat continuation (branch navigation, local LLM streaming)
+- [x] Cursor-based keyset pagination
 
 ### In Progress 🔨
-- [ ] Embeddings and similarity search
 - [ ] Improved test coverage
 - [ ] Performance optimization for large databases
 
 ### Planned 📋
 - [ ] Web-based UI (complement to TUI)
 - [ ] Conversation deduplication utilities
-- [ ] LangChain/LlamaIndex integration
 - [ ] Advanced analytics dashboard
 
 ## 🧪 Development
@@ -703,7 +714,7 @@ If you use CTK in your research or projects, please cite it:
   year         = 2025,
   publisher    = {GitHub},
   url          = {https://github.com/queelius/ctk},
-  version      = {2.6.0}
+  version      = {2.7.0}
 }
 ```
 
