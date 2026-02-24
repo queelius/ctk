@@ -1,4 +1,5 @@
 """Tests for HTML export chat/tree features."""
+
 from ctk.integrations.exporters.html import HTMLExporter
 
 
@@ -186,3 +187,125 @@ class TestChatInputComponents:
         exporter = HTMLExporter()
         js = exporter._get_javascript()
         assert "chatClient.abort" in js
+
+
+class TestHTMLExportIntegration:
+    """Integration tests verifying the full HTML export includes chat features."""
+
+    def test_full_export_contains_all_chat_components(self):
+        """A full HTML export should contain all chat-related components."""
+        exporter = HTMLExporter()
+        html = exporter.export_conversations([])
+        # JS classes
+        assert "class ConversationTree" in html
+        assert "class ChatClient" in html
+        # CSS
+        assert ".branch-indicator" in html
+        assert ".chat-input-area" in html
+        # Settings
+        assert "chatEndpoint" in html
+        assert "chatModel" in html
+        # Functions
+        assert "sendChatMessage" in html
+        assert "createQuickContinueInput" in html
+
+    def test_export_with_conversations_includes_parent_id(self, sample_conversation):
+        """Exported message data should include parent_id for tree construction."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data([sample_conversation])
+        assert len(conv_data) == 1
+        messages = conv_data[0]["messages"]
+        assert len(messages) == 4
+        # First message has no parent
+        root_msgs = [m for m in messages if m["parent_id"] is None]
+        assert len(root_msgs) == 1
+        assert root_msgs[0]["id"] == "msg_001"
+        # All other messages have parent_id set
+        child_msgs = [m for m in messages if m["parent_id"] is not None]
+        assert len(child_msgs) == 3
+        # Verify parent chain: msg_002 -> msg_001, msg_003 -> msg_002, msg_004 -> msg_003
+        by_id = {m["id"]: m for m in messages}
+        assert by_id["msg_002"]["parent_id"] == "msg_001"
+        assert by_id["msg_003"]["parent_id"] == "msg_002"
+        assert by_id["msg_004"]["parent_id"] == "msg_003"
+
+    def test_export_with_branching_conversation(self, branching_conversation):
+        """Branching conversations should export all messages with correct parent links."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data([branching_conversation])
+        assert len(conv_data) == 1
+        messages = conv_data[0]["messages"]
+        # Should have all 5 messages (including both branches)
+        assert len(messages) == 5
+        by_id = {m["id"]: m for m in messages}
+        # Both branch responses should reference the same parent
+        assert by_id["msg_002a"]["parent_id"] == "msg_001"
+        assert by_id["msg_002b"]["parent_id"] == "msg_001"
+        # Continuation from first branch
+        assert by_id["msg_003"]["parent_id"] == "msg_002a"
+        assert by_id["msg_004"]["parent_id"] == "msg_003"
+
+    def test_branching_conversation_full_html_output(self, branching_conversation):
+        """Full HTML export of branching conversation should contain tree JS and data."""
+        exporter = HTMLExporter()
+        html = exporter.export_conversations([branching_conversation])
+        # JS tree class is present
+        assert "class ConversationTree" in html
+        # Conversation data is embedded
+        assert "msg_002a" in html
+        assert "msg_002b" in html
+        # Branch indicator support is present
+        assert "branch-indicator" in html
+        assert "switchBranch" in html
+
+    def test_export_preserves_conversation_metadata(self, sample_conversation):
+        """Export should preserve conversation id, title, source, model, and tags."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data([sample_conversation])
+        conv = conv_data[0]
+        assert conv["id"] == "conv_001"
+        assert conv["title"] == "Test Conversation"
+        assert conv["source"] == "test"
+        assert conv["model"] == "test-model"
+        assert "test" in conv["tags"]
+        assert "sample" in conv["tags"]
+        assert conv["message_count"] == 4
+
+    def test_export_stats_are_computed(
+        self, sample_conversation, branching_conversation
+    ):
+        """Stats should aggregate counts across multiple conversations."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data(
+            [sample_conversation, branching_conversation]
+        )
+        assert stats["total_conversations"] == 2
+        assert stats["total_messages"] == 9  # 4 + 5
+        assert "test" in stats["sources"]
+        assert stats["sources"]["test"] == 2
+
+    def test_export_root_message_ids_included(self, branching_conversation):
+        """Export data should include root_message_ids for tree construction."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data([branching_conversation])
+        conv = conv_data[0]
+        assert "root_message_ids" in conv
+        assert "msg_001" in conv["root_message_ids"]
+
+    def test_full_html_is_valid_document(self):
+        """The exported HTML should be a complete, well-formed document."""
+        exporter = HTMLExporter()
+        html = exporter.export_conversations([])
+        assert html.strip().startswith("<!DOCTYPE html>")
+        assert "</html>" in html
+        assert "<script>" in html or "<script " in html
+        assert "<style>" in html or "<style " in html
+
+    def test_export_message_roles_are_strings(self, sample_conversation):
+        """Message roles should be serialized as string values, not enum objects."""
+        exporter = HTMLExporter()
+        conv_data, stats = exporter._prepare_data([sample_conversation])
+        messages = conv_data[0]["messages"]
+        for msg in messages:
+            assert isinstance(msg["role"], str)
+            assert msg["role"] in ("user", "assistant", "system", "tool")
