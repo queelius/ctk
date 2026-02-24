@@ -23,7 +23,6 @@ from sqlalchemy.pool import StaticPool
 from .constants import (AMBIGUITY_CHECK_LIMIT, DEFAULT_SEARCH_LIMIT,
                         DEFAULT_TIMELINE_LIMIT, MIGRATION_LOCK_TIMEOUT,
                         SEARCH_BUFFER, TITLE_MATCH_BOOST)
-from .pagination import decode_cursor, encode_cursor
 from .db_models import (Base, ConversationModel, CurrentCommunityModel,
                         CurrentGraphModel, CurrentNodeMetricsModel,
                         EmbeddingModel, EmbeddingSessionModel, MessageModel,
@@ -31,6 +30,7 @@ from .db_models import (Base, ConversationModel, CurrentCommunityModel,
                         conversation_tags)
 from .models import (ConversationMetadata, ConversationSummary,
                      ConversationTree, Message, MessageContent, MessageRole)
+from .pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -1152,9 +1152,7 @@ class ConversationDB:
             if model:
                 query = query.filter(ConversationModel.model == model)
             if tag:
-                query = query.join(ConversationModel.tags).filter(
-                    TagModel.name == tag
-                )
+                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
             if tags:
                 query = query.join(ConversationModel.tags).filter(
                     TagModel.name.in_(tags)
@@ -1301,9 +1299,7 @@ class ConversationDB:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(
-                                    f"%{query_text}%"
-                                ),
+                                ConversationModel.title.ilike(f"%{query_text}%"),
                                 text(
                                     "json_extract(messages.content_json, "
                                     "'$.text') LIKE :query"
@@ -1313,24 +1309,18 @@ class ConversationDB:
                     else:
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(
+                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                MessageModel.content_json["text"].astext.ilike(
                                     f"%{query_text}%"
                                 ),
-                                MessageModel.content_json[
-                                    "text"
-                                ].astext.ilike(f"%{query_text}%"),
                             )
                         )
 
             # Date filters
             if date_from:
-                query = query.filter(
-                    ConversationModel.created_at >= date_from
-                )
+                query = query.filter(ConversationModel.created_at >= date_from)
             if date_to:
-                query = query.filter(
-                    ConversationModel.created_at <= date_to
-                )
+                query = query.filter(ConversationModel.created_at <= date_to)
 
             # Source, project, and model filters
             if source:
@@ -1338,9 +1328,7 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(
-                    ConversationModel.model.ilike(f"%{model}%")
-                )
+                query = query.filter(ConversationModel.model.ilike(f"%{model}%"))
 
             # Tag filters
             if tags:
@@ -1352,25 +1340,19 @@ class ConversationDB:
             if not include_archived and archived is None:
                 query = query.filter(ConversationModel.archived_at.is_(None))
             elif archived is True:
-                query = query.filter(
-                    ConversationModel.archived_at.isnot(None)
-                )
+                query = query.filter(ConversationModel.archived_at.isnot(None))
             elif archived is False:
                 query = query.filter(ConversationModel.archived_at.is_(None))
 
             # Star filtering
             if starred is True:
-                query = query.filter(
-                    ConversationModel.starred_at.isnot(None)
-                )
+                query = query.filter(ConversationModel.starred_at.isnot(None))
             elif starred is False:
                 query = query.filter(ConversationModel.starred_at.is_(None))
 
             # Pin filtering
             if pinned is True:
-                query = query.filter(
-                    ConversationModel.pinned_at.isnot(None)
-                )
+                query = query.filter(ConversationModel.pinned_at.isnot(None))
             elif pinned is False:
                 query = query.filter(ConversationModel.pinned_at.is_(None))
 
@@ -1379,13 +1361,9 @@ class ConversationDB:
 
             # Message count filters
             if min_messages is not None:
-                query = query.having(
-                    func.count(MessageModel.id) >= min_messages
-                )
+                query = query.having(func.count(MessageModel.id) >= min_messages)
             if max_messages is not None:
-                query = query.having(
-                    func.count(MessageModel.id) <= max_messages
-                )
+                query = query.having(func.count(MessageModel.id) <= max_messages)
 
             # Ordering
             order_field = {
@@ -1395,13 +1373,9 @@ class ConversationDB:
             }.get(order_by, ConversationModel.updated_at)
 
             if ascending:
-                query = query.order_by(
-                    order_field.asc(), ConversationModel.id.asc()
-                )
+                query = query.order_by(order_field.asc(), ConversationModel.id.asc())
             else:
-                query = query.order_by(
-                    order_field.desc(), ConversationModel.id.desc()
-                )
+                query = query.order_by(order_field.desc(), ConversationModel.id.desc())
 
             if limit is not None:
                 query = query.limit(limit)
@@ -1677,9 +1651,7 @@ class ConversationDB:
                 next_cursor = None
                 if has_more and results:
                     last_conv = results[-1][0]
-                    last_sort_val = getattr(
-                        last_conv, order_by, last_conv.updated_at
-                    )
+                    last_sort_val = getattr(last_conv, order_by, last_conv.updated_at)
                     next_cursor = encode_cursor(last_sort_val, last_conv.id)
 
                 return PaginatedResult(

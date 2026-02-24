@@ -51,14 +51,18 @@ def create_tree_nav_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="fork requires a message number")
+            return CommandResult(
+                success=False, output="", error="fork requires a message number"
+            )
 
         try:
             msg_num = int(args.strip())
             tui_instance.fork_conversation(msg_num)
             return CommandResult(success=True, output="")
         except ValueError:
-            return CommandResult(success=False, output="", error=f"Invalid message number: {args}")
+            return CommandResult(
+                success=False, output="", error=f"Invalid message number: {args}"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"Fork error: {e}")
 
@@ -79,7 +83,7 @@ def create_tree_nav_commands(
             return CommandResult(
                 success=False,
                 output="",
-                error="fork-id requires a message ID (full or partial)"
+                error="fork-id requires a message ID (full or partial)",
             )
 
         try:
@@ -120,7 +124,9 @@ def create_tree_nav_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="merge requires a conversation ID")
+            return CommandResult(
+                success=False, output="", error="merge requires a conversation ID"
+            )
 
         parts = args.split(maxsplit=1)
         conv_id = parts[0]
@@ -132,7 +138,7 @@ def create_tree_nav_commands(
                 return CommandResult(
                     success=False,
                     output="",
-                    error=f"Invalid message number: {parts[1]}"
+                    error=f"Invalid message number: {parts[1]}",
                 )
 
         try:
@@ -156,7 +162,9 @@ def create_tree_nav_commands(
             tui_instance.goto_longest_path()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Navigation error: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Navigation error: {e}"
+            )
 
     def cmd_goto_latest(args: str) -> CommandResult:
         """Navigate to the most recently added message.
@@ -173,7 +181,9 @@ def create_tree_nav_commands(
             tui_instance.goto_latest_leaf()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Navigation error: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Navigation error: {e}"
+            )
 
     def cmd_where(args: str) -> CommandResult:
         """Show current position in conversation tree.
@@ -190,7 +200,9 @@ def create_tree_nav_commands(
             tui_instance.show_current_position()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error showing position: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error showing position: {e}"
+            )
 
     def cmd_alternatives(args: str) -> CommandResult:
         """Show alternative branches at current position.
@@ -207,7 +219,9 @@ def create_tree_nav_commands(
             tui_instance.show_alternatives()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error showing alternatives: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error showing alternatives: {e}"
+            )
 
     def cmd_rollback(args: str) -> CommandResult:
         """Undo recent messages.
@@ -229,7 +243,9 @@ def create_tree_nav_commands(
             try:
                 n = int(args.strip())
             except ValueError:
-                return CommandResult(success=False, output="", error=f"Invalid number: {args}")
+                return CommandResult(
+                    success=False, output="", error=f"Invalid number: {args}"
+                )
 
         try:
             tui_instance.rollback(n)
@@ -251,14 +267,18 @@ def create_tree_nav_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="split requires a message number")
+            return CommandResult(
+                success=False, output="", error="split requires a message number"
+            )
 
         try:
             msg_num = int(args.strip())
             tui_instance.split_conversation(msg_num)
             return CommandResult(success=True, output="")
         except ValueError:
-            return CommandResult(success=False, output="", error=f"Invalid message number: {args}")
+            return CommandResult(
+                success=False, output="", error=f"Invalid message number: {args}"
+            )
         except Exception as e:
             return CommandResult(success=False, output="", error=f"Split error: {e}")
 
@@ -276,7 +296,9 @@ def create_tree_nav_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="prune requires a message ID")
+            return CommandResult(
+                success=False, output="", error="prune requires a message ID"
+            )
 
         try:
             tui_instance.prune_subtree(args.strip())
@@ -298,16 +320,22 @@ def create_tree_nav_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="keep-path requires a path number")
+            return CommandResult(
+                success=False, output="", error="keep-path requires a path number"
+            )
 
         try:
             path_num = int(args.strip())
             tui_instance.keep_path(path_num)
             return CommandResult(success=True, output="")
         except ValueError:
-            return CommandResult(success=False, output="", error=f"Invalid path number: {args}")
+            return CommandResult(
+                success=False, output="", error=f"Invalid path number: {args}"
+            )
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Keep-path error: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Keep-path error: {e}"
+            )
 
     def cmd_show_message(args: str) -> CommandResult:
         """Show a specific message by number.
@@ -323,9 +351,7 @@ def create_tree_nav_commands(
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
             return CommandResult(
-                success=False,
-                output="",
-                error="show-message requires a message number"
+                success=False, output="", error="show-message requires a message number"
             )
 
         try:
@@ -333,9 +359,13 @@ def create_tree_nav_commands(
             tui_instance.show_message(msg_num)
             return CommandResult(success=True, output="")
         except ValueError:
-            return CommandResult(success=False, output="", error=f"Invalid message number: {args}")
+            return CommandResult(
+                success=False, output="", error=f"Invalid message number: {args}"
+            )
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error showing message: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error showing message: {e}"
+            )
 
     return {
         "fork": cmd_fork,

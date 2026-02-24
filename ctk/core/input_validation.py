@@ -12,10 +12,13 @@ from typing import Any, Optional
 
 class ValidationError(Exception):
     """Raised when input validation fails."""
+
     pass
 
 
-def validate_conversation_id(value: Optional[str], allow_partial: bool = True) -> Optional[str]:
+def validate_conversation_id(
+    value: Optional[str], allow_partial: bool = True
+) -> Optional[str]:
     """
     Validate conversation ID format.
 
@@ -34,13 +37,17 @@ def validate_conversation_id(value: Optional[str], allow_partial: bool = True) -
         return None
 
     if not isinstance(value, str):
-        raise ValidationError(f"Conversation ID must be a string, got {type(value).__name__}")
+        raise ValidationError(
+            f"Conversation ID must be a string, got {type(value).__name__}"
+        )
 
     if not value:
         raise ValidationError("Conversation ID cannot be empty")
 
     if len(value) > 200:
-        raise ValidationError(f"Conversation ID too long (max 200 chars, got {len(value)})")
+        raise ValidationError(
+            f"Conversation ID too long (max 200 chars, got {len(value)})"
+        )
 
     # Allow: letters, numbers, underscores, dashes, and hyphens (for UUID format)
     if not re.match(r"^[a-zA-Z0-9_-]+$", value):
@@ -125,7 +132,9 @@ def validate_path_selection(value: Optional[str]) -> Optional[str]:
         return None
 
     if not isinstance(value, str):
-        raise ValidationError(f"Path selection must be a string, got {type(value).__name__}")
+        raise ValidationError(
+            f"Path selection must be a string, got {type(value).__name__}"
+        )
 
     allowed_values = {"longest", "first", "last"}
     if value not in allowed_values:
@@ -153,13 +162,17 @@ def validate_export_format(value: Optional[str]) -> Optional[str]:
         return None
 
     if not isinstance(value, str):
-        raise ValidationError(f"Export format must be a string, got {type(value).__name__}")
+        raise ValidationError(
+            f"Export format must be a string, got {type(value).__name__}"
+        )
 
     if not value:
         raise ValidationError("Export format cannot be empty")
 
     if len(value) > 50:
-        raise ValidationError(f"Export format too long (max 50 chars, got {len(value)})")
+        raise ValidationError(
+            f"Export format too long (max 50 chars, got {len(value)})"
+        )
 
     if not re.match(r"^[a-zA-Z0-9_-]+$", value):
         raise ValidationError(f"Invalid export format: {value}")
@@ -171,7 +184,7 @@ def validate_string(
     value: Optional[str],
     max_length: int = 10000,
     allow_empty: bool = True,
-    name: str = "value"
+    name: str = "value",
 ) -> Optional[str]:
     """
     Validate a general string input.
@@ -237,16 +250,11 @@ def validate_boolean(value: Any, name: str = "value") -> bool:
             return bool(value)
         raise ValidationError(f"Invalid boolean for {name}: {value} (use 0 or 1)")
 
-    raise ValidationError(
-        f"{name} must be boolean, got {type(value).__name__}"
-    )
+    raise ValidationError(f"{name} must be boolean, got {type(value).__name__}")
 
 
 def validate_integer(
-    value: Any,
-    min_val: int = 0,
-    max_val: int = 10000,
-    name: str = "value"
+    value: Any, min_val: int = 0, max_val: int = 10000, name: str = "value"
 ) -> int:
     """
     Validate and coerce an integer input.
@@ -277,8 +285,6 @@ def validate_integer(
         raise ValidationError(f"{name} must be integer, got {type(value).__name__}")
 
     if val < min_val or val > max_val:
-        raise ValidationError(
-            f"{name} out of range [{min_val}, {max_val}]: {val}"
-        )
+        raise ValidationError(f"{name} out of range [{min_val}, {max_val}]: {val}")
 
     return val

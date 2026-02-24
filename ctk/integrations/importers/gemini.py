@@ -63,7 +63,9 @@ class GeminiImporter(ImporterPlugin):
 
         # Sort by key length descending so longer patterns match first
         # (e.g. "gemini-pro-vision" before "gemini-pro")
-        for key, value in sorted(model_map.items(), key=lambda x: len(x[0]), reverse=True):
+        for key, value in sorted(
+            model_map.items(), key=lambda x: len(x[0]), reverse=True
+        ):
             if key in model.lower():
                 return value
 
@@ -168,4 +170,3 @@ class GeminiImporter(ImporterPlugin):
             conversations.append(tree)
 
         return conversations
-

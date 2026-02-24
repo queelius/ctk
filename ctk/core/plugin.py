@@ -306,7 +306,6 @@ class ImporterPlugin(BasePlugin):
         return self.validate(data)
 
 
-
 class ExporterPlugin(BasePlugin):
     """Base class for exporter plugins"""
 

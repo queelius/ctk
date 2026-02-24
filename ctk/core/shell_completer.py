@@ -183,7 +183,9 @@ class ShellCompleter(Completer):
         if len(words) >= 2 and not text.endswith(" "):
             prev_word = words[-2]
             if prev_word.startswith("-"):
-                yield from self._complete_option_argument(command, prev_word, current_word)
+                yield from self._complete_option_argument(
+                    command, prev_word, current_word
+                )
                 return
 
         # Check if cursor is right after a space following an option
@@ -201,6 +203,7 @@ class ShellCompleter(Completer):
         # For commands with options, offer option completions when at space
         if text.endswith(" "):
             from ctk.core.command_options import has_options
+
             if has_options(command):
                 yield from self._complete_options(command, "")
 

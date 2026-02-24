@@ -87,9 +87,7 @@ def list_conversations_helper(
             return 0
 
         if json_output:
-            conv_dicts = [
-                c.to_dict() if hasattr(c, "to_dict") else c for c in items
-            ]
+            conv_dicts = [c.to_dict() if hasattr(c, "to_dict") else c for c in items]
             output = {
                 "items": conv_dicts,
                 "next_cursor": conversations.next_cursor,
@@ -221,9 +219,7 @@ def search_conversations_helper(
             return 0
 
         if output_format == "json":
-            conv_dicts = [
-                c.to_dict() if hasattr(c, "to_dict") else c for c in items
-            ]
+            conv_dicts = [c.to_dict() if hasattr(c, "to_dict") else c for c in items]
             output = {
                 "items": conv_dicts,
                 "next_cursor": results.next_cursor,
@@ -249,9 +245,7 @@ def search_conversations_helper(
             return 0
 
         if output_format == "json":
-            conv_dicts = [
-                c.to_dict() if hasattr(c, "to_dict") else c for c in results
-            ]
+            conv_dicts = [c.to_dict() if hasattr(c, "to_dict") else c for c in results]
             print(json.dumps(conv_dicts, indent=2, default=str))
         elif output_format == "csv":
             print("ID,Title,Messages,Source,Model,Created,Updated")

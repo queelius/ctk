@@ -10,13 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 from ctk.integrations.exporters.csv_exporter import CSVExporter
 
 
@@ -85,8 +80,17 @@ class TestCSVExporterConversationMode:
         headers = next(reader)
 
         expected_headers = [
-            "id", "title", "source", "model", "created_at", "updated_at",
-            "message_count", "tags", "starred", "pinned", "archived",
+            "id",
+            "title",
+            "source",
+            "model",
+            "created_at",
+            "updated_at",
+            "message_count",
+            "tags",
+            "starred",
+            "pinned",
+            "archived",
         ]
         assert headers == expected_headers
 
@@ -268,8 +272,13 @@ class TestCSVExporterMessageMode:
         headers = next(reader)
 
         expected_headers = [
-            "conversation_id", "conversation_title", "message_id",
-            "role", "content", "timestamp", "parent_id",
+            "conversation_id",
+            "conversation_title",
+            "message_id",
+            "role",
+            "content",
+            "timestamp",
+            "parent_id",
         ]
         assert headers == expected_headers
 
@@ -399,9 +408,7 @@ class TestCSVExporterFileIO:
         """export_to_file() writes valid CSV to disk"""
         exporter = CSVExporter()
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             filepath = f.name
 
         try:
@@ -420,9 +427,7 @@ class TestCSVExporterFileIO:
         """Exported file is readable by csv.reader"""
         exporter = CSVExporter()
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".csv", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             filepath = f.name
 
         try:
@@ -455,15 +460,11 @@ class TestCSVExporterFileIO:
         """TSV export to file is readable with tab delimiter"""
         exporter = CSVExporter()
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".tsv", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
             filepath = f.name
 
         try:
-            exporter.export_to_file(
-                [sample_conversation], filepath, delimiter="\t"
-            )
+            exporter.export_to_file([sample_conversation], filepath, delimiter="\t")
 
             with open(filepath, "r", newline="") as f:
                 reader = csv.reader(f, delimiter="\t")
@@ -643,9 +644,7 @@ class TestCSVExporterEdgeCases:
         msg = Message(
             id="msg_001",
             role=MessageRole.USER,
-            content=MessageContent(
-                text='He said, "hello"\nShe replied, "hi"'
-            ),
+            content=MessageContent(text='He said, "hello"\nShe replied, "hi"'),
         )
         conv.add_message(msg)
 

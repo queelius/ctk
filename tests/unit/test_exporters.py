@@ -475,9 +475,7 @@ class TestECHOExporter:
         assert "Unknown" not in manifest["name"]
 
     @pytest.mark.unit
-    def test_export_with_include_db(
-        self, echo_exporter, sample_conversation, temp_dir
-    ):
+    def test_export_with_include_db(self, echo_exporter, sample_conversation, temp_dir):
         """Test database copy when include_db=True."""
         # Create a temporary database file
         db_file = temp_dir / "source.db"
@@ -517,7 +515,9 @@ class TestECHOExporter:
         """Test conversation.json has correct tree structure with children."""
         echo_exporter.export_to_directory([branching_conversation], str(temp_dir))
 
-        conv_json_path = temp_dir / "conversations" / branching_conversation.id / "conversation.json"
+        conv_json_path = (
+            temp_dir / "conversations" / branching_conversation.id / "conversation.json"
+        )
         assert conv_json_path.exists()
 
         conv_data = json.loads(conv_json_path.read_text())
@@ -537,7 +537,9 @@ class TestECHOExporter:
         """Test conversation.md is human-readable."""
         echo_exporter.export_to_directory([sample_conversation], str(temp_dir))
 
-        conv_md_path = temp_dir / "conversations" / sample_conversation.id / "conversation.md"
+        conv_md_path = (
+            temp_dir / "conversations" / sample_conversation.id / "conversation.md"
+        )
         assert conv_md_path.exists()
 
         content = conv_md_path.read_text()
@@ -564,13 +566,13 @@ class TestECHOExporter:
         assert conv_info["title"] == sample_conversation.title
 
     @pytest.mark.unit
-    def test_export_metadata_json(
-        self, echo_exporter, sample_conversation, temp_dir
-    ):
+    def test_export_metadata_json(self, echo_exporter, sample_conversation, temp_dir):
         """Test metadata.json is generated correctly."""
         echo_exporter.export_to_directory([sample_conversation], str(temp_dir))
 
-        metadata_path = temp_dir / "conversations" / sample_conversation.id / "metadata.json"
+        metadata_path = (
+            temp_dir / "conversations" / sample_conversation.id / "metadata.json"
+        )
         assert metadata_path.exists()
 
         metadata = json.loads(metadata_path.read_text())
@@ -925,8 +927,7 @@ class TestExporterEdgeCases:
         msg_map = data["conversations"][0]["messages"]
         # CTK format stores messages as a dict keyed by message id
         assert any(
-            len(m.get("content", {}).get("text", "")) == 12000
-            for m in msg_map.values()
+            len(m.get("content", {}).get("text", "")) == 12000 for m in msg_map.values()
         )
 
     @pytest.mark.unit
@@ -1080,8 +1081,9 @@ class TestExporterEdgeCases:
             messages=[("m1", MessageRole.USER, "", None)],
         )
         exporter = JSONExporter()
-        result = exporter.export_conversations([conv], format_style="openai",
-                                                path_selection="longest")
+        result = exporter.export_conversations(
+            [conv], format_style="openai", path_selection="longest"
+        )
         data = json.loads(result)
         assert data[0]["messages"][0]["content"] == ""
 

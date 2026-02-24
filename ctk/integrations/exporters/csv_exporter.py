@@ -54,32 +54,48 @@ class CSVExporter(ExporterPlugin):
     def _export_conversations(self, writer, conversations):
         """Export conversation-level summary rows."""
         headers = [
-            "id", "title", "source", "model", "created_at", "updated_at",
-            "message_count", "tags", "starred", "pinned", "archived",
+            "id",
+            "title",
+            "source",
+            "model",
+            "created_at",
+            "updated_at",
+            "message_count",
+            "tags",
+            "starred",
+            "pinned",
+            "archived",
         ]
         writer.writerow(headers)
 
         for conv in conversations:
             meta = conv.metadata
-            writer.writerow([
-                conv.id,
-                conv.title or "",
-                meta.source or "",
-                meta.model or "",
-                meta.created_at.isoformat() if meta.created_at else "",
-                meta.updated_at.isoformat() if meta.updated_at else "",
-                len(conv.message_map),
-                ";".join(meta.tags) if meta.tags else "",
-                "true" if meta.starred_at else "false",
-                "true" if meta.pinned_at else "false",
-                "true" if meta.archived_at else "false",
-            ])
+            writer.writerow(
+                [
+                    conv.id,
+                    conv.title or "",
+                    meta.source or "",
+                    meta.model or "",
+                    meta.created_at.isoformat() if meta.created_at else "",
+                    meta.updated_at.isoformat() if meta.updated_at else "",
+                    len(conv.message_map),
+                    ";".join(meta.tags) if meta.tags else "",
+                    "true" if meta.starred_at else "false",
+                    "true" if meta.pinned_at else "false",
+                    "true" if meta.archived_at else "false",
+                ]
+            )
 
     def _export_messages(self, writer, conversations, path_selection):
         """Export message-level detail rows."""
         headers = [
-            "conversation_id", "conversation_title", "message_id",
-            "role", "content", "timestamp", "parent_id",
+            "conversation_id",
+            "conversation_title",
+            "message_id",
+            "role",
+            "content",
+            "timestamp",
+            "parent_id",
         ]
         writer.writerow(headers)
 
@@ -92,15 +108,17 @@ class CSVExporter(ExporterPlugin):
                     if hasattr(msg.content, "get_text")
                     else str(msg.content)
                 )
-                writer.writerow([
-                    conv.id,
-                    conv.title or "",
-                    msg.id,
-                    msg.role.value if hasattr(msg.role, "value") else str(msg.role),
-                    content,
-                    msg.timestamp.isoformat() if msg.timestamp else "",
-                    msg.parent_id or "",
-                ])
+                writer.writerow(
+                    [
+                        conv.id,
+                        conv.title or "",
+                        msg.id,
+                        msg.role.value if hasattr(msg.role, "value") else str(msg.role),
+                        content,
+                        msg.timestamp.isoformat() if msg.timestamp else "",
+                        msg.parent_id or "",
+                    ]
+                )
 
     def _select_path(self, conv, path_selection):
         """Select a message path based on the path_selection strategy."""

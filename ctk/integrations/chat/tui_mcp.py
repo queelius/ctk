@@ -32,9 +32,7 @@ def handle_mcp_command(mcp_client, args, mcp_auto_tools_ref=None):
         if not subargs:
             print("Error: /mcp add requires name and command")
             print("Usage: /mcp add <name> <command> [args...]")
-            print(
-                "Example: /mcp add filesystem python -m mcp_server_filesystem /path"
-            )
+            print("Example: /mcp add filesystem python -m mcp_server_filesystem /path")
             return None
 
         parts = subargs.split(maxsplit=2)
@@ -99,9 +97,7 @@ def handle_mcp_command(mcp_client, args, mcp_auto_tools_ref=None):
         print("\nConfigured MCP servers:")
         for server in servers:
             status = (
-                "connected"
-                if mcp_client.is_connected(server.name)
-                else "disconnected"
+                "connected" if mcp_client.is_connected(server.name) else "disconnected"
             )
             print(f"  - {server.name} ({status})")
             print(f"    Command: {server.command} {' '.join(server.args)}")
@@ -197,8 +193,6 @@ def handle_mcp_command(mcp_client, args, mcp_auto_tools_ref=None):
 
     else:
         print(f"Unknown MCP subcommand: {subcmd}")
-        print(
-            "Available: add, remove, connect, disconnect, list, tools, call, auto"
-        )
+        print("Available: add, remove, connect, disconnect, list, tools, call, auto")
 
     return None

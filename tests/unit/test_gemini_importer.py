@@ -13,10 +13,10 @@ import pytest
 from ctk.core.models import MessageRole
 from ctk.integrations.importers.gemini import GeminiImporter
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_turn(role="user", text="Hello", parts=None, **extra):
     """Build a minimal turn/message dict."""
@@ -32,6 +32,7 @@ def _make_turn(role="user", text="Hello", parts=None, **extra):
 # ===========================================================================
 # Validation
 # ===========================================================================
+
 
 class TestGeminiValidation:
     """Tests for GeminiImporter.validate()"""
@@ -156,6 +157,7 @@ class TestGeminiValidation:
 # Model Detection
 # ===========================================================================
 
+
 class TestGeminiModelDetection:
     """Tests for GeminiImporter._detect_model()"""
 
@@ -167,7 +169,10 @@ class TestGeminiModelDetection:
     @pytest.mark.unit
     def test_detect_gemini_pro_vision(self):
         importer = GeminiImporter()
-        assert importer._detect_model({"model": "gemini-pro-vision"}) == "Gemini Pro Vision"
+        assert (
+            importer._detect_model({"model": "gemini-pro-vision"})
+            == "Gemini Pro Vision"
+        )
 
     @pytest.mark.unit
     def test_detect_gemini_ultra(self):
@@ -182,7 +187,9 @@ class TestGeminiModelDetection:
     @pytest.mark.unit
     def test_detect_gemini_1_5_flash(self):
         importer = GeminiImporter()
-        assert importer._detect_model({"model": "gemini-1.5-flash"}) == "Gemini 1.5 Flash"
+        assert (
+            importer._detect_model({"model": "gemini-1.5-flash"}) == "Gemini 1.5 Flash"
+        )
 
     @pytest.mark.unit
     def test_detect_bard(self):
@@ -203,7 +210,10 @@ class TestGeminiModelDetection:
     def test_detect_unknown_model(self):
         """Unknown model string should be returned as-is."""
         importer = GeminiImporter()
-        assert importer._detect_model({"model": "some-future-model"}) == "some-future-model"
+        assert (
+            importer._detect_model({"model": "some-future-model"})
+            == "some-future-model"
+        )
 
     @pytest.mark.unit
     def test_detect_empty_model(self):
@@ -229,12 +239,16 @@ class TestGeminiModelDetection:
         """Model string containing known key as substring should still match."""
         importer = GeminiImporter()
         # 'gemini-1.5-pro-latest' contains 'gemini-1.5-pro'
-        assert importer._detect_model({"model": "gemini-1.5-pro-latest"}) == "Gemini 1.5 Pro"
+        assert (
+            importer._detect_model({"model": "gemini-1.5-pro-latest"})
+            == "Gemini 1.5 Pro"
+        )
 
 
 # ===========================================================================
 # Import – Basic
 # ===========================================================================
+
 
 class TestGeminiImportBasic:
     """Tests for basic import_data scenarios."""
@@ -294,11 +308,13 @@ class TestGeminiImportBasic:
     def test_import_json_string_input(self):
         """import_data should accept a JSON string and parse it."""
         importer = GeminiImporter()
-        data = json.dumps({
-            "id": "json_str",
-            "title": "From String",
-            "turns": [_make_turn("user", "Hello from string")],
-        })
+        data = json.dumps(
+            {
+                "id": "json_str",
+                "title": "From String",
+                "turns": [_make_turn("user", "Hello from string")],
+            }
+        )
         result = importer.import_data(data)
         assert len(result) == 1
         assert result[0].id == "json_str"
@@ -343,6 +359,7 @@ class TestGeminiImportBasic:
 # ===========================================================================
 # Message Parsing
 # ===========================================================================
+
 
 class TestGeminiMessageParsing:
     """Tests for message/turn parsing within import_data."""
@@ -507,6 +524,7 @@ class TestGeminiMessageParsing:
 # Content Handling
 # ===========================================================================
 
+
 class TestGeminiContentParsing:
     """Tests for multimodal content / parts parsing."""
 
@@ -640,6 +658,7 @@ class TestGeminiContentParsing:
 # Edge Cases
 # ===========================================================================
 
+
 class TestGeminiImportEdgeCases:
     """Edge cases and unusual but valid inputs."""
 
@@ -685,8 +704,11 @@ class TestGeminiImportEdgeCases:
         importer = GeminiImporter()
         data = {
             "turns": [
-                {"role": "user", "parts": [{"text": "hi"}],
-                 "timestamp": "2024-06-15T10:30:00"},
+                {
+                    "role": "user",
+                    "parts": [{"text": "hi"}],
+                    "timestamp": "2024-06-15T10:30:00",
+                },
             ],
         }
         result = importer.import_data(data)
@@ -817,10 +839,13 @@ class TestGeminiImportEdgeCases:
         importer = GeminiImporter()
         data = {
             "turns": [
-                {"role": "user", "parts": [
-                    {"text": "keep this"},
-                    {"unknown_key": "skip me"},
-                ]},
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": "keep this"},
+                        {"unknown_key": "skip me"},
+                    ],
+                },
             ],
         }
         result = importer.import_data(data)

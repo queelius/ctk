@@ -1,6 +1,7 @@
 """Tests for ctk.core.constants module."""
 
 import pytest
+
 from ctk.core import constants
 
 

@@ -12,28 +12,22 @@ All tests should FAIL initially (RED phase of TDD).
 
 import base64
 import json
-import pytest
 from datetime import datetime, timedelta
 from typing import List
 
+import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationTree,
-    ConversationMetadata,
-    Message,
-    MessageContent,
-    MessageRole,
-    PaginatedResult,
-    ConversationSummary,
-)
-from ctk.core.pagination import encode_cursor, decode_cursor
-
+from ctk.core.models import (ConversationMetadata, ConversationSummary,
+                             ConversationTree, Message, MessageContent,
+                             MessageRole, PaginatedResult)
+from ctk.core.pagination import decode_cursor, encode_cursor
 
 # =============================================================================
 # 1. TestCursorEncoding - Test cursor encode/decode utilities
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestCursorEncoding:
@@ -111,6 +105,7 @@ class TestCursorEncoding:
 # =============================================================================
 # 2. TestPaginatedResult - Test PaginatedResult dataclass
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestPaginatedResult:
@@ -216,6 +211,7 @@ class TestPaginatedResult:
 # =============================================================================
 # 3. TestCursorPagination - Test cursor pagination in list_conversations()
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestCursorPagination:
@@ -520,6 +516,7 @@ class TestCursorPagination:
 # =============================================================================
 # 4. TestSearchCursorPagination - Test cursor pagination in search_conversations()
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestSearchCursorPagination:

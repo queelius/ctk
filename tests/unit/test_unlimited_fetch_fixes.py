@@ -5,21 +5,16 @@ Verifies that database queries use proper limits, DB-level prefix resolution,
 and efficient aggregation queries instead of materializing all conversations.
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch, PropertyMock
+from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
+import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationSummary,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-)
+from ctk.core.models import (ConversationMetadata, ConversationSummary,
+                             ConversationTree, Message, MessageContent,
+                             MessageRole)
 
 
 def _create_db(n: int = 10) -> ConversationDB:
@@ -34,7 +29,9 @@ def _create_db(n: int = 10) -> ConversationDB:
         metadata = ConversationMetadata(
             created_at=created_at,
             updated_at=updated_at,
-            source="openai" if i % 3 == 0 else ("anthropic" if i % 3 == 1 else "gemini"),
+            source=(
+                "openai" if i % 3 == 0 else ("anthropic" if i % 3 == 1 else "gemini")
+            ),
             model=f"gpt-4" if i % 2 == 0 else "claude-3",
             format="openai",
             version="1.0",
@@ -96,7 +93,8 @@ class TestDistinctQueries:
         conv = ConversationTree(id="no-source", title="No Source")
         conv.metadata.source = None
         msg = Message(
-            id="msg-ns", role=MessageRole.USER,
+            id="msg-ns",
+            role=MessageRole.USER,
             content=MessageContent(text="test"),
         )
         conv.add_message(msg)
@@ -116,7 +114,8 @@ class TestDistinctQueries:
         conv = ConversationTree(id="no-model", title="No Model")
         conv.metadata.model = None
         msg = Message(
-            id="msg-nm", role=MessageRole.USER,
+            id="msg-nm",
+            role=MessageRole.USER,
             content=MessageContent(text="test"),
         )
         conv.add_message(msg)
@@ -343,7 +342,9 @@ class TestSearchConversationsLimit:
 
         search = SearchCommands(db, MagicMock())
 
-        with patch.object(db, "list_conversations", wraps=db.list_conversations) as mock_list:
+        with patch.object(
+            db, "list_conversations", wraps=db.list_conversations
+        ) as mock_list:
             search._search_conversations(
                 content_regex=None,
                 name_regex=None,

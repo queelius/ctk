@@ -12,7 +12,6 @@ import pytest
 
 from ctk.core.utils import parse_timestamp, try_parse_json
 
-
 # ==================== parse_timestamp ====================
 
 
@@ -182,7 +181,7 @@ class TestTryParseJson:
     @pytest.mark.unit
     def test_json_array_string(self):
         """Valid JSON array string should be parsed."""
-        result = try_parse_json('[1, 2, 3]')
+        result = try_parse_json("[1, 2, 3]")
         assert result == [1, 2, 3]
 
     @pytest.mark.unit

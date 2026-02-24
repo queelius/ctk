@@ -174,10 +174,8 @@ class FilesystemCodingImporter(ImporterPlugin):
                 format="copilot",
                 source="GitHub Copilot",
                 model="Copilot",
-                created_at=parse_timestamp(row.get("created_at"))
-                or datetime.now(),
-                updated_at=parse_timestamp(row.get("updated_at"))
-                or datetime.now(),
+                created_at=parse_timestamp(row.get("created_at")) or datetime.now(),
+                updated_at=parse_timestamp(row.get("updated_at")) or datetime.now(),
                 tags=["coding", "copilot", "github"],
                 custom_data={
                     "workspace": row.get("workspace"),
@@ -352,7 +350,6 @@ class FilesystemCodingImporter(ImporterPlugin):
         """Parse generic conversation format"""
         # Generic parsing logic
         return None
-
 
     @classmethod
     def scan_for_conversations(cls, base_path: Path = Path.home()) -> List[Path]:

@@ -25,8 +25,9 @@ def importer():
     return CopilotImporter()
 
 
-def _make_session(requests=None, session_id=None, creation_date=None,
-                  last_message_date=None):
+def _make_session(
+    requests=None, session_id=None, creation_date=None, last_message_date=None
+):
     """Helper to build a minimal Copilot chat session dict."""
     data = {}
     if requests is not None:
@@ -40,8 +41,9 @@ def _make_session(requests=None, session_id=None, creation_date=None,
     return data
 
 
-def _make_turn(user_text, response_text=None, response_format="result_metadata",
-               variable_data=None):
+def _make_turn(
+    user_text, response_text=None, response_format="result_metadata", variable_data=None
+):
     """Helper to build a single request turn.
 
     response_format:
@@ -226,9 +228,11 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_basic_request_response(self, importer):
         """Parse a basic user request with assistant response."""
-        data = _make_session(requests=[
-            _make_turn("Hello Copilot", "Hi there!"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Hello Copilot", "Hi there!"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
 
         assert conv is not None
@@ -242,10 +246,12 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_multiple_turns(self, importer):
         """Parse multiple request/response turns."""
-        data = _make_session(requests=[
-            _make_turn("First question", "First answer"),
-            _make_turn("Second question", "Second answer"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("First question", "First answer"),
+                _make_turn("Second question", "Second answer"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
 
         messages = conv.get_longest_path()
@@ -258,9 +264,11 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_user_message_only_no_response(self, importer):
         """Turn with user message but no response should still add user message."""
-        data = _make_session(requests=[
-            _make_turn("Just a question", response_text=None),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Just a question", response_text=None),
+            ]
+        )
         conv = importer._parse_chat_session(data)
 
         assert conv is not None
@@ -333,9 +341,11 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_title_from_first_user_message(self, importer):
         """Title should be extracted from first user message text."""
-        data = _make_session(requests=[
-            _make_turn("How do I parse JSON in Python?", "Use json.loads()"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("How do I parse JSON in Python?", "Use json.loads()"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "How do I parse JSON in Python?"
 
@@ -343,9 +353,11 @@ class TestCopilotParseChatSession:
     def test_title_truncation_at_50_chars(self, importer):
         """Title longer than 50 chars should be truncated with '...'."""
         long_msg = "A" * 60  # 60 characters
-        data = _make_session(requests=[
-            _make_turn(long_msg, "Response"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn(long_msg, "Response"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "A" * 50 + "..."
         assert len(conv.title) == 53
@@ -354,9 +366,11 @@ class TestCopilotParseChatSession:
     def test_title_exactly_50_chars(self, importer):
         """Title of exactly 50 chars should get '...' appended."""
         msg = "B" * 50
-        data = _make_session(requests=[
-            _make_turn(msg, "Response"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn(msg, "Response"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "B" * 50 + "..."
 
@@ -364,36 +378,44 @@ class TestCopilotParseChatSession:
     def test_title_under_50_chars(self, importer):
         """Title under 50 chars should not be truncated."""
         msg = "C" * 49
-        data = _make_session(requests=[
-            _make_turn(msg, "Response"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn(msg, "Response"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "C" * 49
 
     @pytest.mark.unit
     def test_title_multiline_uses_first_line(self, importer):
         """Title should use only the first line of user message."""
-        data = _make_session(requests=[
-            _make_turn("First line\nSecond line\nThird line", "Response"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("First line\nSecond line\nThird line", "Response"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "First line"
 
     @pytest.mark.unit
     def test_default_title_when_no_message_text(self, importer):
         """Default title 'Copilot Chat' when first message has no text."""
-        data = _make_session(requests=[
-            {"message": {"text": ""}, "result": {"metadata": {"response": "Hi"}}},
-        ])
+        data = _make_session(
+            requests=[
+                {"message": {"text": ""}, "result": {"metadata": {"response": "Hi"}}},
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.title == "Copilot Chat"
 
     @pytest.mark.unit
     def test_default_title_when_no_message_key(self, importer):
         """Default title when first request has no 'message' key."""
-        data = _make_session(requests=[
-            {"result": {"metadata": {"response": "Some response"}}},
-        ])
+        data = _make_session(
+            requests=[
+                {"result": {"metadata": {"response": "Some response"}}},
+            ]
+        )
         conv = importer._parse_chat_session(data)
         # No user message text -> default title
         # But assistant response is still added
@@ -410,7 +432,9 @@ class TestCopilotParseChatSession:
         conv = importer._parse_chat_session(
             data, project_path="file:///home/user/myproject"
         )
-        assert conv.metadata.custom_data["project_path"] == "file:///home/user/myproject"
+        assert (
+            conv.metadata.custom_data["project_path"] == "file:///home/user/myproject"
+        )
         assert conv.metadata.custom_data["project_name"] == "myproject"
         assert "project:myproject" in conv.metadata.tags
 
@@ -456,9 +480,11 @@ class TestCopilotParseChatSession:
                 },
             ]
         }
-        data = _make_session(requests=[
-            _make_turn("Explain this code", "Sure!", variable_data=var_data),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Explain this code", "Sure!", variable_data=var_data),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         user_msg = conv.get_longest_path()[0]
         refs = user_msg.content.metadata.get("referenced_files", [])
@@ -474,9 +500,11 @@ class TestCopilotParseChatSession:
                 {"kind": "selection", "value": {"text": "some code"}},
             ]
         }
-        data = _make_session(requests=[
-            _make_turn("Explain", "Sure!", variable_data=var_data),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Explain", "Sure!", variable_data=var_data),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         user_msg = conv.get_longest_path()[0]
         refs = user_msg.content.metadata.get("referenced_files", [])
@@ -485,10 +513,15 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_response_in_result_metadata_format(self, importer):
         """Response in result.metadata.response format."""
-        data = _make_session(requests=[
-            _make_turn("Q", "Answer from result.metadata",
-                       response_format="result_metadata"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn(
+                    "Q",
+                    "Answer from result.metadata",
+                    response_format="result_metadata",
+                ),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         messages = conv.get_longest_path()
         assert messages[1].content.text == "Answer from result.metadata"
@@ -496,10 +529,11 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_response_in_turn_response_list_format(self, importer):
         """Response in turn['response'] list format with value dicts."""
-        data = _make_session(requests=[
-            _make_turn("Q", "Answer from list",
-                       response_format="response_list"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Q", "Answer from list", response_format="response_list"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         messages = conv.get_longest_path()
         assert messages[1].content.text == "Answer from list"
@@ -548,10 +582,12 @@ class TestCopilotParseChatSession:
     @pytest.mark.unit
     def test_message_parent_chain(self, importer):
         """Messages should be chained via parent_id."""
-        data = _make_session(requests=[
-            _make_turn("Q1", "A1"),
-            _make_turn("Q2", "A2"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Q1", "A1"),
+                _make_turn("Q2", "A2"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         messages = conv.get_longest_path()
 
@@ -592,9 +628,11 @@ class TestCopilotImportData:
     @pytest.mark.unit
     def test_import_from_dict(self, importer):
         """Import directly from a dict with conversation data."""
-        data = _make_session(requests=[
-            _make_turn("Hello", "World"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Hello", "World"),
+            ]
+        )
         results = importer.import_data(data)
         assert len(results) == 1
         assert results[0].get_longest_path()[0].content.text == "Hello"
@@ -630,9 +668,11 @@ class TestCopilotImportData:
         chat_dir = tmp_path / "chatSessions"
         chat_dir.mkdir()
 
-        session = _make_session(requests=[
-            _make_turn("Dir question", "Dir answer"),
-        ])
+        session = _make_session(
+            requests=[
+                _make_turn("Dir question", "Dir answer"),
+            ]
+        )
         (chat_dir / "session1.json").write_text(json.dumps(session))
 
         results = importer.import_data(str(tmp_path))
@@ -647,9 +687,11 @@ class TestCopilotImportData:
         chat_dir.mkdir()
 
         for i in range(3):
-            session = _make_session(requests=[
-                _make_turn(f"Question {i}", f"Answer {i}"),
-            ])
+            session = _make_session(
+                requests=[
+                    _make_turn(f"Question {i}", f"Answer {i}"),
+                ]
+            )
             (chat_dir / f"session_{i}.json").write_text(json.dumps(session))
 
         results = importer.import_data(str(tmp_path))
@@ -663,9 +705,11 @@ class TestCopilotImportData:
             ws_dir.mkdir()
             chat_dir = ws_dir / "chatSessions"
             chat_dir.mkdir()
-            session = _make_session(requests=[
-                _make_turn(f"Q from {ws_name}", f"A from {ws_name}"),
-            ])
+            session = _make_session(
+                requests=[
+                    _make_turn(f"Q from {ws_name}", f"A from {ws_name}"),
+                ]
+            )
             (chat_dir / "session.json").write_text(json.dumps(session))
 
         results = importer.import_data(str(tmp_path))
@@ -680,14 +724,19 @@ class TestCopilotImportData:
         ws_json = tmp_path / "workspace.json"
         ws_json.write_text(json.dumps({"folder": "file:///home/user/myrepo"}))
 
-        session = _make_session(requests=[
-            _make_turn("Code question", "Code answer"),
-        ])
+        session = _make_session(
+            requests=[
+                _make_turn("Code question", "Code answer"),
+            ]
+        )
         (chat_dir / "session.json").write_text(json.dumps(session))
 
         results = importer.import_data(str(tmp_path))
         assert len(results) == 1
-        assert results[0].metadata.custom_data["project_path"] == "file:///home/user/myrepo"
+        assert (
+            results[0].metadata.custom_data["project_path"]
+            == "file:///home/user/myrepo"
+        )
         assert results[0].metadata.custom_data["project_name"] == "myrepo"
 
     @pytest.mark.unit
@@ -709,9 +758,11 @@ class TestCopilotImportData:
     @pytest.mark.unit
     def test_import_from_json_file(self, importer, tmp_path):
         """Import from a single .json file."""
-        session = _make_session(requests=[
-            _make_turn("File question", "File answer"),
-        ])
+        session = _make_session(
+            requests=[
+                _make_turn("File question", "File answer"),
+            ]
+        )
         json_file = tmp_path / "copilot_session.json"
         json_file.write_text(json.dumps(session))
 
@@ -780,9 +831,11 @@ class TestCopilotImportFromVscdb:
         conn = sqlite3.connect(str(db_path))
         conn.execute("CREATE TABLE ItemTable (key TEXT, value TEXT)")
 
-        session_data = _make_session(requests=[
-            _make_turn("DB question", "DB answer"),
-        ])
+        session_data = _make_session(
+            requests=[
+                _make_turn("DB question", "DB answer"),
+            ]
+        )
         conn.execute(
             "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
             ("copilot.chat.sessions", json.dumps(session_data)),
@@ -865,9 +918,11 @@ class TestCopilotImportFromVscdb:
         conn = sqlite3.connect(str(db_path))
         conn.execute("CREATE TABLE ItemTable (key TEXT, value TEXT)")
 
-        session_data = _make_session(requests=[
-            _make_turn("DB Q", "DB A"),
-        ])
+        session_data = _make_session(
+            requests=[
+                _make_turn("DB Q", "DB A"),
+            ]
+        )
         conn.execute(
             "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
             ("github.copilot.history", json.dumps(session_data)),
@@ -886,9 +941,11 @@ class TestCopilotImportFromVscdb:
         conn.execute("CREATE TABLE ItemTable (key TEXT, value TEXT)")
 
         for i in range(3):
-            session = _make_session(requests=[
-                _make_turn(f"Question {i}", f"Answer {i}"),
-            ])
+            session = _make_session(
+                requests=[
+                    _make_turn(f"Question {i}", f"Answer {i}"),
+                ]
+            )
             conn.execute(
                 "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
                 (f"copilot.session.{i}", json.dumps(session)),
@@ -909,12 +966,14 @@ class TestCopilotEdgeCases:
     @pytest.mark.unit
     def test_unicode_content(self, importer):
         """Unicode content in messages should be handled correctly."""
-        data = _make_session(requests=[
-            _make_turn(
-                "Explain this: def greet(): print('Hola mundo')",
-                "This function prints 'Hola mundo' (Hello world in Spanish)"
-            ),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn(
+                    "Explain this: def greet(): print('Hola mundo')",
+                    "This function prints 'Hola mundo' (Hello world in Spanish)",
+                ),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         messages = conv.get_longest_path()
         assert "Hola mundo" in messages[0].content.text
@@ -923,9 +982,11 @@ class TestCopilotEdgeCases:
     @pytest.mark.unit
     def test_unicode_emoji_content(self, importer):
         """Emoji and special unicode in messages."""
-        data = _make_session(requests=[
-            _make_turn("What does this do? return x", "It returns x"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("What does this do? return x", "It returns x"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv is not None
         assert conv.get_longest_path()[0].content.text == "What does this do? return x"
@@ -933,9 +994,11 @@ class TestCopilotEdgeCases:
     @pytest.mark.unit
     def test_cjk_content(self, importer):
         """CJK characters should be handled correctly."""
-        data = _make_session(requests=[
-            _make_turn("Python", "Python"),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Python", "Python"),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv.get_longest_path()[0].content.text == "Python"
 
@@ -984,9 +1047,11 @@ class TestCopilotEdgeCases:
                 {"kind": "file", "value": {}},
             ]
         }
-        data = _make_session(requests=[
-            _make_turn("Q", "A", variable_data=var_data),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Q", "A", variable_data=var_data),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         user_msg = conv.get_longest_path()[0]
         refs = user_msg.content.metadata.get("referenced_files", [])
@@ -996,9 +1061,11 @@ class TestCopilotEdgeCases:
     def test_variable_data_empty_variables(self, importer):
         """Empty variables list should not cause errors."""
         var_data = {"variables": []}
-        data = _make_session(requests=[
-            _make_turn("Q", "A", variable_data=var_data),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Q", "A", variable_data=var_data),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv is not None
 
@@ -1006,9 +1073,11 @@ class TestCopilotEdgeCases:
     def test_variable_data_missing_variables_key(self, importer):
         """variableData without 'variables' key should not crash."""
         var_data = {"someOtherKey": "value"}
-        data = _make_session(requests=[
-            _make_turn("Q", "A", variable_data=var_data),
-        ])
+        data = _make_session(
+            requests=[
+                _make_turn("Q", "A", variable_data=var_data),
+            ]
+        )
         conv = importer._parse_chat_session(data)
         assert conv is not None
 
@@ -1059,10 +1128,7 @@ class TestCopilotEdgeCases:
     @pytest.mark.unit
     def test_large_conversation(self, importer):
         """Import a conversation with many turns."""
-        requests = [
-            _make_turn(f"Question {i}", f"Answer {i}")
-            for i in range(100)
-        ]
+        requests = [_make_turn(f"Question {i}", f"Answer {i}") for i in range(100)]
         data = _make_session(requests=requests)
         conv = importer._parse_chat_session(data)
         messages = conv.get_longest_path()

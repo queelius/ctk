@@ -15,17 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.input_validation import (
-    ValidationError,
-    validate_boolean,
-    validate_conversation_id,
-    validate_export_format,
-    validate_file_path,
-    validate_integer,
-    validate_path_selection,
-    validate_string,
-)
-
+from ctk.core.input_validation import (ValidationError, validate_boolean,
+                                       validate_conversation_id,
+                                       validate_export_format,
+                                       validate_file_path, validate_integer,
+                                       validate_path_selection,
+                                       validate_string)
 
 # ==================== ValidationError ====================
 
@@ -192,7 +187,9 @@ class TestValidateFilePath:
 
     @pytest.mark.unit
     def test_nonexistent_path_accepted_when_not_required(self):
-        result = validate_file_path("/tmp/some_nonexistent_file_xyz.txt", must_exist=False)
+        result = validate_file_path(
+            "/tmp/some_nonexistent_file_xyz.txt", must_exist=False
+        )
         assert isinstance(result, Path)
 
     @pytest.mark.unit

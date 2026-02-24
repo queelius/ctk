@@ -19,15 +19,9 @@ import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationSummary,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-    PaginatedResult,
-)
+from ctk.core.models import (ConversationMetadata, ConversationSummary,
+                             ConversationTree, Message, MessageContent,
+                             MessageRole, PaginatedResult)
 from ctk.core.pagination import encode_cursor
 
 
@@ -100,11 +94,11 @@ class TestSearchConversationsHelperCursor:
         from ctk.core.db_helpers import search_conversations_helper
 
         # Use a cursor to get second page
-        cursor = encode_cursor(
-            datetime(2024, 1, 1, 9, 0, 0), "conv-009"
-        )
+        cursor = encode_cursor(datetime(2024, 1, 1, 9, 0, 0), "conv-009")
 
-        with patch.object(db, "search_conversations", wraps=db.search_conversations) as mock:
+        with patch.object(
+            db, "search_conversations", wraps=db.search_conversations
+        ) as mock:
             search_conversations_helper(
                 db=db,
                 query="Message",
@@ -158,7 +152,9 @@ class TestSearchConversationsHelperCursor:
 
         captured = capsys.readouterr()
         # Should indicate no more pages
-        assert "next_cursor" not in captured.out.lower() or "null" in captured.out.lower()
+        assert (
+            "next_cursor" not in captured.out.lower() or "null" in captured.out.lower()
+        )
 
     def test_cursor_json_output_includes_pagination(self, db, capsys):
         """JSON output with cursor should include pagination metadata."""
@@ -198,7 +194,9 @@ class TestListConversationsHelperCursor:
         """list_conversations_helper should pass cursor and page_size to db."""
         from ctk.core.db_helpers import list_conversations_helper
 
-        with patch.object(db, "list_conversations", wraps=db.list_conversations) as mock:
+        with patch.object(
+            db, "list_conversations", wraps=db.list_conversations
+        ) as mock:
             list_conversations_helper(
                 db=db,
                 cursor="",
@@ -242,8 +240,9 @@ class TestCLICmdQueryCursor:
 
     def test_query_parser_has_cursor_flag(self):
         """ctk query parser should accept --cursor flag."""
-        from ctk.cli import main
         import argparse
+
+        from ctk.cli import main
 
         # Build the parser via main's setup
         with patch("sys.argv", ["ctk", "query", "--help"]):
@@ -286,8 +285,9 @@ class TestCLICmdQueryCursor:
         args.cursor = cursor_val
         args.page_size = 5
 
-        with patch("ctk.cli.ConversationDB") as mock_db_cls, \
-             patch("ctk.core.db_helpers.search_conversations_helper") as mock_helper:
+        with patch("ctk.cli.ConversationDB") as mock_db_cls, patch(
+            "ctk.core.db_helpers.search_conversations_helper"
+        ) as mock_helper:
             mock_helper.return_value = 0
             cmd_query(args)
 
@@ -360,10 +360,13 @@ class TestMCPCursorPagination:
             mock_get_db.return_value = mock_db
 
             result = event_loop.run_until_complete(
-                handle_call_tool("search_conversations", {
-                    "query": "test",
-                    "cursor": cursor_val,
-                })
+                handle_call_tool(
+                    "search_conversations",
+                    {
+                        "query": "test",
+                        "cursor": cursor_val,
+                    },
+                )
             )
 
             # DB should have been called with cursor
@@ -394,10 +397,13 @@ class TestMCPCursorPagination:
             mock_get_db.return_value = mock_db
 
             result = event_loop.run_until_complete(
-                handle_call_tool("search_conversations", {
-                    "query": "test",
-                    "cursor": "",
-                })
+                handle_call_tool(
+                    "search_conversations",
+                    {
+                        "query": "test",
+                        "cursor": "",
+                    },
+                )
             )
 
             # Response text should include next_cursor info
@@ -428,9 +434,12 @@ class TestMCPCursorPagination:
             mock_get_db.return_value = mock_db
 
             result = event_loop.run_until_complete(
-                handle_call_tool("list_conversations", {
-                    "cursor": "",
-                })
+                handle_call_tool(
+                    "list_conversations",
+                    {
+                        "cursor": "",
+                    },
+                )
             )
 
             # DB should have been called with cursor
@@ -461,9 +470,12 @@ class TestMCPCursorPagination:
             mock_get_db.return_value = mock_db
 
             result = event_loop.run_until_complete(
-                handle_call_tool("list_conversations", {
-                    "cursor": "",
-                })
+                handle_call_tool(
+                    "list_conversations",
+                    {
+                        "cursor": "",
+                    },
+                )
             )
 
             response_text = result[0].text
@@ -487,9 +499,12 @@ class TestMCPCursorPagination:
             mock_get_db.return_value = mock_db
 
             result = event_loop.run_until_complete(
-                handle_call_tool("search_conversations", {
-                    "query": "test",
-                })
+                handle_call_tool(
+                    "search_conversations",
+                    {
+                        "query": "test",
+                    },
+                )
             )
 
             response_text = result[0].text

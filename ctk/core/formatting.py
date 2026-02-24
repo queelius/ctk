@@ -9,7 +9,9 @@ from rich.table import Table
 
 
 def format_conversations_table(
-    conversations: List, show_message_count: bool = False, console: Optional[Console] = None
+    conversations: List,
+    show_message_count: bool = False,
+    console: Optional[Console] = None,
 ) -> None:
     """
     Format conversations as a Rich table.

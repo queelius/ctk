@@ -8,13 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ctk.core.network_analysis import (
-    compute_global_metrics,
-    format_network_stats,
-    load_graph_from_file,
-    save_network_metrics_to_db,
-)
-
+from ctk.core.network_analysis import (compute_global_metrics,
+                                       format_network_stats,
+                                       load_graph_from_file,
+                                       save_network_metrics_to_db)
 
 # ── Fixtures ──────────────────────────────────────────────
 

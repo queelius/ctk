@@ -8,8 +8,9 @@ Tests the command modules created for TUI mode unification:
 - tree_nav.py: fork, branch, merge, goto-*, where, alternatives
 """
 
+from unittest.mock import MagicMock, Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock
 
 from ctk.core.commands.database import create_database_commands
 from ctk.core.commands.llm import create_llm_commands

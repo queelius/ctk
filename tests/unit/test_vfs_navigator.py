@@ -130,6 +130,7 @@ class TestVFSNavigatorInitialization:
 
         # Add cache entries for different conversations
         from time import time
+
         now = time()
         nav._cache["/chats/conv_abc123"] = (now, [], 1)
         nav._cache["/chats/conv_abc123::msg::m1"] = (now, [], 1)

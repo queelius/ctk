@@ -308,32 +308,38 @@ class JSONExporter(ExporterPlugin):
                 if msg.content and msg.content.images:
                     for img in msg.content.images:
                         if img.data:
-                            content_blocks.append({
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": img.mime_type or "image/png",
-                                    "data": img.data,
-                                },
-                            })
+                            content_blocks.append(
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": img.mime_type or "image/png",
+                                        "data": img.data,
+                                    },
+                                }
+                            )
                         elif img.url:
-                            content_blocks.append({
-                                "type": "image",
-                                "source": {
-                                    "type": "url",
-                                    "url": img.url,
-                                },
-                            })
+                            content_blocks.append(
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "url",
+                                        "url": img.url,
+                                    },
+                                }
+                            )
 
                 # Add tool calls (Anthropic uses tool_use blocks)
                 if msg.content and msg.content.tool_calls:
                     for tool in msg.content.tool_calls:
-                        content_blocks.append({
-                            "type": "tool_use",
-                            "id": tool.id,
-                            "name": tool.name,
-                            "input": tool.arguments,
-                        })
+                        content_blocks.append(
+                            {
+                                "type": "tool_use",
+                                "id": tool.id,
+                                "name": tool.name,
+                                "input": tool.arguments,
+                            }
+                        )
 
                 msg_data["content"] = content_blocks
             else:

@@ -78,15 +78,12 @@ def handle_cd(db, vfs_navigator, vfs_cwd, args):
         if target_in_conv_dir and looks_like_id:
             # Get the parent directory for prefix resolution
             parent_path = (
-                "/".join(vfs_path.normalized_path.rstrip("/").split("/")[:-1])
-                or "/"
+                "/".join(vfs_path.normalized_path.rstrip("/").split("/")[:-1]) or "/"
             )
 
             try:
                 parent_vfs = VFSPathParser.parse(parent_path)
-                resolved_id = vfs_navigator.resolve_prefix(
-                    last_segment, parent_vfs
-                )
+                resolved_id = vfs_navigator.resolve_prefix(last_segment, parent_vfs)
 
                 if resolved_id:
                     new_cwd = VFSPathParser.parse(
@@ -121,9 +118,7 @@ def handle_cd(db, vfs_navigator, vfs_cwd, args):
                 resolved_id = vfs_navigator.resolve_prefix(path, current_path)
 
                 if resolved_id:
-                    new_cwd = VFSPathParser.parse(
-                        resolved_id, vfs_cwd
-                    ).normalized_path
+                    new_cwd = VFSPathParser.parse(resolved_id, vfs_cwd).normalized_path
                     print(f"Resolved '{path}' to: {resolved_id}")
                     return new_cwd
             except ValueError as prefix_error:
@@ -174,6 +169,7 @@ def handle_ls(db, vfs_navigator, vfs_cwd, args, console=None):
 
     if console is None:
         from rich.console import Console
+
         console = Console()
 
     # Parse options
@@ -222,9 +218,7 @@ def handle_ls(db, vfs_navigator, vfs_cwd, args, console=None):
                 table.add_column("Tags")
                 table.add_column("Modified")
 
-            for entry in sorted(
-                entries, key=lambda e: (not e.is_directory, e.name)
-            ):
+            for entry in sorted(entries, key=lambda e: (not e.is_directory, e.name)):
                 entry_type = "dir" if entry.is_directory else "file"
 
                 name = entry.name
@@ -277,9 +271,7 @@ def handle_ls(db, vfs_navigator, vfs_cwd, args, console=None):
             files = [e for e in entries if not e.is_directory]
 
             if dirs:
-                dir_names = [
-                    f"{d.name}/" for d in sorted(dirs, key=lambda e: e.name)
-                ]
+                dir_names = [f"{d.name}/" for d in sorted(dirs, key=lambda e: e.name)]
                 print("  ".join(dir_names))
 
             if files:
@@ -329,9 +321,7 @@ def handle_ln(db, vfs_navigator, vfs_cwd, args):
             )
             return
         if not src_path.conversation_id:
-            print(
-                f"Error: Source is not a conversation: {src_path.normalized_path}"
-            )
+            print(f"Error: Source is not a conversation: {src_path.normalized_path}")
             return
 
         dest_path = VFSPathParser.parse(dest_path_str, vfs_cwd)
@@ -388,9 +378,7 @@ def handle_cp(db, vfs_navigator, vfs_cwd, args):
             )
             return
         if not src_path.conversation_id:
-            print(
-                f"Error: Source is not a conversation: {src_path.normalized_path}"
-            )
+            print(f"Error: Source is not a conversation: {src_path.normalized_path}")
             return
 
         dest_path = VFSPathParser.parse(dest_path_str, vfs_cwd)
@@ -447,9 +435,7 @@ def handle_mv(db, vfs_navigator, vfs_cwd, args):
             )
             return
         if not src_path.conversation_id:
-            print(
-                f"Error: Source is not a conversation: {src_path.normalized_path}"
-            )
+            print(f"Error: Source is not a conversation: {src_path.normalized_path}")
             return
 
         if src_path.path_type.value != "tag_dir":
@@ -504,9 +490,7 @@ def handle_rm(db, vfs_navigator, vfs_cwd, args):
         print("Usage: /rm <path>")
         print("Examples:")
         print("  /rm /tags/physics/abc123  - Remove tag from conversation")
-        print(
-            "  /rm /chats/abc123         - Delete conversation (with confirmation)"
-        )
+        print("  /rm /chats/abc123         - Delete conversation (with confirmation)")
         return
 
     try:

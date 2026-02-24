@@ -285,16 +285,12 @@ class TestAnthropicImportBasic:
             {
                 "uuid": "conv-1",
                 "name": "Chat 1",
-                "chat_messages": [
-                    {"uuid": "m1", "text": "Hello", "sender": "human"}
-                ],
+                "chat_messages": [{"uuid": "m1", "text": "Hello", "sender": "human"}],
             },
             {
                 "uuid": "conv-2",
                 "name": "Chat 2",
-                "chat_messages": [
-                    {"uuid": "m2", "text": "Goodbye", "sender": "human"}
-                ],
+                "chat_messages": [{"uuid": "m2", "text": "Goodbye", "sender": "human"}],
             },
         ]
         conversations = importer.import_data(data)
@@ -777,7 +773,10 @@ class TestAnthropicContentParsing:
                         "text": "image",
                         "sender": "human",
                         "attachments": [
-                            {"file_name": f"photo{ext}", "file_type": f"image/{ext.lstrip('.')}"}
+                            {
+                                "file_name": f"photo{ext}",
+                                "file_type": f"image/{ext.lstrip('.')}",
+                            }
                         ],
                     },
                 ],
@@ -848,9 +847,7 @@ class TestAnthropicContentParsing:
                     "uuid": "m1",
                     "text": "Some text",
                     "sender": "human",
-                    "attachments": [
-                        {"file_type": "application/octet-stream"}
-                    ],
+                    "attachments": [{"file_type": "application/octet-stream"}],
                 },
             ],
         }
@@ -1231,7 +1228,9 @@ class TestAnthropicEdgeCases:
             "chat_messages": [],
         }
         conversations = importer.import_data(data)
-        assert conversations[0].metadata.custom_data["account_uuid"] == "acct-string-789"
+        assert (
+            conversations[0].metadata.custom_data["account_uuid"] == "acct-string-789"
+        )
 
     @pytest.mark.unit
     def test_custom_data_account_missing(self):
@@ -1254,7 +1253,10 @@ class TestAnthropicEdgeCases:
             "chat_messages": [],
         }
         conversations = importer.import_data(data)
-        assert conversations[0].metadata.custom_data["summary"] == "A conversation about testing."
+        assert (
+            conversations[0].metadata.custom_data["summary"]
+            == "A conversation about testing."
+        )
 
     @pytest.mark.unit
     def test_message_metadata_files(self):
@@ -1417,11 +1419,13 @@ class TestAnthropicEdgeCases:
         messages_data = []
         for i in range(50):
             sender = "human" if i % 2 == 0 else "assistant"
-            messages_data.append({
-                "uuid": f"m-{i}",
-                "text": f"Message {i}",
-                "sender": sender,
-            })
+            messages_data.append(
+                {
+                    "uuid": f"m-{i}",
+                    "text": f"Message {i}",
+                    "sender": sender,
+                }
+            )
 
         data = {
             "uuid": "conv-large",
@@ -1448,9 +1452,7 @@ class TestAnthropicEdgeCases:
                     "uuid": "m1",
                     "text": "With empty attachment",
                     "sender": "human",
-                    "attachments": [
-                        {"file_name": "", "file_type": "application/pdf"}
-                    ],
+                    "attachments": [{"file_name": "", "file_type": "application/pdf"}],
                 },
             ],
         }

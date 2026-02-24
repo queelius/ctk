@@ -14,17 +14,18 @@ Tests cover:
 import json
 import sqlite3
 import uuid
-
-import pytest
 from pathlib import Path
 
-from ctk.integrations.importers.filesystem_coding import FilesystemCodingImporter
-from ctk.core.models import ConversationTree, MessageRole
+import pytest
 
+from ctk.core.models import ConversationTree, MessageRole
+from ctk.integrations.importers.filesystem_coding import \
+    FilesystemCodingImporter
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _create_test_db(db_path, table_name, columns, rows):
     """Create a test SQLite database with given table, columns, and rows."""
@@ -41,6 +42,7 @@ def _create_test_db(db_path, table_name, columns, rows):
 # ===========================================================================
 # Validation tests
 # ===========================================================================
+
 
 class TestFilesystemCodingValidation:
     """Tests for FilesystemCodingImporter.validate()"""
@@ -163,6 +165,7 @@ class TestFilesystemCodingValidation:
 # ===========================================================================
 # Agent type detection tests
 # ===========================================================================
+
 
 class TestAgentTypeDetection:
     """Tests for FilesystemCodingImporter._detect_agent_type()"""
@@ -298,6 +301,7 @@ class TestAgentTypeDetection:
 # import_data dispatch tests
 # ===========================================================================
 
+
 class TestImportDataDispatch:
     """Tests for FilesystemCodingImporter.import_data() dispatch logic."""
 
@@ -351,6 +355,7 @@ class TestImportDataDispatch:
 # Copilot import tests
 # ===========================================================================
 
+
 class TestCopilotImport:
     """Tests for _import_copilot, _parse_copilot_row, _parse_copilot_json."""
 
@@ -370,10 +375,12 @@ class TestCopilotImport:
         copilot_dir.mkdir()
         db_path = copilot_dir / "copilot_data.db"
 
-        messages_json = json.dumps([
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ])
+        messages_json = json.dumps(
+            [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi there!"},
+            ]
+        )
 
         _create_test_db(
             db_path,
@@ -406,9 +413,11 @@ class TestCopilotImport:
         copilot_dir.mkdir()
         db_path = copilot_dir / "copilot_data.db"
 
-        messages_json = json.dumps([
-            {"role": "user", "content": "What is Python?"},
-        ])
+        messages_json = json.dumps(
+            [
+                {"role": "user", "content": "What is Python?"},
+            ]
+        )
 
         _create_test_db(
             db_path,
@@ -448,10 +457,12 @@ class TestCopilotImport:
         copilot_dir.mkdir()
         db_path = copilot_dir / "state.vscdb"
 
-        messages_json = json.dumps([
-            {"role": "user", "content": "Code help"},
-            {"role": "assistant", "content": "Sure!"},
-        ])
+        messages_json = json.dumps(
+            [
+                {"role": "user", "content": "Code help"},
+                {"role": "assistant", "content": "Sure!"},
+            ]
+        )
 
         _create_test_db(
             db_path,
@@ -560,6 +571,7 @@ class TestCopilotImport:
 # _parse_copilot_row tests
 # ===========================================================================
 
+
 class TestParseCopilotRow:
     """Tests for _parse_copilot_row."""
 
@@ -570,10 +582,12 @@ class TestParseCopilotRow:
         row = {
             "id": "row-1",
             "title": "Row Chat",
-            "messages": json.dumps([
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "World"},
-            ]),
+            "messages": json.dumps(
+                [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "World"},
+                ]
+            ),
         }
         result = importer._parse_copilot_row(row)
         assert result is not None
@@ -641,11 +655,13 @@ class TestParseCopilotRow:
         importer = FilesystemCodingImporter()
         row = {
             "id": "chain-row",
-            "messages": json.dumps([
-                {"role": "user", "content": "First"},
-                {"role": "assistant", "content": "Second"},
-                {"role": "user", "content": "Third"},
-            ]),
+            "messages": json.dumps(
+                [
+                    {"role": "user", "content": "First"},
+                    {"role": "assistant", "content": "Second"},
+                    {"role": "user", "content": "Third"},
+                ]
+            ),
         }
         result = importer._parse_copilot_row(row)
         assert result is not None
@@ -665,9 +681,11 @@ class TestParseCopilotRow:
         importer = FilesystemCodingImporter()
         row = {
             "id": "ctx-row",
-            "messages": json.dumps([
-                {"role": "user", "content": "Help", "file_context": "main.py:10"},
-            ]),
+            "messages": json.dumps(
+                [
+                    {"role": "user", "content": "Help", "file_context": "main.py:10"},
+                ]
+            ),
         }
         result = importer._parse_copilot_row(row)
         assert result is not None
@@ -687,6 +705,7 @@ class TestParseCopilotRow:
 # ===========================================================================
 # _parse_copilot_json tests
 # ===========================================================================
+
 
 class TestParseCopilotJson:
     """Tests for _parse_copilot_json."""
@@ -868,6 +887,7 @@ class TestParseCopilotJson:
 # Cursor import tests
 # ===========================================================================
 
+
 class TestCursorImport:
     """Tests for _import_cursor and _parse_cursor_conversation."""
 
@@ -893,7 +913,9 @@ class TestCursorImport:
         assert result == []
 
     @pytest.mark.unit
-    def test_import_cursor_with_conversation_table_placeholder_returns_empty(self, tmp_path):
+    def test_import_cursor_with_conversation_table_placeholder_returns_empty(
+        self, tmp_path
+    ):
         """Cursor with conversation table rows still returns empty (placeholder parser returns None)."""
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir()
@@ -934,6 +956,7 @@ class TestCursorImport:
 # Claude Code and Codeium placeholder tests
 # ===========================================================================
 
+
 class TestPlaceholderImports:
     """Tests for placeholder import methods."""
 
@@ -954,6 +977,7 @@ class TestPlaceholderImports:
 # Generic import tests
 # ===========================================================================
 
+
 class TestGenericImport:
     """Tests for _import_generic, _looks_like_conversation, _parse_generic_conversation."""
 
@@ -968,7 +992,9 @@ class TestGenericImport:
     def test_import_generic_json_with_messages_key(self, tmp_path):
         """JSON with 'messages' key detected but _parse_generic returns None, so empty result."""
         json_path = tmp_path / "data.json"
-        json_path.write_text(json.dumps({"messages": [{"role": "user", "content": "Hi"}]}))
+        json_path.write_text(
+            json.dumps({"messages": [{"role": "user", "content": "Hi"}]})
+        )
 
         importer = FilesystemCodingImporter()
         result = importer._import_generic(tmp_path)
@@ -1012,6 +1038,7 @@ class TestGenericImport:
 # ===========================================================================
 # _looks_like_conversation tests
 # ===========================================================================
+
 
 class TestLooksLikeConversation:
     """Tests for the _looks_like_conversation heuristic."""
@@ -1065,6 +1092,7 @@ class TestLooksLikeConversation:
 # ===========================================================================
 # Edge case and integration tests
 # ===========================================================================
+
 
 class TestEdgeCases:
     """Edge cases and additional integration scenarios."""
@@ -1146,9 +1174,11 @@ class TestEdgeCases:
 
         # Create a DB with one conversation
         db_path = copilot_dir / "copilot_main.db"
-        messages_json = json.dumps([
-            {"role": "user", "content": "DB Hello"},
-        ])
+        messages_json = json.dumps(
+            [
+                {"role": "user", "content": "DB Hello"},
+            ]
+        )
         _create_test_db(
             db_path,
             "conversations",
@@ -1198,10 +1228,12 @@ class TestEdgeCases:
         vscode_dir.mkdir()
 
         db_path = vscode_dir / "copilot_data.db"
-        messages_json = json.dumps([
-            {"role": "user", "content": "Write a function"},
-            {"role": "assistant", "content": "def hello(): pass"},
-        ])
+        messages_json = json.dumps(
+            [
+                {"role": "user", "content": "Write a function"},
+                {"role": "assistant", "content": "def hello(): pass"},
+            ]
+        )
         _create_test_db(
             db_path,
             "conversation_log",

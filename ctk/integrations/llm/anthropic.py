@@ -8,18 +8,11 @@ from typing import Any, Dict, Iterator, List, Optional
 import requests
 
 from ctk.core.constants import DEFAULT_TIMEOUT
-from ctk.integrations.llm.base import (
-    AuthenticationError,
-    ChatResponse,
-    ContextLengthError,
-    LLMProvider,
-    LLMProviderError,
-    Message,
-    MessageRole,
-    ModelInfo,
-    ModelNotFoundError,
-    RateLimitError,
-)
+from ctk.integrations.llm.base import (AuthenticationError, ChatResponse,
+                                       ContextLengthError, LLMProvider,
+                                       LLMProviderError, Message, MessageRole,
+                                       ModelInfo, ModelNotFoundError,
+                                       RateLimitError)
 
 
 class AnthropicProvider(LLMProvider):
@@ -90,7 +83,9 @@ class AnthropicProvider(LLMProvider):
         elif "context" in error_type.lower() or "too long" in error_msg.lower():
             raise ContextLengthError(f"Context length exceeded: {error_msg}")
         else:
-            raise LLMProviderError(f"Anthropic API error ({response.status_code}): {error_msg}")
+            raise LLMProviderError(
+                f"Anthropic API error ({response.status_code}): {error_msg}"
+            )
 
     def chat(
         self,
@@ -175,11 +170,13 @@ class AnthropicProvider(LLMProvider):
                 elif block["type"] == "tool_use":
                     if tool_calls is None:
                         tool_calls = []
-                    tool_calls.append({
-                        "id": block["id"],
-                        "name": block["name"],
-                        "arguments": block["input"],
-                    })
+                    tool_calls.append(
+                        {
+                            "id": block["id"],
+                            "name": block["name"],
+                            "arguments": block["input"],
+                        }
+                    )
 
             return ChatResponse(
                 content=content,
@@ -187,7 +184,9 @@ class AnthropicProvider(LLMProvider):
                 finish_reason=result.get("stop_reason"),
                 usage={
                     "prompt_tokens": result.get("usage", {}).get("input_tokens", 0),
-                    "completion_tokens": result.get("usage", {}).get("output_tokens", 0),
+                    "completion_tokens": result.get("usage", {}).get(
+                        "output_tokens", 0
+                    ),
                     "total_tokens": (
                         result.get("usage", {}).get("input_tokens", 0)
                         + result.get("usage", {}).get("output_tokens", 0)
@@ -204,7 +203,12 @@ class AnthropicProvider(LLMProvider):
             )
         except requests.exceptions.Timeout:
             raise LLMProviderError(f"Request timed out after {self.timeout}s")
-        except (AuthenticationError, RateLimitError, ModelNotFoundError, ContextLengthError):
+        except (
+            AuthenticationError,
+            RateLimitError,
+            ModelNotFoundError,
+            ContextLengthError,
+        ):
             raise
         except LLMProviderError:
             raise
@@ -312,7 +316,12 @@ class AnthropicProvider(LLMProvider):
             )
         except requests.exceptions.Timeout:
             raise LLMProviderError(f"Request timed out after {self.timeout}s")
-        except (AuthenticationError, RateLimitError, ModelNotFoundError, ContextLengthError):
+        except (
+            AuthenticationError,
+            RateLimitError,
+            ModelNotFoundError,
+            ContextLengthError,
+        ):
             raise
         except LLMProviderError:
             raise
@@ -387,11 +396,15 @@ class AnthropicProvider(LLMProvider):
         """
         formatted = []
         for tool in tools:
-            formatted.append({
-                "name": tool["name"],
-                "description": tool.get("description", ""),
-                "input_schema": tool.get("input_schema", {"type": "object", "properties": {}}),
-            })
+            formatted.append(
+                {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "input_schema": tool.get(
+                        "input_schema", {"type": "object", "properties": {}}
+                    ),
+                }
+            )
         return formatted
 
     def format_tool_result_message(

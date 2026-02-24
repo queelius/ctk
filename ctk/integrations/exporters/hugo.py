@@ -64,9 +64,7 @@ class HugoExporter(ExporterPlugin):
         for conv in conversations:
             try:
                 # Determine target directory based on organization strategy
-                target_dir = self._get_target_dir(
-                    conv, output_dir, hugo_organize
-                )
+                target_dir = self._get_target_dir(conv, output_dir, hugo_organize)
                 target_dir.mkdir(parents=True, exist_ok=True)
 
                 self._export_conversation(
@@ -89,10 +87,7 @@ class HugoExporter(ExporterPlugin):
         print(f"Exported {exported_count} conversation(s) to {output_dir}")
 
     def _get_target_dir(
-        self,
-        conv: ConversationTree,
-        base_dir: Path,
-        organize_strategy: str
+        self, conv: ConversationTree, base_dir: Path, organize_strategy: str
     ) -> Path:
         """
         Determine the target directory for a conversation based on organization strategy.

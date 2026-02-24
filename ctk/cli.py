@@ -12,12 +12,10 @@ from pathlib import Path
 from typing import List, Optional
 
 from ctk.core.database import ConversationDB
-from ctk.core.input_validation import (
-    ValidationError,
-    validate_file_path,
-    validate_conversation_id,
-    validate_path_selection,
-)
+from ctk.core.input_validation import (ValidationError,
+                                       validate_conversation_id,
+                                       validate_file_path,
+                                       validate_path_selection)
 from ctk.core.plugin import registry
 from ctk.core.sanitizer import Sanitizer
 
@@ -83,7 +81,7 @@ def cmd_import(args):
                 must_exist=True,
                 allow_relative=True,
                 allow_dir=True,
-                allow_file=True
+                allow_file=True,
             )
         except ValidationError as e:
             print(f"Error: Invalid input path: {e}")
@@ -371,7 +369,7 @@ def cmd_export(args):
                 must_exist=False,
                 allow_relative=True,
                 allow_dir=True,
-                allow_file=True
+                allow_file=True,
             )
         except ValidationError as e:
             print(f"Error: Invalid output path: {e}")
@@ -3118,10 +3116,14 @@ def main():
     query_parser.add_argument("--asc", action="store_true", help="Sort ascending")
     # Cursor pagination
     query_parser.add_argument(
-        "--cursor", help="Pagination cursor (use value from previous page's next_cursor)"
+        "--cursor",
+        help="Pagination cursor (use value from previous page's next_cursor)",
     )
     query_parser.add_argument(
-        "--page-size", type=int, default=50, help="Results per page when using --cursor (default: 50)"
+        "--page-size",
+        type=int,
+        default=50,
+        help="Results per page when using --cursor (default: 50)",
     )
 
     # SQL command - direct SQL queries with Rich output

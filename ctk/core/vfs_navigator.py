@@ -745,9 +745,7 @@ class VFSNavigator:
         if len(segments) == 1:
             # /source/ - list all sources (uses SQL DISTINCT, not loading all convs)
             sources = self.db.get_distinct_sources()
-            return [
-                VFSEntry(name=source, is_directory=True) for source in sources
-            ]
+            return [VFSEntry(name=source, is_directory=True) for source in sources]
         else:
             # /source/<name>/ - list conversations from source
             source_name = segments[1]

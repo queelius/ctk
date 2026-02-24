@@ -137,10 +137,12 @@ class JSONLExporter(ExporterPlugin):
                 # Add text content if present
                 text = msg.content.get_text() if msg.content else ""
                 if text:
-                    content_parts.append({
-                        "type": "text",
-                        "text": self._sanitize_text(text, sanitizer),
-                    })
+                    content_parts.append(
+                        {
+                            "type": "text",
+                            "text": self._sanitize_text(text, sanitizer),
+                        }
+                    )
 
                 # Add images
                 if msg.content and msg.content.images:
@@ -153,7 +155,9 @@ class JSONLExporter(ExporterPlugin):
                         if img.mime_type:
                             img_data["mime_type"] = img.mime_type
                         if img.caption:
-                            img_data["caption"] = self._sanitize_text(img.caption, sanitizer)
+                            img_data["caption"] = self._sanitize_text(
+                                img.caption, sanitizer
+                            )
                         content_parts.append(img_data)
 
                 # Add audio
@@ -197,10 +201,12 @@ class JSONLExporter(ExporterPlugin):
                     content_parts = []
                     for part in msg.content.parts:
                         if isinstance(part, str):
-                            content_parts.append({
-                                "type": "text",
-                                "text": self._sanitize_text(part, sanitizer),
-                            })
+                            content_parts.append(
+                                {
+                                    "type": "text",
+                                    "text": self._sanitize_text(part, sanitizer),
+                                }
+                            )
                         elif isinstance(part, dict):
                             # Preserve structured content
                             if sanitizer and sanitizer.enabled:

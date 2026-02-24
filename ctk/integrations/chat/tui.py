@@ -1557,7 +1557,9 @@ You don't need to create directories before tagging - this is mainly for documen
             if len(conv_id) < 36:
                 resolved_id = self.db.resolve_conversation(conv_id)
                 if not resolved_id:
-                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
+                    print(
+                        f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)"
+                    )
                     return
                 conv_id = resolved_id
 
@@ -1604,7 +1606,9 @@ You don't need to create directories before tagging - this is mainly for documen
             if not tree and len(conv_id) < 36:
                 resolved_id = self.db.resolve_conversation(conv_id)
                 if not resolved_id:
-                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
+                    print(
+                        f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)"
+                    )
                     return
                 tree = self.db.load_conversation(resolved_id)
 
@@ -3698,7 +3702,9 @@ Available operations:
             if not tree:
                 resolved_id = self.db.resolve_conversation(conv_id)
                 if not resolved_id:
-                    print(f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)")
+                    print(
+                        f"Error: No conversation found matching '{conv_id}' (or ID is ambiguous)"
+                    )
                     return
                 tree = self.db.load_conversation(resolved_id)
 
@@ -4286,8 +4292,7 @@ Available operations:
         from .tui_mcp import handle_mcp_command as _handle_mcp
 
         result = _handle_mcp(
-            self.mcp_client, args,
-            mcp_auto_tools_ref=[self.mcp_auto_tools]
+            self.mcp_client, args, mcp_auto_tools_ref=[self.mcp_auto_tools]
         )
         if result is not None:
             self.mcp_auto_tools = result
@@ -4335,7 +4340,9 @@ Available operations:
         from .tui_vfs import handle_ls as _handle_ls
 
         self._ensure_vfs_navigator()
-        _handle_ls(self.db, self.vfs_navigator, self.vfs_cwd, args, console=self.console)
+        _handle_ls(
+            self.db, self.vfs_navigator, self.vfs_cwd, args, console=self.console
+        )
 
     def handle_ln(self, args: str):
         """Handle /ln command - delegates to tui_vfs module."""
@@ -4371,7 +4378,6 @@ Available operations:
 
         self._ensure_vfs_navigator()
         _handle_mkdir(self.db, self.vfs_navigator, self.vfs_cwd, args)
-
 
     def run(self):
         """Run the chat interface"""

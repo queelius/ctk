@@ -38,51 +38,75 @@ __all__ = [
     "create_semantic_commands",
 ]
 
+
 # Lazy imports for command factories
 def create_navigation_commands(*args, **kwargs):
     from .navigation import create_navigation_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_unix_commands(*args, **kwargs):
     from .unix import create_unix_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_visualization_commands(*args, **kwargs):
     from .visualization import create_visualization_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_organization_commands(*args, **kwargs):
     from .organization import create_organization_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_search_commands(*args, **kwargs):
     from .search import create_search_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_chat_commands(*args, **kwargs):
     from .chat import create_chat_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_settings_commands(*args, **kwargs):
     from .settings import create_settings_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_database_commands(*args, **kwargs):
     from .database import create_database_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_llm_commands(*args, **kwargs):
     from .llm import create_llm_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_session_commands(*args, **kwargs):
     from .session import create_session_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_tree_nav_commands(*args, **kwargs):
     from .tree_nav import create_tree_nav_commands as _create
+
     return _create(*args, **kwargs)
+
 
 def create_semantic_commands(*args, **kwargs):
     from .semantic import create_semantic_commands as _create
+
     return _create(*args, **kwargs)

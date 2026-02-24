@@ -7,19 +7,13 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 
-from ctk.core.constants import DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT, MODEL_LIST_TIMEOUT
-from ctk.integrations.llm.base import (
-    AuthenticationError,
-    ChatResponse,
-    ContextLengthError,
-    LLMProvider,
-    LLMProviderError,
-    Message,
-    MessageRole,
-    ModelInfo,
-    ModelNotFoundError,
-    RateLimitError,
-)
+from ctk.core.constants import (DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT,
+                                MODEL_LIST_TIMEOUT)
+from ctk.integrations.llm.base import (AuthenticationError, ChatResponse,
+                                       ContextLengthError, LLMProvider,
+                                       LLMProviderError, Message, MessageRole,
+                                       ModelInfo, ModelNotFoundError,
+                                       RateLimitError)
 
 
 class OpenAIProvider(LLMProvider):
@@ -80,7 +74,9 @@ class OpenAIProvider(LLMProvider):
         elif "context_length" in error_type or "context_length" in error_msg.lower():
             raise ContextLengthError(f"Context length exceeded: {error_msg}")
         else:
-            raise LLMProviderError(f"OpenAI API error ({response.status_code}): {error_msg}")
+            raise LLMProviderError(
+                f"OpenAI API error ({response.status_code}): {error_msg}"
+            )
 
     def chat(
         self,
@@ -153,11 +149,13 @@ class OpenAIProvider(LLMProvider):
             if "tool_calls" in message:
                 tool_calls = []
                 for tc in message["tool_calls"]:
-                    tool_calls.append({
-                        "id": tc["id"],
-                        "name": tc["function"]["name"],
-                        "arguments": json.loads(tc["function"]["arguments"]),
-                    })
+                    tool_calls.append(
+                        {
+                            "id": tc["id"],
+                            "name": tc["function"]["name"],
+                            "arguments": json.loads(tc["function"]["arguments"]),
+                        }
+                    )
 
             return ChatResponse(
                 content=message.get("content", ""),
@@ -175,7 +173,12 @@ class OpenAIProvider(LLMProvider):
             )
         except requests.exceptions.Timeout:
             raise LLMProviderError(f"Request timed out after {self.timeout}s")
-        except (AuthenticationError, RateLimitError, ModelNotFoundError, ContextLengthError):
+        except (
+            AuthenticationError,
+            RateLimitError,
+            ModelNotFoundError,
+            ContextLengthError,
+        ):
             raise
         except LLMProviderError:
             raise
@@ -267,7 +270,12 @@ class OpenAIProvider(LLMProvider):
             )
         except requests.exceptions.Timeout:
             raise LLMProviderError(f"Request timed out after {self.timeout}s")
-        except (AuthenticationError, RateLimitError, ModelNotFoundError, ContextLengthError):
+        except (
+            AuthenticationError,
+            RateLimitError,
+            ModelNotFoundError,
+            ContextLengthError,
+        ):
             raise
         except LLMProviderError:
             raise
@@ -338,7 +346,11 @@ class OpenAIProvider(LLMProvider):
     def _estimate_context_window(self, model_id: str) -> int:
         """Estimate context window based on model name."""
         model_lower = model_id.lower()
-        if "128k" in model_lower or "gpt-4-turbo" in model_lower or "gpt-4o" in model_lower:
+        if (
+            "128k" in model_lower
+            or "gpt-4-turbo" in model_lower
+            or "gpt-4o" in model_lower
+        ):
             return 128000
         elif "32k" in model_lower:
             return 32000
@@ -394,14 +406,16 @@ class OpenAIProvider(LLMProvider):
         """
         formatted = []
         for tool in tools:
-            formatted.append({
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool.get("description", ""),
-                    "parameters": tool.get("input_schema", {}),
-                },
-            })
+            formatted.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("input_schema", {}),
+                    },
+                }
+            )
         return formatted
 
     def format_tool_result_message(

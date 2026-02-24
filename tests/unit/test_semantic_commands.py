@@ -41,7 +41,10 @@ def test_db(tmp_path):
                     "You can use Python libraries like scikit-learn or PyTorch "
                     "for machine learning model training and data analysis.",
                 ),
-                ("user", "Which Python framework is better for data science beginners?"),
+                (
+                    "user",
+                    "Which Python framework is better for data science beginners?",
+                ),
                 (
                     "assistant",
                     "For data science beginners, scikit-learn is great for machine "

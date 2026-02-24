@@ -434,9 +434,7 @@ class TestJSONLExtractMessages:
     @pytest.mark.unit
     def test_prompt_completion_extra_metadata(self):
         """Extra keys in prompt/completion format are preserved as metadata."""
-        data = json.dumps(
-            {"prompt": "P", "completion": "C", "source": "dataset-v2"}
-        )
+        data = json.dumps({"prompt": "P", "completion": "C", "source": "dataset-v2"})
         convs = self.importer._extract_messages(data)
         _, metadata = convs[0]
         assert metadata["source"] == "dataset-v2"
@@ -535,10 +533,7 @@ class TestJSONLExtractMessages:
     @pytest.mark.unit
     def test_conversation_break_at_start(self):
         """conversation_break at the very start (no prior messages) is harmless."""
-        data = (
-            '{"conversation_break": true}\n'
-            '{"role": "user", "content": "Hello"}'
-        )
+        data = '{"conversation_break": true}\n' '{"role": "user", "content": "Hello"}'
         convs = self.importer._extract_messages(data)
         assert len(convs) == 1
         assert convs[0][0][0]["content"] == "Hello"
@@ -662,9 +657,7 @@ class TestJSONLImportData:
         assert "Describe this" in msg.content.text
         # Non-text parts stored in content metadata
         assert "parts" in msg.content.metadata
-        assert any(
-            p.get("type") == "image_url" for p in msg.content.metadata["parts"]
-        )
+        assert any(p.get("type") == "image_url" for p in msg.content.metadata["parts"])
 
     @pytest.mark.unit
     def test_timestamp_from_timestamp_field(self):
@@ -886,9 +879,7 @@ class TestJSONLImportData:
     @pytest.mark.unit
     def test_message_extra_fields_in_metadata(self):
         """Extra fields on individual messages are stored in message metadata."""
-        data = [
-            {"role": "user", "content": "hi", "weight": 1.0, "label": "good"}
-        ]
+        data = [{"role": "user", "content": "hi", "weight": 1.0, "label": "good"}]
         trees = self.importer.import_data(data)
         msg = trees[0].get_longest_path()[0]
         assert msg.metadata.get("weight") == 1.0
@@ -957,13 +948,13 @@ class TestJSONLEdgeCases:
     def test_unicode_content(self):
         """Unicode content is preserved through import."""
         data = [
-            {"role": "user", "content": "Bonjour! Comment ca va? \u2603 \U0001F600"},
+            {"role": "user", "content": "Bonjour! Comment ca va? \u2603 \U0001f600"},
             {"role": "assistant", "content": "\u4f60\u597d\u4e16\u754c"},
         ]
         trees = self.importer.import_data(data)
         messages = trees[0].get_longest_path()
         assert "\u2603" in messages[0].content.text
-        assert "\U0001F600" in messages[0].content.text
+        assert "\U0001f600" in messages[0].content.text
         assert "\u4f60\u597d\u4e16\u754c" in messages[1].content.text
 
     @pytest.mark.unit

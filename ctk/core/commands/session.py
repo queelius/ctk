@@ -75,7 +75,9 @@ def create_session_commands(
                 db.save_conversation(tree)
                 output_lines.append("Current conversation saved")
             except Exception as e:
-                output_lines.append(f"Warning: Could not save current conversation: {e}")
+                output_lines.append(
+                    f"Warning: Could not save current conversation: {e}"
+                )
 
         # Clear current conversation
         tui_instance.root = None
@@ -112,14 +114,15 @@ def create_session_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="system requires a message")
+            return CommandResult(
+                success=False, output="", error="system requires a message"
+            )
 
         from ctk.integrations.llm.base import MessageRole as LLMMessageRole
 
         tui_instance.add_message(LLMMessageRole.SYSTEM, args.strip())
         return CommandResult(
-            success=True,
-            output=f"System message added: {args.strip()[:50]}..."
+            success=True, output=f"System message added: {args.strip()[:50]}..."
         )
 
     def cmd_context(args: str) -> CommandResult:
@@ -137,13 +140,17 @@ def create_session_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not args:
-            return CommandResult(success=False, output="", error="context requires a file path")
+            return CommandResult(
+                success=False, output="", error="context requires a file path"
+            )
 
         try:
             tui_instance.load_file_context(args.strip())
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error loading context: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error loading context: {e}"
+            )
 
     def cmd_user(args: str) -> CommandResult:
         """Get or set current user name.
@@ -163,20 +170,16 @@ def create_session_commands(
         if not args:
             if tui_instance.current_user:
                 return CommandResult(
-                    success=True,
-                    output=f"Current user: {tui_instance.current_user}"
+                    success=True, output=f"Current user: {tui_instance.current_user}"
                 )
             else:
                 return CommandResult(
                     success=True,
-                    output="No user set (messages will have no user attribution)"
+                    output="No user set (messages will have no user attribution)",
                 )
         else:
             tui_instance.current_user = args.strip()
-            return CommandResult(
-                success=True,
-                output=f"User set to: {args.strip()}"
-            )
+            return CommandResult(success=True, output=f"User set to: {args.strip()}")
 
     def cmd_stats(args: str) -> CommandResult:
         """Show conversation/database statistics.
@@ -193,7 +196,9 @@ def create_session_commands(
             tui_instance.show_stats()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error showing stats: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error showing stats: {e}"
+            )
 
     def cmd_project(args: str) -> CommandResult:
         """Get or set project name for current conversation.
@@ -213,17 +218,13 @@ def create_session_commands(
         if not args:
             if tui_instance.conversation_project:
                 return CommandResult(
-                    success=True,
-                    output=f"Project: {tui_instance.conversation_project}"
+                    success=True, output=f"Project: {tui_instance.conversation_project}"
                 )
             else:
                 return CommandResult(success=True, output="No project set")
         else:
             tui_instance.conversation_project = args.strip()
-            return CommandResult(
-                success=True,
-                output=f"Project set to: {args.strip()}"
-            )
+            return CommandResult(success=True, output=f"Project set to: {args.strip()}")
 
     def cmd_history(args: str) -> CommandResult:
         """Show conversation history.
@@ -245,13 +246,17 @@ def create_session_commands(
             try:
                 max_len = int(args.strip())
             except ValueError:
-                return CommandResult(success=False, output="", error=f"Invalid length: {args}")
+                return CommandResult(
+                    success=False, output="", error=f"Invalid length: {args}"
+                )
 
         try:
             tui_instance.show_history(max_len)
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error showing history: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error showing history: {e}"
+            )
 
     def cmd_summary(args: str) -> CommandResult:
         """Request a summary of the conversation.
@@ -268,7 +273,9 @@ def create_session_commands(
             tui_instance.request_summary()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error generating summary: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error generating summary: {e}"
+            )
 
     return {
         "clear": cmd_clear,

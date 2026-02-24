@@ -16,13 +16,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-)
+from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
+                             MessageContent, MessageRole)
 from ctk.integrations.exporters.hugo import HugoExporter
 
 
@@ -113,7 +108,9 @@ class TestGetTargetDir:
         assert result == tmp_path
 
     @pytest.mark.unit
-    def test_tags_strategy_uses_first_tag(self, exporter, sample_conversation, tmp_path):
+    def test_tags_strategy_uses_first_tag(
+        self, exporter, sample_conversation, tmp_path
+    ):
         """'tags' strategy should use the first tag as subdirectory."""
         result = exporter._get_target_dir(sample_conversation, tmp_path, "tags")
         assert result == tmp_path / "python"
@@ -129,7 +126,9 @@ class TestGetTargetDir:
         """Tags with special characters should be sanitized to valid dir names."""
         metadata = ConversationMetadata(tags=["C++/C#"])
         conv = ConversationTree(id="test", title="Test", metadata=metadata)
-        msg = Message(id="msg1", role=MessageRole.USER, content=MessageContent(text="x"))
+        msg = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="x")
+        )
         conv.add_message(msg)
         result = exporter._get_target_dir(conv, tmp_path, "tags")
         # Should not be empty or contain invalid chars
@@ -142,7 +141,9 @@ class TestGetTargetDir:
         """Tags with ALL special characters should fall back to 'untagged'."""
         metadata = ConversationMetadata(tags=["!!!@@@###"])
         conv = ConversationTree(id="test", title="Test", metadata=metadata)
-        msg = Message(id="msg1", role=MessageRole.USER, content=MessageContent(text="x"))
+        msg = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="x")
+        )
         conv.add_message(msg)
         result = exporter._get_target_dir(conv, tmp_path, "tags")
         assert result == tmp_path / "untagged"
@@ -164,7 +165,9 @@ class TestGetTargetDir:
         """Source with all special chars should fall back to 'unknown'."""
         metadata = ConversationMetadata(source="@#$%")
         conv = ConversationTree(id="test", title="Test", metadata=metadata)
-        msg = Message(id="msg1", role=MessageRole.USER, content=MessageContent(text="x"))
+        msg = Message(
+            id="msg1", role=MessageRole.USER, content=MessageContent(text="x")
+        )
         conv.add_message(msg)
         result = exporter._get_target_dir(conv, tmp_path, "source")
         assert result == tmp_path / "unknown"
@@ -182,9 +185,13 @@ class TestGetTargetDir:
         assert result == tmp_path / "undated"
 
     @pytest.mark.unit
-    def test_unknown_strategy_returns_base(self, exporter, sample_conversation, tmp_path):
+    def test_unknown_strategy_returns_base(
+        self, exporter, sample_conversation, tmp_path
+    ):
         """Unknown strategy should fall back to base directory."""
-        result = exporter._get_target_dir(sample_conversation, tmp_path, "unknown_strategy")
+        result = exporter._get_target_dir(
+            sample_conversation, tmp_path, "unknown_strategy"
+        )
         assert result == tmp_path
 
 
@@ -424,7 +431,9 @@ class TestExportToFile:
         assert (tmp_path / "python").exists()
 
     @pytest.mark.unit
-    def test_multiple_conversations(self, exporter, sample_conversation, minimal_conversation, tmp_path):
+    def test_multiple_conversations(
+        self, exporter, sample_conversation, minimal_conversation, tmp_path
+    ):
         """Multiple conversations should each get their own bundle."""
         exporter.export_to_file(
             [sample_conversation, minimal_conversation],

@@ -7,13 +7,9 @@ used for shell option completion.
 
 import pytest
 
-from ctk.core.command_options import (
-    COMMAND_OPTIONS,
-    get_command_options,
-    get_option_enum_values,
-    get_option_info,
-    has_options,
-)
+from ctk.core.command_options import (COMMAND_OPTIONS, get_command_options,
+                                      get_option_enum_values, get_option_info,
+                                      has_options)
 
 
 class TestCommandOptionsRegistry:

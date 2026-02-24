@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from ctk.core.constants import EMBEDDING_TIMEOUT, MODEL_LIST_TIMEOUT, SHORT_TIMEOUT
+from ctk.core.constants import (EMBEDDING_TIMEOUT, MODEL_LIST_TIMEOUT,
+                                SHORT_TIMEOUT)
 from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
                                               EmbeddingProviderError,
                                               EmbeddingResponse,
@@ -129,7 +130,9 @@ class OllamaEmbedding(EmbeddingProvider):
             EmbeddingProviderError: On API errors
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT)
+            response = requests.get(
+                f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT
+            )
             response.raise_for_status()
 
             result = response.json()

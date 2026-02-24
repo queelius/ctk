@@ -191,7 +191,9 @@ class TestCLIIntegration:
     def test_query_command_json(self, temp_db):
         """Test query command with JSON output (replaces old 'list --json')"""
         with patch("sys.stdout") as mock_stdout:
-            with patch("sys.argv", ["ctk", "query", "--db", temp_db, "--format", "json"]):
+            with patch(
+                "sys.argv", ["ctk", "query", "--db", temp_db, "--format", "json"]
+            ):
                 result = main()
 
             assert result == 0
@@ -386,7 +388,15 @@ class TestCLIErrorHandling:
 
             with patch(
                 "sys.argv",
-                ["ctk", "export", protected_output, "--db", temp_db, "--format", "jsonl"],
+                [
+                    "ctk",
+                    "export",
+                    protected_output,
+                    "--db",
+                    temp_db,
+                    "--format",
+                    "jsonl",
+                ],
             ):
                 result = main()
 
@@ -397,6 +407,7 @@ class TestCLIErrorHandling:
             os.chmod(read_only_dir, stat.S_IRWXU)
             if os.path.exists(read_only_dir):
                 import shutil
+
                 shutil.rmtree(read_only_dir)
 
 

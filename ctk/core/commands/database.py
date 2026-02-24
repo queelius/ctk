@@ -40,7 +40,9 @@ def create_database_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not db:
-            return CommandResult(success=False, output="", error="No database configured")
+            return CommandResult(
+                success=False, output="", error="No database configured"
+            )
         if not tui_instance.root:
             return CommandResult(success=False, output="", error="No messages to save")
 
@@ -57,7 +59,9 @@ def create_database_commands(
             return CommandResult(success=True, output=output)
 
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error saving conversation: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error saving conversation: {e}"
+            )
 
     def cmd_load(args: str) -> CommandResult:
         """Load a conversation from database.
@@ -74,19 +78,25 @@ def create_database_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not db:
-            return CommandResult(success=False, output="", error="No database configured")
+            return CommandResult(
+                success=False, output="", error="No database configured"
+            )
         if not args:
-            return CommandResult(success=False, output="", error="load requires a conversation ID")
+            return CommandResult(
+                success=False, output="", error="load requires a conversation ID"
+            )
 
         conv_id = args.strip()
         try:
             tui_instance.load_conversation(conv_id)
             return CommandResult(
                 success=True,
-                output=f"Loaded conversation: {tui_instance.conversation_title or conv_id[:8]}"
+                output=f"Loaded conversation: {tui_instance.conversation_title or conv_id[:8]}",
             )
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error loading conversation: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error loading conversation: {e}"
+            )
 
     def cmd_search(args: str) -> CommandResult:
         """Search conversations by query text.
@@ -103,9 +113,13 @@ def create_database_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not db:
-            return CommandResult(success=False, output="", error="No database configured")
+            return CommandResult(
+                success=False, output="", error="No database configured"
+            )
         if not args:
-            return CommandResult(success=False, output="", error="search requires a query")
+            return CommandResult(
+                success=False, output="", error="search requires a query"
+            )
 
         query = args.strip()
         try:
@@ -138,7 +152,9 @@ def create_database_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not db:
-            return CommandResult(success=False, output="", error="No database configured")
+            return CommandResult(
+                success=False, output="", error="No database configured"
+            )
 
         try:
             # Parse arguments (TUI's list_conversations handles this)

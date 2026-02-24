@@ -11,21 +11,16 @@ Covers:
 """
 
 import gc
-import pytest
 from datetime import datetime, timedelta
 from typing import Generator
 
+import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (
-    ConversationMetadata,
-    ConversationSummary,
-    ConversationTree,
-    Message,
-    MessageContent,
-    MessageRole,
-)
+from ctk.core.models import (ConversationMetadata, ConversationSummary,
+                             ConversationTree, Message, MessageContent,
+                             MessageRole)
 
 
 def _create_db_with_conversations(n: int = 10) -> ConversationDB:
@@ -258,9 +253,7 @@ class TestIterSearchResults:
 
     def test_search_with_source_filter(self, db):
         """Should combine text search with source filter."""
-        items = list(
-            db.iter_search_results(query_text="Message", source="anthropic")
-        )
+        items = list(db.iter_search_results(query_text="Message", source="anthropic"))
         # Odd-numbered conversations are "anthropic" source
         assert len(items) == 5
         assert all(item.source == "anthropic" for item in items)

@@ -89,7 +89,6 @@ class OpenAIImporter(ImporterPlugin):
         # Remove None values
         return {k: v for k, v in metadata.items() if v is not None}
 
-
     def _process_part(self, part) -> Optional[str]:
         """Extract text from a single content part.
 
@@ -157,7 +156,9 @@ class OpenAIImporter(ImporterPlugin):
             else:
                 content.add_image(url=url, caption=img_data.get("detail"))
 
-    def _process_tool_calls(self, content_data: dict, content: "MessageContent") -> None:
+    def _process_tool_calls(
+        self, content_data: dict, content: "MessageContent"
+    ) -> None:
         """Process tool_calls and function_call from content_data.
 
         Args:
@@ -170,9 +171,7 @@ class OpenAIImporter(ImporterPlugin):
                     id=tool_data.get("id", ""),
                     name=tool_data.get("function", {}).get("name", ""),
                     arguments=(
-                        json.loads(
-                            tool_data.get("function", {}).get("arguments", "{}")
-                        )
+                        json.loads(tool_data.get("function", {}).get("arguments", "{}"))
                         if tool_data.get("function", {}).get("arguments")
                         else {}
                     ),

@@ -113,11 +113,7 @@ class TestProcessAssetPointer:
         """Asset pointer with DALL-E metadata should add image with caption=prompt."""
         part = {
             "asset_pointer": "file-service://file-abc123",
-            "metadata": {
-                "dalle": {
-                    "prompt": "A cat wearing a hat"
-                }
-            },
+            "metadata": {"dalle": {"prompt": "A cat wearing a hat"}},
         }
         content = MessageContent()
 
@@ -166,9 +162,7 @@ class TestProcessAssetPointer:
         }
         content = MessageContent()
 
-        with patch.object(
-            importer, "_resolve_and_copy_image", return_value=None
-        ):
+        with patch.object(importer, "_resolve_and_copy_image", return_value=None):
             importer._process_asset_pointer(part, content)
 
         assert len(content.images) == 0
@@ -196,9 +190,7 @@ class TestProcessAssetPointer:
         """When dalle value is not a dict, image should be added with caption=None."""
         part = {
             "asset_pointer": "file-service://file-abc123",
-            "metadata": {
-                "dalle": "not-a-dict"
-            },
+            "metadata": {"dalle": "not-a-dict"},
         }
         content = MessageContent()
 
@@ -267,9 +259,7 @@ class TestProcessImageUrl:
         part = {"image_url": "file-service://file-missing"}
         content = MessageContent()
 
-        with patch.object(
-            importer, "_resolve_and_copy_image", return_value=None
-        ):
+        with patch.object(importer, "_resolve_and_copy_image", return_value=None):
             importer._process_image_url(part, content)
 
         assert len(content.images) == 0
@@ -322,9 +312,7 @@ class TestProcessImageUrl:
         }
         content = MessageContent()
 
-        with patch.object(
-            importer, "_resolve_and_copy_image", return_value=None
-        ):
+        with patch.object(importer, "_resolve_and_copy_image", return_value=None):
             importer._process_image_url(part, content)
 
         assert len(content.images) == 0
@@ -582,7 +570,12 @@ def _make_openai_conv(
     """
     if mapping is None:
         mapping = {
-            "root": {"id": "root", "message": None, "parent": None, "children": ["msg-1"]},
+            "root": {
+                "id": "root",
+                "message": None,
+                "parent": None,
+                "children": ["msg-1"],
+            },
             "msg-1": {
                 "id": "msg-1",
                 "message": {
@@ -715,11 +708,22 @@ class TestOpenAIImportEdgeCases:
     def test_conversation_with_system_message(self, importer):
         """System messages should be imported with MessageRole.SYSTEM."""
         mapping = {
-            "root": {"id": "root", "message": None, "parent": None, "children": ["sys-1"]},
-            "sys-1": _make_msg_node("sys-1", role="system", parts=["You are helpful."],
-                                    parent="root", children=["usr-1"]),
-            "usr-1": _make_msg_node("usr-1", role="user", parts=["Hi"],
-                                    parent="sys-1", children=[]),
+            "root": {
+                "id": "root",
+                "message": None,
+                "parent": None,
+                "children": ["sys-1"],
+            },
+            "sys-1": _make_msg_node(
+                "sys-1",
+                role="system",
+                parts=["You are helpful."],
+                parent="root",
+                children=["usr-1"],
+            ),
+            "usr-1": _make_msg_node(
+                "usr-1", role="user", parts=["Hi"], parent="sys-1", children=[]
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -756,6 +760,7 @@ class TestOpenAIImportEdgeCases:
         # created_at should be parsed from 1700000000.0
         # We cannot check updated_at due to add_message() overwriting it.
         from datetime import datetime
+
         expected_created = datetime.fromtimestamp(1700000000.0)
         assert tree.metadata.created_at == expected_created
 
@@ -773,10 +778,14 @@ class TestOpenAIImportEdgeCases:
         """content_type 'code' should be stored in content.type."""
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
-            "m1": _make_msg_node("m1", role="assistant",
-                                 parts=["print('hello')"],
-                                 content_type="code",
-                                 parent="root", children=[]),
+            "m1": _make_msg_node(
+                "m1",
+                role="assistant",
+                parts=["print('hello')"],
+                content_type="code",
+                parent="root",
+                children=[],
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -791,10 +800,14 @@ class TestOpenAIImportEdgeCases:
         """content_type 'execution_output' should be stored in content.type."""
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
-            "m1": _make_msg_node("m1", role="tool",
-                                 parts=["Result: 42"],
-                                 content_type="execution_output",
-                                 parent="root", children=[]),
+            "m1": _make_msg_node(
+                "m1",
+                role="tool",
+                parts=["Result: 42"],
+                content_type="execution_output",
+                parent="root",
+                children=[],
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -810,10 +823,12 @@ class TestOpenAIImportEdgeCases:
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
             "m1": _make_msg_node(
-                "m1", role="tool",
+                "m1",
+                role="tool",
                 parts=["According to the search results..."],
                 content_type="tether_browsing_display_text",
-                parent="root", children=[],
+                parent="root",
+                children=[],
             ),
         }
         conv = _make_openai_conv(mapping=mapping)
@@ -829,10 +844,12 @@ class TestOpenAIImportEdgeCases:
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
             "m1": _make_msg_node(
-                "m1", role="tool",
+                "m1",
+                role="tool",
                 parts=["Quoted text from website"],
                 content_type="tether_quote",
-                parent="root", children=[],
+                parent="root",
+                children=[],
             ),
         }
         conv = _make_openai_conv(mapping=mapping)
@@ -896,7 +913,9 @@ class TestOpenAIImportEdgeCases:
         """Messages with empty children lists should be leaf nodes."""
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
-            "m1": _make_msg_node("m1", parts=["Leaf message"], parent="root", children=[]),
+            "m1": _make_msg_node(
+                "m1", parts=["Leaf message"], parent="root", children=[]
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -912,7 +931,12 @@ class TestOpenAIImportEdgeCases:
     def test_deeply_nested_conversation(self, importer):
         """A conversation with 12 messages in a chain should import correctly."""
         mapping = {
-            "root": {"id": "root", "message": None, "parent": None, "children": ["m-0"]},
+            "root": {
+                "id": "root",
+                "message": None,
+                "parent": None,
+                "children": ["m-0"],
+            },
         }
         for i in range(12):
             node_id = f"m-{i}"
@@ -920,8 +944,11 @@ class TestOpenAIImportEdgeCases:
             children = [f"m-{i + 1}"] if i < 11 else []
             role = "user" if i % 2 == 0 else "assistant"
             mapping[node_id] = _make_msg_node(
-                node_id, role=role, parts=[f"Message {i}"],
-                parent=parent, children=children,
+                node_id,
+                role=role,
+                parts=[f"Message {i}"],
+                parent=parent,
+                children=children,
             )
 
         conv = _make_openai_conv(mapping=mapping)
@@ -994,7 +1021,10 @@ class TestOpenAIImportEdgeCases:
                         "content_type": "text",
                         "parts": [
                             "Here is an image:",
-                            {"asset_pointer": "file-service://file-xyz", "content_type": "image_asset_pointer"},
+                            {
+                                "asset_pointer": "file-service://file-xyz",
+                                "content_type": "image_asset_pointer",
+                            },
                             "And some more text.",
                         ],
                     },
@@ -1006,7 +1036,9 @@ class TestOpenAIImportEdgeCases:
         }
         conv = _make_openai_conv(mapping=mapping)
         # Patch _resolve_and_copy_image since we don't have a real filesystem
-        with patch.object(importer, "_resolve_and_copy_image", return_value="media/img.png"):
+        with patch.object(
+            importer, "_resolve_and_copy_image", return_value="media/img.png"
+        ):
             results = importer.import_data(conv)
 
         tree = results[0]
@@ -1096,8 +1128,9 @@ class TestOpenAIImportEdgeCases:
 
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
-            "m1": _make_msg_node("m1", parts=["Hi"], parent="root", children=[],
-                                 create_time=1700000000.0),
+            "m1": _make_msg_node(
+                "m1", parts=["Hi"], parent="root", children=[], create_time=1700000000.0
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -1112,9 +1145,16 @@ class TestOpenAIImportEdgeCases:
         """Message metadata should include status, end_turn, weight, recipient."""
         mapping = {
             "root": {"id": "root", "message": None, "parent": None, "children": ["m1"]},
-            "m1": _make_msg_node("m1", parts=["Test"], parent="root", children=[],
-                                 status="in_progress", end_turn=True, weight=0.5,
-                                 recipient="browser"),
+            "m1": _make_msg_node(
+                "m1",
+                parts=["Test"],
+                parent="root",
+                children=[],
+                status="in_progress",
+                end_turn=True,
+                weight=0.5,
+                recipient="browser",
+            ),
         }
         conv = _make_openai_conv(mapping=mapping)
         results = importer.import_data(conv)
@@ -1139,7 +1179,10 @@ class TestOpenAIImportEdgeCases:
                     "content": {
                         "content_type": "text",
                         "parts": [
-                            {"asset_pointer": "file-service://abc", "content_type": "image_asset_pointer"},
+                            {
+                                "asset_pointer": "file-service://abc",
+                                "content_type": "image_asset_pointer",
+                            },
                         ],
                     },
                     "status": "finished_successfully",
@@ -1149,7 +1192,9 @@ class TestOpenAIImportEdgeCases:
             },
         }
         conv = _make_openai_conv(mapping=mapping)
-        with patch.object(importer, "_resolve_and_copy_image", return_value="media/x.png"):
+        with patch.object(
+            importer, "_resolve_and_copy_image", return_value="media/x.png"
+        ):
             results = importer.import_data(conv)
 
         tree = results[0]
@@ -1349,7 +1394,9 @@ class TestOpenAIMetadata:
     @pytest.mark.unit
     def test_plugin_ids_in_custom_data(self, importer):
         """plugin_ids should be preserved in metadata.custom_data."""
-        conv = _make_openai_conv(plugin_ids=["plugin-web-browser", "plugin-code-interpreter"])
+        conv = _make_openai_conv(
+            plugin_ids=["plugin-web-browser", "plugin-code-interpreter"]
+        )
         results = importer.import_data(conv)
         tree = results[0]
 
@@ -1391,7 +1438,11 @@ class TestOpenAIMetadata:
         tree = results[0]
 
         # created_at should be approximately "now" (within a few seconds)
-        assert before - timedelta(seconds=2) <= tree.metadata.created_at <= after + timedelta(seconds=2)
+        assert (
+            before - timedelta(seconds=2)
+            <= tree.metadata.created_at
+            <= after + timedelta(seconds=2)
+        )
 
     @pytest.mark.unit
     def test_is_archived_in_custom_data(self, importer):

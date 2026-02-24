@@ -45,8 +45,7 @@ def create_llm_commands(
 
         if not args:
             return CommandResult(
-                success=True,
-                output=f"Current temperature: {tui_instance.temperature}"
+                success=True, output=f"Current temperature: {tui_instance.temperature}"
             )
 
         try:
@@ -55,12 +54,14 @@ def create_llm_commands(
                 return CommandResult(
                     success=False,
                     output="",
-                    error="Temperature must be between 0.0 and 2.0"
+                    error="Temperature must be between 0.0 and 2.0",
                 )
             tui_instance.temperature = temp
             return CommandResult(success=True, output=f"Temperature set to {temp}")
         except ValueError:
-            return CommandResult(success=False, output="", error=f"Invalid temperature: {args}")
+            return CommandResult(
+                success=False, output="", error=f"Invalid temperature: {args}"
+            )
 
     def cmd_model(args: str) -> CommandResult:
         """Get or set current LLM model.
@@ -78,7 +79,9 @@ def create_llm_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not tui_instance.provider:
-            return CommandResult(success=False, output="", error="No LLM provider configured")
+            return CommandResult(
+                success=False, output="", error="No LLM provider configured"
+            )
 
         if not args:
             # Show current model info
@@ -116,8 +119,7 @@ def create_llm_commands(
             old_model = tui_instance.provider.model
             tui_instance.provider.model = args.strip()
             return CommandResult(
-                success=True,
-                output=f"Model changed from {old_model} to {args.strip()}"
+                success=True, output=f"Model changed from {old_model} to {args.strip()}"
             )
 
     def cmd_models(args: str) -> CommandResult:
@@ -130,13 +132,17 @@ def create_llm_commands(
         if not tui_instance:
             return CommandResult(success=False, output="", error="TUI not available")
         if not tui_instance.provider:
-            return CommandResult(success=False, output="", error="No LLM provider configured")
+            return CommandResult(
+                success=False, output="", error="No LLM provider configured"
+            )
 
         try:
             tui_instance.list_models()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Error listing models: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Error listing models: {e}"
+            )
 
     def cmd_regenerate(args: str) -> CommandResult:
         """Regenerate the last assistant response.
@@ -153,7 +159,9 @@ def create_llm_commands(
             tui_instance.regenerate_last_response()
             return CommandResult(success=True, output="")
         except Exception as e:
-            return CommandResult(success=False, output="", error=f"Regenerate error: {e}")
+            return CommandResult(
+                success=False, output="", error=f"Regenerate error: {e}"
+            )
 
     def cmd_retry(args: str) -> CommandResult:
         """Retry the last user message.
@@ -178,10 +186,12 @@ def create_llm_commands(
                     return CommandResult(
                         success=False,
                         output="",
-                        error="Temperature must be between 0.0 and 2.0"
+                        error="Temperature must be between 0.0 and 2.0",
                     )
             except ValueError:
-                return CommandResult(success=False, output="", error=f"Invalid temperature: {args}")
+                return CommandResult(
+                    success=False, output="", error=f"Invalid temperature: {args}"
+                )
 
         try:
             tui_instance.retry_last_message(temp)
@@ -224,12 +234,11 @@ def create_llm_commands(
             if tui_instance.num_ctx:
                 return CommandResult(
                     success=True,
-                    output=f"Context window: {tui_instance.num_ctx:,} tokens"
+                    output=f"Context window: {tui_instance.num_ctx:,} tokens",
                 )
             else:
                 return CommandResult(
-                    success=True,
-                    output="Context window: not set (using model default)"
+                    success=True, output="Context window: not set (using model default)"
                 )
         else:
             try:
@@ -238,15 +247,16 @@ def create_llm_commands(
                     return CommandResult(
                         success=False,
                         output="",
-                        error="Context window must be at least 128 tokens"
+                        error="Context window must be at least 128 tokens",
                     )
                 tui_instance.num_ctx = size
                 return CommandResult(
-                    success=True,
-                    output=f"Context window set to {size:,} tokens"
+                    success=True, output=f"Context window set to {size:,} tokens"
                 )
             except ValueError:
-                return CommandResult(success=False, output="", error=f"Invalid context size: {args}")
+                return CommandResult(
+                    success=False, output="", error=f"Invalid context size: {args}"
+                )
 
     return {
         "temp": cmd_temp,

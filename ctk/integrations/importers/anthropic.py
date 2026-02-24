@@ -91,7 +91,6 @@ class AnthropicImporter(ImporterPlugin):
 
         return model if model else "Claude"
 
-
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         """Import Anthropic conversation data"""
         if isinstance(data, str):

@@ -253,10 +253,14 @@ class ECHOExporter(ExporterPlugin):
             "source": conv.metadata.source,
             "model": conv.metadata.model,
             "created": (
-                conv.metadata.created_at.isoformat() if conv.metadata.created_at else None
+                conv.metadata.created_at.isoformat()
+                if conv.metadata.created_at
+                else None
             ),
             "updated": (
-                conv.metadata.updated_at.isoformat() if conv.metadata.updated_at else None
+                conv.metadata.updated_at.isoformat()
+                if conv.metadata.updated_at
+                else None
             ),
             "message_count": len(conv.message_map),
             "has_branches": len(conv.root_message_ids) > 1

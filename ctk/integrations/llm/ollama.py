@@ -226,7 +226,9 @@ class OllamaProvider(LLMProvider):
             LLMProviderError: On API errors
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT)
+            response = requests.get(
+                f"{self.base_url}/api/tags", timeout=MODEL_LIST_TIMEOUT
+            )
             response.raise_for_status()
 
             result = response.json()

@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def parse_timestamp(
-    value: Union[int, float, str, datetime, None],
-    default: Optional[datetime] = None
+    value: Union[int, float, str, datetime, None], default: Optional[datetime] = None
 ) -> Optional[datetime]:
     """
     Parse timestamp from various formats.
