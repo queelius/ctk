@@ -2297,11 +2297,11 @@ body[data-theme="dark"] .hljs {
     background: var(--border-color);
 }
 
-.streaming .message-content.waiting::after {
-    content: 'Waiting for response...';
+.streaming .message-content.waiting {
     color: var(--text-secondary);
     font-style: italic;
     animation: pulse 1.5s ease-in-out infinite;
+    min-height: 1.5em;
 }
 
 .streaming .message-content:not(.waiting)::after {
@@ -3232,7 +3232,7 @@ function createConversationItem(conv) {
     return div;
 }
 
-function showConversation(conv) {
+function showConversation(conv, pathLeafId) {
     state.currentConv = conv;
     state.markAsRead(conv.id);
 
@@ -3333,7 +3333,11 @@ function showConversation(conv) {
     // Build tree and render selected path
     const tree = new ConversationTree(allMessages);
     state.currentTree = tree;
-    state.currentPath = tree.getDefaultPath();
+    if (pathLeafId && tree.messages.has(pathLeafId)) {
+        state.currentPath = tree.getPathToRoot(pathLeafId);
+    } else {
+        state.currentPath = tree.getDefaultPath();
+    }
 
     state.currentPath.forEach(msg => {
         const messageDiv = createMessageElement(conv, msg);
@@ -3636,38 +3640,44 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
         is_chat: true
     };
     tree.addMessage(assistantMsg);
+    saveChatBranch(conv.id, assistantMsg);
 
-    state.currentPath = tree.getPathToRoot(assistantMsg.id);
-    showConversation(conv);
+    // Manually append messages instead of re-rendering (showConversation
+    // rebuilds the tree from scratch and would lose the assistant message
+    // before it's streamed and saved)
+    const container = document.getElementById('conversationView');
+    if (inputContainer) inputContainer.remove();
+    const existingContinue = container.querySelector('.chat-input-area');
+    if (existingContinue) existingContinue.remove();
 
-    const msgEl = document.querySelector('[data-msg-id="' + assistantMsg.id + '"]');
-    if (msgEl) msgEl.classList.add('streaming');
+    const userEl = createMessageElement(conv, userMsg);
+    container.appendChild(userEl);
 
-    // Show waiting indicator until first token arrives
-    const contentEl = msgEl ? msgEl.querySelector('.message-content') : null;
+    const assistantEl = createMessageElement(conv, assistantMsg);
+    assistantEl.classList.add('streaming');
+    container.appendChild(assistantEl);
+
+    const contentEl = assistantEl.querySelector('.message-content');
     if (contentEl) {
-        contentEl.textContent = '';
+        contentEl.textContent = 'Waiting for response...';
         contentEl.classList.add('waiting');
     }
 
+    assistantEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
     // Add stop button during streaming
-    let stopBtn = null;
-    if (msgEl) {
-        stopBtn = document.createElement('button');
-        stopBtn.className = 'chat-stop-btn';
-        stopBtn.textContent = 'Stop';
-        stopBtn.addEventListener('click', () => chatClient.abort());
-        msgEl.appendChild(stopBtn);
-    }
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'chat-stop-btn';
+    stopBtn.textContent = 'Stop';
+    stopBtn.addEventListener('click', () => chatClient.abort());
+    assistantEl.appendChild(stopBtn);
 
     try {
         let fullContent = '';
-        let firstToken = true;
 
         for await (const token of chatClient.sendMessage(contextPath)) {
-            if (firstToken && contentEl) {
+            if (contentEl.classList.contains('waiting')) {
                 contentEl.classList.remove('waiting');
-                firstToken = false;
             }
             fullContent += token;
             if (contentEl) contentEl.textContent = fullContent;
@@ -3676,7 +3686,7 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
         assistantMsg.content = fullContent;
         saveChatBranch(conv.id, assistantMsg);
     } catch (err) {
-        if (msgEl) msgEl.classList.remove('streaming');
+        assistantEl.classList.remove('streaming');
 
         const errorDiv = document.createElement('div');
         errorDiv.className = 'chat-error';
@@ -3697,15 +3707,15 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
             errorDiv.textContent = err.message;
         }
 
-        if (msgEl) msgEl.appendChild(errorDiv);
+        assistantEl.appendChild(errorDiv);
         return;
     } finally {
-        if (stopBtn) stopBtn.remove();
-        if (msgEl) msgEl.classList.remove('streaming');
+        stopBtn.remove();
+        assistantEl.classList.remove('streaming');
     }
 
-    state.currentPath = tree.getPathToRoot(assistantMsg.id);
-    showConversation(conv);
+    // Clean re-render with correct path
+    showConversation(conv, assistantMsg.id);
 }
 
 function saveChatBranch(convId, msg) {
