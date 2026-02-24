@@ -3332,6 +3332,10 @@ function showConversation(conv) {
         }
         container.appendChild(messageDiv);
     });
+
+    // Quick continue input at bottom
+    const continueInput = createQuickContinueInput(conv, tree);
+    container.appendChild(continueInput);
 }
 
 function createMessageElement(conv, msg) {
@@ -3355,6 +3359,18 @@ function createMessageElement(conv, msg) {
         <button class="message-action" onclick="copyMessage('${msg.id}')">📋 Copy</button>
     `;
     header.appendChild(actions);
+
+    if (msg.role === 'assistant') {
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'message-action';
+        replyBtn.textContent = '\\uD83D\\uDCAC Reply';
+        replyBtn.addEventListener('click', () => {
+            document.querySelectorAll('.inline-reply-area').forEach(el => el.remove());
+            const replyArea = createInlineReplyInput(conv, msg, div);
+            div.after(replyArea);
+        });
+        actions.appendChild(replyBtn);
+    }
 
     div.appendChild(header);
 
@@ -3497,6 +3513,188 @@ function clearLocalBranches(convId) {
     if (state.currentConv && state.currentConv.id === convId) {
         showConversation(state.currentConv);
     }
+}
+
+// ==================== Chat Input Components ====================
+function createInlineReplyInput(conv, parentMsg, parentDiv) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'inline-reply-area';
+
+    const area = document.createElement('div');
+    area.className = 'chat-input-area';
+
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Reply to this message...';
+    textarea.rows = 2;
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage(conv, parentMsg.id, textarea.value.trim(), wrapper);
+        }
+    });
+
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'chat-send-btn';
+    sendBtn.textContent = 'Send';
+    sendBtn.addEventListener('click', () => {
+        sendChatMessage(conv, parentMsg.id, textarea.value.trim(), wrapper);
+    });
+
+    area.appendChild(textarea);
+    area.appendChild(sendBtn);
+    wrapper.appendChild(area);
+
+    setTimeout(() => textarea.focus(), 50);
+    return wrapper;
+}
+
+function createQuickContinueInput(conv, tree) {
+    const chat = state.preferences.chat || {};
+    if (!chat.model) {
+        const hint = document.createElement('div');
+        hint.className = 'chat-config-hint';
+        hint.textContent = 'Configure a model in Settings > AI Chat to continue this conversation.';
+        return hint;
+    }
+
+    const lastMsg = state.currentPath[state.currentPath.length - 1];
+    if (!lastMsg) {
+        return document.createElement('div');
+    }
+
+    const sep = document.createElement('div');
+    sep.className = 'chat-continuation-separator';
+    sep.textContent = 'Continue conversation';
+
+    const area = document.createElement('div');
+    area.className = 'chat-input-area';
+
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Type a message...';
+    textarea.rows = 2;
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendChatMessage(conv, lastMsg.id, textarea.value.trim(), area);
+        }
+    });
+
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'chat-send-btn';
+    sendBtn.textContent = 'Send';
+    sendBtn.addEventListener('click', () => {
+        sendChatMessage(conv, lastMsg.id, textarea.value.trim(), area);
+    });
+
+    area.appendChild(textarea);
+    area.appendChild(sendBtn);
+
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(sep);
+    wrapper.appendChild(area);
+    return wrapper;
+}
+
+async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
+    if (!text) return;
+
+    const tree = state.currentTree;
+    if (!tree) return;
+
+    const userMsg = {
+        id: 'chat_' + Date.now() + '_user',
+        role: 'user',
+        content: text,
+        parent_id: parentMsgId,
+        timestamp: new Date().toISOString(),
+        is_chat: true
+    };
+    tree.addMessage(userMsg);
+    saveChatBranch(conv.id, userMsg);
+
+    const contextPath = tree.getPathToRoot(parentMsgId);
+    contextPath.push(userMsg);
+
+    const assistantMsg = {
+        id: 'chat_' + Date.now() + '_assistant',
+        role: 'assistant',
+        content: '',
+        parent_id: userMsg.id,
+        timestamp: new Date().toISOString(),
+        is_chat: true
+    };
+    tree.addMessage(assistantMsg);
+
+    state.currentPath = tree.getPathToRoot(assistantMsg.id);
+    showConversation(conv);
+
+    const msgEl = document.querySelector('[data-msg-id="' + assistantMsg.id + '"]');
+    if (msgEl) msgEl.classList.add('streaming');
+
+    // Add stop button during streaming
+    let stopBtn = null;
+    if (msgEl) {
+        stopBtn = document.createElement('button');
+        stopBtn.className = 'chat-stop-btn';
+        stopBtn.textContent = 'Stop';
+        stopBtn.addEventListener('click', () => chatClient.abort());
+        msgEl.appendChild(stopBtn);
+    }
+
+    try {
+        let fullContent = '';
+        const contentEl = msgEl ? msgEl.querySelector('.message-content') : null;
+
+        for await (const token of chatClient.sendMessage(contextPath)) {
+            fullContent += token;
+            if (contentEl) contentEl.textContent = fullContent;
+        }
+
+        assistantMsg.content = fullContent;
+        saveChatBranch(conv.id, assistantMsg);
+    } catch (err) {
+        if (msgEl) msgEl.classList.remove('streaming');
+
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'chat-error';
+
+        if (err.name === 'AbortError') {
+            if (assistantMsg.content) {
+                saveChatBranch(conv.id, assistantMsg);
+            }
+            return;
+        } else if (err.message === 'MODEL_NOT_CONFIGURED') {
+            errorDiv.textContent = 'Configure a model in Settings > AI Chat to chat.';
+        } else if (err.message.startsWith('MODEL_NOT_FOUND:')) {
+            const model = err.message.split(':')[1];
+            errorDiv.textContent = "Model '" + model + "' not found. Check model name in Settings.";
+        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+            errorDiv.textContent = 'Could not reach endpoint. Check that your server is running.';
+        } else {
+            errorDiv.textContent = err.message;
+        }
+
+        if (msgEl) msgEl.appendChild(errorDiv);
+        return;
+    } finally {
+        if (stopBtn) stopBtn.remove();
+        if (msgEl) msgEl.classList.remove('streaming');
+    }
+
+    state.currentPath = tree.getPathToRoot(assistantMsg.id);
+    showConversation(conv);
+}
+
+function saveChatBranch(convId, msg) {
+    const key = 'chat_branches_' + convId;
+    const branches = JSON.parse(localStorage.getItem(key) || '[]');
+    const existingIdx = branches.findIndex(m => m.id === msg.id);
+    if (existingIdx >= 0) {
+        branches[existingIdx] = msg;
+    } else {
+        branches.push(msg);
+    }
+    localStorage.setItem(key, JSON.stringify(branches));
 }
 
 function renderTimeline() {

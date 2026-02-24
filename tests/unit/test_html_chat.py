@@ -147,3 +147,42 @@ class TestChatSettings:
     def test_default_endpoint_value(self):
         html = self._get_html()
         assert "localhost:11434" in html
+
+
+class TestChatInputComponents:
+    """Test chat input UI components."""
+
+    def test_assistant_messages_have_reply_button(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "Reply" in js
+
+    def test_quick_continue_input_function_exists(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "createQuickContinueInput" in js
+
+    def test_send_chat_message_function_exists(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "sendChatMessage" in js
+
+    def test_inline_reply_input_function_exists(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "createInlineReplyInput" in js
+
+    def test_chat_message_persistence(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "saveChatBranch" in js
+
+    def test_error_handling_messages(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "MODEL_NOT_CONFIGURED" in js
+
+    def test_stop_button_aborts_stream(self):
+        exporter = HTMLExporter()
+        js = exporter._get_javascript()
+        assert "chatClient.abort" in js
