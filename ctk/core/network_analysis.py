@@ -8,9 +8,52 @@ for conversation similarity graphs.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_graph_path(db_dir: Optional[Path], stored_path: str) -> str:
+    """Resolve a graph file path, which may be relative to db_dir or CWD.
+
+    Tries multiple resolution strategies for backwards compatibility:
+    1. Absolute path — use as-is
+    2. Relative to db_dir (new convention: "graphs/file.json")
+    3. Relative to db_dir's parent (old convention: "dbname/graphs/file.json")
+    4. Relative to CWD (legacy fallback)
+
+    Args:
+        db_dir: Resolved database directory path, or None
+        stored_path: Path as stored in the database (absolute or relative)
+
+    Returns:
+        Resolved path string (may not exist on disk)
+    """
+    p = Path(stored_path)
+    if p.is_absolute():
+        return stored_path
+
+    # Try db_dir-relative (new convention)
+    if db_dir:
+        candidate = db_dir / stored_path
+        if candidate.exists():
+            return str(candidate)
+
+    # Try db_dir parent-relative (old convention stored from parent dir)
+    if db_dir:
+        candidate = db_dir.parent / stored_path
+        if candidate.exists():
+            return str(candidate)
+
+    # Try CWD-relative (legacy)
+    candidate = Path.cwd() / stored_path
+    if candidate.exists():
+        return str(candidate)
+
+    # Nothing found — return db_dir-relative for error message
+    if db_dir:
+        return str(db_dir / stored_path)
+    return stored_path
 
 
 def load_graph_from_file(graph_path: str):

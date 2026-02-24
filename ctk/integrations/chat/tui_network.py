@@ -80,60 +80,21 @@ def handle_net_command(
         )
 
 
-def _resolve_graph_path(db, stored_path: str) -> str:
-    """Resolve a graph file path, which may be relative to db_dir or CWD.
-
-    Tries multiple resolution strategies for backwards compatibility:
-    1. Absolute path — use as-is
-    2. Relative to db_dir (new convention: "graphs/file.json")
-    3. Relative to db_dir's parent (old convention: "dbname/graphs/file.json")
-    4. Relative to CWD (legacy fallback)
-    """
-    from pathlib import Path
-
-    p = Path(stored_path)
-    if p.is_absolute():
-        return stored_path
-
-    db_dir = db.db_dir.resolve() if db.db_dir else None
-
-    # Try db_dir-relative (new convention)
-    if db_dir:
-        candidate = db_dir / stored_path
-        if candidate.exists():
-            return str(candidate)
-
-    # Try db_dir parent-relative (old convention stored from parent dir)
-    if db_dir:
-        candidate = db_dir.parent / stored_path
-        if candidate.exists():
-            return str(candidate)
-
-    # Try CWD-relative (legacy)
-    candidate = Path.cwd() / stored_path
-    if candidate.exists():
-        return str(candidate)
-
-    # Nothing found — return db_dir-relative for error message
-    if db_dir:
-        return str(db_dir / stored_path)
-    return stored_path
-
-
 def _load_graph(db) -> Optional[Tuple[nx.Graph, dict]]:
     """Load graph from database, handling missing files gracefully.
 
     Returns:
         (graph, metadata) tuple, or None if graph unavailable.
     """
-    from ctk.core.network_analysis import load_graph_from_file
+    from ctk.core.network_analysis import load_graph_from_file, resolve_graph_path
 
     graph_metadata = db.get_current_graph()
     if not graph_metadata:
         print("Error: No graph found. Run 'net links' first.")
         return None
 
-    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
+    db_dir = db.db_dir.resolve() if db.db_dir else None
+    graph_path = resolve_graph_path(db_dir, graph_metadata["graph_file_path"])
     try:
         G = load_graph_from_file(graph_path)
         return G, graph_metadata
@@ -491,20 +452,14 @@ def _handle_similar(
 
     # Load and fit TF-IDF if needed
     if provider == "tfidf" and not embedder.provider.is_fitted:
+        from ctk.core.similarity import extract_conversation_text
+
         conversations = db.list_conversations()
         corpus_texts = []
         for conv_summary in conversations:
             conv = db.load_conversation(conv_summary.id)
             if conv:
-                text_parts = []
-                if conv.title:
-                    text_parts.append(conv.title)
-                if conv.metadata.tags:
-                    text_parts.append(" ".join(conv.metadata.tags))
-                for msg in conv.message_map.values():
-                    if hasattr(msg.content, "text") and msg.content.text:
-                        text_parts.append(msg.content.text)
-                corpus_texts.append(" ".join(text_parts))
+                corpus_texts.append(extract_conversation_text(conv))
 
         embedder.provider.fit(corpus_texts)
 
@@ -745,10 +700,12 @@ def _handle_network(db, subargs):
     from ctk.core.network_analysis import (compute_global_metrics,
                                            format_network_stats,
                                            load_graph_from_file,
+                                           resolve_graph_path,
                                            save_network_metrics_to_db)
 
     # Load graph from file
-    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
+    db_dir = db.db_dir.resolve() if db.db_dir else None
+    graph_path = resolve_graph_path(db_dir, graph_metadata["graph_file_path"])
     try:
         G = load_graph_from_file(graph_path)
     except FileNotFoundError:

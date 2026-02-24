@@ -663,15 +663,7 @@ class SimilarityComputer:
             Similarity score (0.0 to 1.0 for most metrics)
         """
         if self.metric == SimilarityMetric.COSINE:
-            # Cosine similarity
-            dot = np.dot(vec1, vec2)
-            norm1 = np.linalg.norm(vec1)
-            norm2 = np.linalg.norm(vec2)
-
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-
-            return float(dot / (norm1 * norm2))
+            return cosine_similarity(vec1, vec2)
 
         elif self.metric == SimilarityMetric.DOT_PRODUCT:
             # Dot product (assumes normalized vectors)

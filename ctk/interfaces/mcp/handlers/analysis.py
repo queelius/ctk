@@ -46,14 +46,12 @@ def _build_title_cache(db, conversation_ids: List[str], max_len: int = 50) -> Di
     Uses list_conversations (returns ConversationSummary without message trees)
     instead of load_conversation (which deserializes entire conversation trees).
     """
+    id_set = set(conversation_ids)
     cache = {}
     try:
         summaries = db.list_conversations(limit=len(conversation_ids) + 100)
         for summary in summaries:
-            if summary.id in conversation_ids or any(
-                summary.id.startswith(cid) or cid.startswith(summary.id)
-                for cid in conversation_ids
-            ):
+            if summary.id in id_set:
                 title = (summary.title or "Untitled")[:max_len]
                 cache[summary.id] = title
     except Exception:

@@ -4,11 +4,7 @@ Network/similarity CLI commands for CTK
 Implements conversation embedding, similarity search, and graph analysis
 """
 
-import argparse
 import logging
-import sys
-from pathlib import Path
-from typing import List, Optional
 
 from ctk.core.database import ConversationDB
 
@@ -601,10 +597,12 @@ def cmd_network(args):
         from ctk.core.network_analysis import (compute_global_metrics,
                                                format_network_stats,
                                                load_graph_from_file,
+                                               resolve_graph_path,
                                                save_network_metrics_to_db)
 
         # Load graph from file
-        graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
+        db_dir = db.db_dir.resolve() if db.db_dir else None
+        graph_path = resolve_graph_path(db_dir, graph_metadata["graph_file_path"])
         try:
             G = load_graph_from_file(graph_path)
         except FileNotFoundError:
@@ -629,55 +627,17 @@ def cmd_network(args):
     return 0
 
 
-def _resolve_graph_path(db, stored_path):
-    """Resolve a graph file path, which may be relative to db_dir or CWD.
-
-    Tries multiple resolution strategies for backwards compatibility:
-    1. Absolute path — use as-is
-    2. Relative to db_dir (new convention: "graphs/file.json")
-    3. Relative to db_dir's parent (old convention: "dbname/graphs/file.json")
-    4. Relative to CWD (legacy fallback)
-    """
-    import os
-
-    if os.path.isabs(stored_path):
-        return stored_path
-
-    db_dir = str(db.db_dir.resolve()) if db.db_dir else None
-
-    # Try db_dir-relative (new convention)
-    if db_dir:
-        candidate = os.path.join(db_dir, stored_path)
-        if os.path.exists(candidate):
-            return candidate
-
-    # Try db_dir parent-relative (old convention stored from parent dir)
-    if db_dir:
-        candidate = os.path.join(os.path.dirname(db_dir), stored_path)
-        if os.path.exists(candidate):
-            return candidate
-
-    # Try CWD-relative (legacy)
-    candidate = os.path.abspath(stored_path)
-    if os.path.exists(candidate):
-        return candidate
-
-    # Nothing found — return db_dir-relative for error message
-    if db_dir:
-        return os.path.join(db_dir, stored_path)
-    return stored_path
-
-
 def _load_graph(db, console):
     """Helper to load graph from database"""
-    from ctk.core.network_analysis import load_graph_from_file
+    from ctk.core.network_analysis import load_graph_from_file, resolve_graph_path
 
     graph_metadata = db.get_current_graph()
     if not graph_metadata:
         console.print("[red]Error: No graph found. Run 'ctk net links' first.[/red]")
         return None, None
 
-    graph_path = _resolve_graph_path(db, graph_metadata["graph_file_path"])
+    db_dir = db.db_dir.resolve() if db.db_dir else None
+    graph_path = resolve_graph_path(db_dir, graph_metadata["graph_file_path"])
     try:
         G = load_graph_from_file(graph_path)
         return G, graph_metadata
