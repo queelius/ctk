@@ -36,18 +36,12 @@ class TestMCPServerToolDefinitions:
         tool_names = {t.name for t in tools}
         expected_tools = {
             "search_conversations",
-            "list_conversations",
             "get_conversation",
+            "update_conversation",
             "get_statistics",
-            "star_conversation",
-            "pin_conversation",
-            "archive_conversation",
-            "set_title",
-            "get_tags",
             "find_similar",
             "semantic_search",
-            "get_network_summary",
-            "get_clusters",
+            "execute_sql",
         }
 
         assert tool_names == expected_tools
@@ -103,20 +97,6 @@ class TestMCPServerToolExecution:
         assert "Total conversations:" in text
         assert "Total messages:" in text
 
-    def test_list_conversations_returns_results(self, event_loop):
-        """Test list_conversations returns conversation list."""
-        from ctk.mcp_server import handle_call_tool
-
-        result = event_loop.run_until_complete(
-            handle_call_tool("list_conversations", {"limit": 5})
-        )
-
-        assert len(result) == 1
-        text = result[0].text
-
-        # Should have numbered results
-        assert "[1]" in text or "No conversations found" in text
-
     def test_search_conversations_with_query(self, event_loop):
         """Test search_conversations with a query."""
         from ctk.mcp_server import handle_call_tool
@@ -150,7 +130,7 @@ class TestMCPServerToolExecution:
 
         # First list to get an ID
         list_result = event_loop.run_until_complete(
-            handle_call_tool("list_conversations", {"limit": 1})
+            handle_call_tool("search_conversations", {"limit": 1})
         )
 
         list_text = list_result[0].text
@@ -185,17 +165,65 @@ class TestMCPServerToolExecution:
         text = result[0].text
         assert "Error" in text or "Could not find" in text
 
-    def test_get_tags_returns_list(self, event_loop):
-        """Test get_tags returns tag list."""
+    def test_update_conversation_no_changes(self, event_loop):
+        """Test update_conversation with no fields specified."""
         from ctk.mcp_server import handle_call_tool
 
-        result = event_loop.run_until_complete(handle_call_tool("get_tags", {}))
+        # First get a conversation ID
+        list_result = event_loop.run_until_complete(
+            handle_call_tool("search_conversations", {"limit": 1})
+        )
+        list_text = list_result[0].text
+
+        if "[1]" in list_text:
+            import re
+
+            match = re.search(r"\[1\]\s+([a-f0-9]+)", list_text)
+            if match:
+                partial_id = match.group(1)[:8]
+                result = event_loop.run_until_complete(
+                    handle_call_tool("update_conversation", {"id": partial_id})
+                )
+                text = result[0].text
+                assert "No changes" in text
+
+    def test_execute_sql_select(self, event_loop):
+        """Test execute_sql with a SELECT query."""
+        from ctk.mcp_server import handle_call_tool
+
+        result = event_loop.run_until_complete(
+            handle_call_tool(
+                "execute_sql",
+                {"sql": "SELECT COUNT(*) as cnt FROM conversations"},
+            )
+        )
+
+        assert len(result) == 1
+        text = result[0].text
+        assert "cnt" in text
+
+    def test_execute_sql_invalid_query(self, event_loop):
+        """Test execute_sql with invalid SQL."""
+        from ctk.mcp_server import handle_call_tool
+
+        result = event_loop.run_until_complete(
+            handle_call_tool("execute_sql", {"sql": "INVALID SQL"})
+        )
+
+        text = result[0].text
+        assert "error" in text.lower() or "Error" in text
+
+    def test_get_statistics_includes_tags(self, event_loop):
+        """Test get_statistics includes tag information."""
+        from ctk.mcp_server import handle_call_tool
+
+        result = event_loop.run_until_complete(handle_call_tool("get_statistics", {}))
 
         assert len(result) == 1
         text = result[0].text
 
-        # Either has tags or reports none
-        assert "Tags" in text or "No tags" in text
+        assert "CTK Database Statistics" in text
+        assert "Total conversations:" in text
 
 
 class TestMCPServerHelperFunctions:

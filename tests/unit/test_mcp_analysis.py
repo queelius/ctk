@@ -18,7 +18,7 @@ class TestAnalysisToolDefinitions:
         """Verify TOOLS list has entries."""
         from ctk.interfaces.mcp.handlers.analysis import TOOLS
 
-        assert len(TOOLS) == 4
+        assert len(TOOLS) == 2
 
     def test_find_similar_tool_exists(self):
         """Verify find_similar tool is defined."""
@@ -33,20 +33,6 @@ class TestAnalysisToolDefinitions:
 
         names = {t.name for t in TOOLS}
         assert "semantic_search" in names
-
-    def test_get_network_summary_tool_exists(self):
-        """Verify get_network_summary tool is defined."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        names = {t.name for t in TOOLS}
-        assert "get_network_summary" in names
-
-    def test_get_clusters_tool_exists(self):
-        """Verify get_clusters tool is defined."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        names = {t.name for t in TOOLS}
-        assert "get_clusters" in names
 
     def test_find_similar_schema_requires_id(self):
         """Verify find_similar requires 'id' parameter."""
@@ -82,60 +68,16 @@ class TestAnalysisToolDefinitions:
         tool = next(t for t in TOOLS if t.name == "semantic_search")
         assert "top_k" in tool.inputSchema["properties"]
 
-    def test_get_network_summary_schema_has_threshold(self):
-        """Verify get_network_summary has threshold optional param."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        tool = next(t for t in TOOLS if t.name == "get_network_summary")
-        assert "threshold" in tool.inputSchema["properties"]
-        assert tool.inputSchema["required"] == []
-
-    def test_get_clusters_schema_has_algorithm_enum(self):
-        """Verify get_clusters has algorithm enum with correct values."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        tool = next(t for t in TOOLS if t.name == "get_clusters")
-        algo_prop = tool.inputSchema["properties"]["algorithm"]
-        assert algo_prop["type"] == "string"
-        assert "enum" in algo_prop
-        assert "label_propagation" in algo_prop["enum"]
-        assert "greedy_modularity" in algo_prop["enum"]
-        assert tool.inputSchema["required"] == []
-
-    def test_get_clusters_schema_has_threshold(self):
-        """Verify get_clusters now has threshold parameter."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        tool = next(t for t in TOOLS if t.name == "get_clusters")
-        assert "threshold" in tool.inputSchema["properties"]
-        assert tool.inputSchema["properties"]["threshold"]["type"] == "number"
-
-    def test_network_summary_schema_has_max_conversations(self):
-        """Verify get_network_summary has max_conversations parameter."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        tool = next(t for t in TOOLS if t.name == "get_network_summary")
-        assert "max_conversations" in tool.inputSchema["properties"]
-
-    def test_get_clusters_schema_has_max_conversations(self):
-        """Verify get_clusters has max_conversations parameter."""
-        from ctk.interfaces.mcp.handlers.analysis import TOOLS
-
-        tool = next(t for t in TOOLS if t.name == "get_clusters")
-        assert "max_conversations" in tool.inputSchema["properties"]
-
 
 class TestAnalysisHandlerDispatch:
     """Test that handlers are properly registered."""
 
     def test_handlers_dict_has_all_tools(self):
-        """Verify HANDLERS dict has entries for all 4 tools."""
+        """Verify HANDLERS dict has entries for all tools."""
         from ctk.interfaces.mcp.handlers.analysis import HANDLERS
 
         assert "find_similar" in HANDLERS
         assert "semantic_search" in HANDLERS
-        assert "get_network_summary" in HANDLERS
-        assert "get_clusters" in HANDLERS
 
     def test_handlers_are_callable(self):
         """Verify all handlers are callable."""
@@ -166,8 +108,6 @@ class TestAnalysisRegistration:
         tool_names = {t.name for t in ALL_TOOLS}
         assert "find_similar" in tool_names
         assert "semantic_search" in tool_names
-        assert "get_network_summary" in tool_names
-        assert "get_clusters" in tool_names
 
     def test_analysis_handlers_in_all_handlers(self):
         """Verify analysis handlers appear in ALL_HANDLERS."""
@@ -175,21 +115,19 @@ class TestAnalysisRegistration:
 
         assert "find_similar" in ALL_HANDLERS
         assert "semantic_search" in ALL_HANDLERS
-        assert "get_network_summary" in ALL_HANDLERS
-        assert "get_clusters" in ALL_HANDLERS
 
     def test_total_tool_count(self):
         """Verify total tool count includes analysis tools."""
         from ctk.interfaces.mcp.handlers import ALL_TOOLS
 
-        # search (2) + conversation (5) + metadata (2) + analysis (4) = 13
-        assert len(ALL_TOOLS) == 13
+        # search (1) + conversation (2) + metadata (1) + analysis (2) + sql (1) = 7
+        assert len(ALL_TOOLS) == 7
 
     def test_total_handler_count(self):
         """Verify total handler count includes analysis handlers."""
         from ctk.interfaces.mcp.handlers import ALL_HANDLERS
 
-        assert len(ALL_HANDLERS) == 13
+        assert len(ALL_HANDLERS) == 7
 
 
 class TestHandleFindSimilar:
@@ -403,251 +341,6 @@ class TestHandleSemanticSearch:
             event_loop.run_until_complete(handle_semantic_search({}, mock_db))
 
 
-class TestHandleGetNetworkSummary:
-    """Test handle_get_network_summary handler."""
-
-    @pytest.fixture
-    def event_loop(self):
-        """Create event loop for async tests."""
-        loop = asyncio.new_event_loop()
-        yield loop
-        loop.close()
-
-    @pytest.fixture
-    def mock_db(self):
-        """Create a mock database."""
-        db = MagicMock()
-        db.get_all_embeddings.return_value = []
-        db.load_conversation.return_value = None
-        return db
-
-    def test_no_embeddings_returns_error(self, event_loop, mock_db):
-        """Test get_network_summary returns error when no embeddings exist."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-
-        result = event_loop.run_until_complete(handle_get_network_summary({}, mock_db))
-
-        assert len(result) == 1
-        assert "No embeddings found" in result[0].text
-
-    def test_returns_summary_with_embeddings(self, event_loop, mock_db):
-        """Test get_network_summary returns summary when embeddings exist."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-
-        mock_db.get_all_embeddings.return_value = [
-            {
-                "conversation_id": "id-1",
-                "embedding": [1.0, 0.0, 0.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-2",
-                "embedding": [0.9, 0.1, 0.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-3",
-                "embedding": [0.0, 0.0, 1.0],
-                "provider": "tfidf",
-            },
-        ]
-
-        result = event_loop.run_until_complete(
-            handle_get_network_summary({"threshold": 0.5}, mock_db)
-        )
-
-        assert len(result) == 1
-        text = result[0].text
-        assert "Conversation Network Summary" in text
-        assert "Nodes: 3" in text
-        assert "Density:" in text
-
-    def test_threshold_string_conversion(self, event_loop, mock_db):
-        """Test that string threshold is converted to float via validate_float."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-
-        mock_db.get_all_embeddings.return_value = [
-            {"conversation_id": "id-1", "embedding": [1.0, 0.0], "provider": "tfidf"},
-        ]
-
-        result = event_loop.run_until_complete(
-            handle_get_network_summary({"threshold": "0.5"}, mock_db)
-        )
-
-        assert len(result) == 1
-        assert "Nodes: 1" in result[0].text
-
-    def test_invalid_threshold_raises_validation_error(self, event_loop, mock_db):
-        """Test that invalid threshold raises ValidationError."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-        from ctk.interfaces.mcp.validation import ValidationError
-
-        with pytest.raises(ValidationError, match="must be a number"):
-            event_loop.run_until_complete(
-                handle_get_network_summary({"threshold": "abc"}, mock_db)
-            )
-
-    def test_threshold_out_of_range_raises_error(self, event_loop, mock_db):
-        """Test that out-of-range threshold raises ValidationError."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-        from ctk.interfaces.mcp.validation import ValidationError
-
-        with pytest.raises(ValidationError, match="between"):
-            event_loop.run_until_complete(
-                handle_get_network_summary({"threshold": 5.0}, mock_db)
-            )
-
-    def test_central_conversations_shown(self, event_loop, mock_db):
-        """Test that most connected conversations are listed."""
-        from ctk.interfaces.mcp.handlers.analysis import \
-            handle_get_network_summary
-
-        # Create embeddings where id-1 and id-2 are very similar
-        mock_db.get_all_embeddings.return_value = [
-            {
-                "conversation_id": "id-1",
-                "embedding": [1.0, 0.0, 0.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-2",
-                "embedding": [0.99, 0.01, 0.0],
-                "provider": "tfidf",
-            },
-        ]
-
-        # Title cache uses list_conversations (not load_conversation)
-        mock_summary = MagicMock()
-        mock_summary.id = "id-1"
-        mock_summary.title = "Central Conv"
-        mock_summary2 = MagicMock()
-        mock_summary2.id = "id-2"
-        mock_summary2.title = "Other Conv"
-        mock_db.list_conversations.return_value = [mock_summary, mock_summary2]
-
-        result = event_loop.run_until_complete(
-            handle_get_network_summary({"threshold": 0.5}, mock_db)
-        )
-
-        text = result[0].text
-        assert "Most connected" in text
-
-
-class TestHandleGetClusters:
-    """Test handle_get_clusters handler."""
-
-    @pytest.fixture
-    def event_loop(self):
-        """Create event loop for async tests."""
-        loop = asyncio.new_event_loop()
-        yield loop
-        loop.close()
-
-    @pytest.fixture
-    def mock_db(self):
-        """Create a mock database."""
-        db = MagicMock()
-        db.get_all_embeddings.return_value = []
-        db.load_conversation.return_value = None
-        return db
-
-    def test_no_embeddings_returns_error(self, event_loop, mock_db):
-        """Test get_clusters returns error when no embeddings exist."""
-        from ctk.interfaces.mcp.handlers.analysis import handle_get_clusters
-
-        result = event_loop.run_until_complete(handle_get_clusters({}, mock_db))
-
-        assert len(result) == 1
-        assert "No embeddings found" in result[0].text
-
-    def test_clusters_with_embeddings(self, event_loop, mock_db):
-        """Test get_clusters detects communities with embeddings."""
-        from ctk.interfaces.mcp.handlers.analysis import handle_get_clusters
-
-        mock_db.get_all_embeddings.return_value = [
-            {
-                "conversation_id": "id-1",
-                "embedding": [1.0, 0.0, 0.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-2",
-                "embedding": [0.95, 0.05, 0.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-3",
-                "embedding": [0.0, 0.0, 1.0],
-                "provider": "tfidf",
-            },
-            {
-                "conversation_id": "id-4",
-                "embedding": [0.0, 0.05, 0.95],
-                "provider": "tfidf",
-            },
-        ]
-
-        # Title cache uses list_conversations
-        summaries = []
-        for i in range(1, 5):
-            s = MagicMock()
-            s.id = f"id-{i}"
-            s.title = "Test"
-            summaries.append(s)
-        mock_db.list_conversations.return_value = summaries
-
-        result = event_loop.run_until_complete(handle_get_clusters({}, mock_db))
-
-        assert len(result) == 1
-        text = result[0].text
-        assert "cluster" in text.lower()
-
-    def test_greedy_modularity_algorithm(self, event_loop, mock_db):
-        """Test get_clusters with greedy_modularity algorithm."""
-        from ctk.interfaces.mcp.handlers.analysis import handle_get_clusters
-
-        mock_db.get_all_embeddings.return_value = [
-            {"conversation_id": "id-1", "embedding": [1.0, 0.0], "provider": "tfidf"},
-            {"conversation_id": "id-2", "embedding": [0.9, 0.1], "provider": "tfidf"},
-            {"conversation_id": "id-3", "embedding": [0.0, 1.0], "provider": "tfidf"},
-        ]
-
-        summaries = []
-        for i in range(1, 4):
-            s = MagicMock()
-            s.id = f"id-{i}"
-            s.title = "Test"
-            summaries.append(s)
-        mock_db.list_conversations.return_value = summaries
-
-        result = event_loop.run_until_complete(
-            handle_get_clusters({"algorithm": "greedy_modularity"}, mock_db)
-        )
-
-        assert len(result) == 1
-        assert "cluster" in result[0].text.lower()
-
-    def test_unknown_algorithm_returns_error(self, event_loop, mock_db):
-        """Test get_clusters returns error for unknown algorithm."""
-        from ctk.interfaces.mcp.handlers.analysis import handle_get_clusters
-
-        mock_db.get_all_embeddings.return_value = [
-            {"conversation_id": "id-1", "embedding": [1.0, 0.0], "provider": "tfidf"},
-        ]
-
-        result = event_loop.run_until_complete(
-            handle_get_clusters({"algorithm": "nonexistent"}, mock_db)
-        )
-
-        assert len(result) == 1
-        assert "Unknown algorithm" in result[0].text
-
-
 class TestHelperFunctions:
     """Test helper/utility functions in the analysis module."""
 
@@ -760,30 +453,6 @@ class TestHelperFunctions:
         from ctk.interfaces.mcp.handlers.analysis import _get_title
 
         assert _get_title({}, "missing-id") == "Unknown"
-
-    def test_compute_pairwise_similarities_shape(self):
-        """Test vectorized pairwise similarity returns correct shape."""
-        import numpy as np
-
-        from ctk.interfaces.mcp.handlers.analysis import (
-            _compute_pairwise_similarities,
-        )
-
-        vecs = [np.array([1.0, 0.0]), np.array([0.0, 1.0]), np.array([1.0, 1.0])]
-        result = _compute_pairwise_similarities(vecs)
-        assert result.shape == (3, 3)
-        # Diagonal should be 1.0 (self-similarity)
-        for i in range(3):
-            assert abs(result[i, i] - 1.0) < 1e-6
-
-    def test_compute_pairwise_similarities_empty(self):
-        """Test vectorized pairwise similarity with empty input."""
-        from ctk.interfaces.mcp.handlers.analysis import (
-            _compute_pairwise_similarities,
-        )
-
-        result = _compute_pairwise_similarities([])
-        assert result.size == 0
 
     def test_validate_float_in_threshold(self):
         """Test that threshold validation works via validate_float."""
