@@ -15,13 +15,9 @@ TOOLS: List[types.Tool] = [
         name="get_statistics",
         description=(
             "Get database statistics: total conversations, messages,"
-            " starred/pinned/archived counts, sources, models."
+            " starred/pinned/archived counts, sources, models,"
+            " and all tags with usage counts."
         ),
-        inputSchema={"type": "object", "properties": {}, "required": []},
-    ),
-    types.Tool(
-        name="get_tags",
-        description="List all tags used in the database with conversation counts.",
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
 ]
@@ -50,22 +46,13 @@ async def handle_get_statistics(arguments: dict, db) -> list[types.TextContent]:
     if stats.get("models"):
         lines.append(f"Models: {', '.join(stats['models'][:10])}")
 
-    return [types.TextContent(type="text", text="\n".join(lines))]
-
-
-async def handle_get_tags(arguments: dict, db) -> list[types.TextContent]:
-    """Handle get_tags tool call."""
     tags = db.get_all_tags()
-
-    if not tags:
-        return [types.TextContent(type="text", text="No tags found in database.")]
-
-    lines = ["Tags in database:\n"]
-    # tags is List[Dict] with 'name' and 'usage_count' keys
-    for tag_dict in sorted(tags, key=lambda x: -x.get("usage_count", 0)):
-        name = tag_dict.get("name", "unknown")
-        count = tag_dict.get("usage_count", 0)
-        lines.append(f"  {name}: {count} conversation(s)")
+    if tags:
+        lines.append("\nTags:")
+        for tag_dict in sorted(tags, key=lambda x: -x.get("usage_count", 0)):
+            name = tag_dict.get("name", "unknown")
+            count = tag_dict.get("usage_count", 0)
+            lines.append(f"  {name}: {count}")
 
     return [types.TextContent(type="text", text="\n".join(lines))]
 
@@ -74,5 +61,4 @@ async def handle_get_tags(arguments: dict, db) -> list[types.TextContent]:
 
 HANDLERS: Dict[str, callable] = {
     "get_statistics": handle_get_statistics,
-    "get_tags": handle_get_tags,
 }
