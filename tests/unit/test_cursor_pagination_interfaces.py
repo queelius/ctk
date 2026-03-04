@@ -322,17 +322,6 @@ class TestMCPCursorPagination:
         assert "cursor" in props
         assert props["cursor"]["type"] == "string"
 
-    def test_list_schema_has_cursor(self, event_loop):
-        """list_conversations tool schema should include cursor property."""
-        from ctk.mcp_server import handle_list_tools
-
-        tools = event_loop.run_until_complete(handle_list_tools())
-        list_tool = next(t for t in tools if t.name == "list_conversations")
-
-        props = list_tool.inputSchema["properties"]
-        assert "cursor" in props
-        assert props["cursor"]["type"] == "string"
-
     def test_search_handler_uses_cursor(self, event_loop):
         """search_conversations handler should pass cursor to DB."""
         from ctk.mcp_server import handle_call_tool
@@ -410,14 +399,14 @@ class TestMCPCursorPagination:
             response_text = result[0].text
             assert "next_cursor" in response_text or "next123" in response_text
 
-    def test_list_handler_uses_cursor(self, event_loop):
-        """list_conversations handler should pass cursor to DB."""
+    def test_list_via_search_handler_uses_cursor(self, event_loop):
+        """search_conversations without query (list mode) should pass cursor to DB."""
         from ctk.mcp_server import handle_call_tool
 
         mock_summary = MagicMock(spec=ConversationSummary)
         mock_summary.id = "conv-009"
         mock_summary.title = "Test Conv"
-        mock_summary.created_at = datetime(2024, 1, 1)
+        mock_summary.message_count = 5
         mock_summary.starred_at = None
         mock_summary.pinned_at = None
         mock_summary.archived_at = None
@@ -435,51 +424,16 @@ class TestMCPCursorPagination:
 
             result = event_loop.run_until_complete(
                 handle_call_tool(
-                    "list_conversations",
+                    "search_conversations",
                     {
-                        "cursor": "",
+                        "cursor": "somecursor",
                     },
                 )
             )
 
-            # DB should have been called with cursor
+            # DB should have been called with cursor (list mode, no query)
             call_kwargs = mock_db.list_conversations.call_args[1]
-            assert call_kwargs["cursor"] == ""
-
-    def test_list_handler_returns_next_cursor(self, event_loop):
-        """list_conversations response should include next_cursor when paginated."""
-        from ctk.mcp_server import handle_call_tool
-
-        mock_summary = MagicMock(spec=ConversationSummary)
-        mock_summary.id = "conv-009"
-        mock_summary.title = "Test Conv"
-        mock_summary.created_at = datetime(2024, 1, 1)
-        mock_summary.starred_at = None
-        mock_summary.pinned_at = None
-        mock_summary.archived_at = None
-
-        paginated = PaginatedResult(
-            items=[mock_summary],
-            next_cursor="nextabc",
-            has_more=True,
-        )
-
-        with patch("ctk.mcp_server.get_db") as mock_get_db:
-            mock_db = MagicMock()
-            mock_db.list_conversations.return_value = paginated
-            mock_get_db.return_value = mock_db
-
-            result = event_loop.run_until_complete(
-                handle_call_tool(
-                    "list_conversations",
-                    {
-                        "cursor": "",
-                    },
-                )
-            )
-
-            response_text = result[0].text
-            assert "next_cursor" in response_text or "nextabc" in response_text
+            assert call_kwargs["cursor"] == "somecursor"
 
     def test_no_cursor_returns_legacy_format(self, event_loop):
         """Without cursor, should return legacy list format."""
