@@ -135,8 +135,11 @@ TOOLS: List[types.Tool] = [
         },
     ),
     types.Tool(
-        name="star_conversation",
-        description="Star or unstar a conversation for quick access.",
+        name="update_conversation",
+        description=(
+            "Update conversation properties. Only provided fields are changed."
+            " Use partial IDs (first 6-8 chars) for convenience."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -146,64 +149,22 @@ TOOLS: List[types.Tool] = [
                 },
                 "starred": {
                     "type": "boolean",
-                    "description": "True to star, False to unstar",
-                },
-            },
-            "required": ["id", "starred"],
-        },
-    ),
-    types.Tool(
-        name="pin_conversation",
-        description="Pin or unpin a conversation to keep it at the top.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "Conversation ID (full or partial)",
+                    "description": "Star (true) or unstar (false)",
                 },
                 "pinned": {
                     "type": "boolean",
-                    "description": "True to pin, False to unpin",
-                },
-            },
-            "required": ["id", "pinned"],
-        },
-    ),
-    types.Tool(
-        name="archive_conversation",
-        description="Archive or unarchive a conversation.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "Conversation ID (full or partial)",
+                    "description": "Pin (true) or unpin (false)",
                 },
                 "archived": {
                     "type": "boolean",
-                    "description": "True to archive, False to unarchive",
-                },
-            },
-            "required": ["id", "archived"],
-        },
-    ),
-    types.Tool(
-        name="set_title",
-        description="Set or update the title of a conversation.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string",
-                    "description": "Conversation ID (full or partial)",
+                    "description": "Archive (true) or unarchive (false)",
                 },
                 "title": {
                     "type": "string",
                     "description": "New title for the conversation",
                 },
             },
-            "required": ["id", "title"],
+            "required": ["id"],
         },
     ),
 ]
@@ -254,73 +215,16 @@ async def handle_get_conversation(arguments: dict, db) -> list[types.TextContent
     return [types.TextContent(type="text", text=output)]
 
 
-async def handle_star_conversation(arguments: dict, db) -> list[types.TextContent]:
-    """Handle star_conversation tool call."""
-    # Validate inputs
+async def handle_update_conversation(arguments: dict, db) -> list[types.TextContent]:
+    """Handle update_conversation tool call."""
     conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     starred = validate_boolean(arguments.get("starred"), "starred")
-    if starred is None:
-        starred = True
-
-    full_id = resolve_conversation_id(conv_id, db=db)
-    if not full_id:
-        return [
-            types.TextContent(
-                type="text",
-                text=f"Error: Could not find conversation '{conv_id}'",
-            )
-        ]
-
-    db.star_conversation(full_id, star=starred)
-    if starred:
-        return [
-            types.TextContent(
-                type="text", text=f"\u2b50 Starred conversation {full_id[:8]}"
-            )
-        ]
-    else:
-        return [
-            types.TextContent(type="text", text=f"Unstarred conversation {full_id[:8]}")
-        ]
-
-
-async def handle_pin_conversation(arguments: dict, db) -> list[types.TextContent]:
-    """Handle pin_conversation tool call."""
-    # Validate inputs
-    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     pinned = validate_boolean(arguments.get("pinned"), "pinned")
-    if pinned is None:
-        pinned = True
-
-    full_id = resolve_conversation_id(conv_id, db=db)
-    if not full_id:
-        return [
-            types.TextContent(
-                type="text",
-                text=f"Error: Could not find conversation '{conv_id}'",
-            )
-        ]
-
-    db.pin_conversation(full_id, pin=pinned)
-    if pinned:
-        return [
-            types.TextContent(
-                type="text", text=f"\U0001f4cc Pinned conversation {full_id[:8]}"
-            )
-        ]
-    else:
-        return [
-            types.TextContent(type="text", text=f"Unpinned conversation {full_id[:8]}")
-        ]
-
-
-async def handle_archive_conversation(arguments: dict, db) -> list[types.TextContent]:
-    """Handle archive_conversation tool call."""
-    # Validate inputs
-    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
     archived = validate_boolean(arguments.get("archived"), "archived")
-    if archived is None:
-        archived = True
+    title = validate_string(arguments.get("title"), "title", MAX_TITLE_LENGTH)
+
+    if not conv_id:
+        return [types.TextContent(type="text", text="Error: conversation ID is required")]
 
     full_id = resolve_conversation_id(conv_id, db=db)
     if not full_id:
@@ -331,46 +235,36 @@ async def handle_archive_conversation(arguments: dict, db) -> list[types.TextCon
             )
         ]
 
-    db.archive_conversation(full_id, archive=archived)
-    if archived:
-        return [
-            types.TextContent(
-                type="text", text=f"\U0001f4e6 Archived conversation {full_id[:8]}"
-            )
-        ]
-    else:
-        return [
-            types.TextContent(
-                type="text", text=f"Unarchived conversation {full_id[:8]}"
-            )
-        ]
+    changes = []
 
+    if starred is not None:
+        db.star_conversation(full_id, star=starred)
+        changes.append(f"{'Starred' if starred else 'Unstarred'}")
 
-async def handle_set_title(arguments: dict, db) -> list[types.TextContent]:
-    """Handle set_title tool call."""
-    # Validate inputs
-    conv_id = validate_string(arguments.get("id"), "id", MAX_ID_LENGTH, required=True)
-    title = validate_string(
-        arguments.get("title"), "title", MAX_TITLE_LENGTH, required=True
-    )
+    if pinned is not None:
+        db.pin_conversation(full_id, pin=pinned)
+        changes.append(f"{'Pinned' if pinned else 'Unpinned'}")
 
-    if not title:
-        return [types.TextContent(type="text", text="Error: title is required")]
+    if archived is not None:
+        db.archive_conversation(full_id, archive=archived)
+        changes.append(f"{'Archived' if archived else 'Unarchived'}")
 
-    full_id = resolve_conversation_id(conv_id, db=db)
-    if not full_id:
+    if title is not None:
+        db.update_conversation_metadata(full_id, title=title)
+        changes.append(f'Title set to "{title}"')
+
+    if not changes:
         return [
             types.TextContent(
                 type="text",
-                text=f"Error: Could not find conversation '{conv_id}'",
+                text=f"No changes specified for {full_id[:8]}.",
             )
         ]
-
-    db.update_conversation_metadata(full_id, title=title)
 
     return [
         types.TextContent(
-            type="text", text=f'Updated title for {full_id[:8]}: "{title}"'
+            type="text",
+            text=f"Updated {full_id[:8]}: {', '.join(changes)}",
         )
     ]
 
@@ -379,8 +273,5 @@ async def handle_set_title(arguments: dict, db) -> list[types.TextContent]:
 
 HANDLERS: Dict[str, callable] = {
     "get_conversation": handle_get_conversation,
-    "star_conversation": handle_star_conversation,
-    "pin_conversation": handle_pin_conversation,
-    "archive_conversation": handle_archive_conversation,
-    "set_title": handle_set_title,
+    "update_conversation": handle_update_conversation,
 }
