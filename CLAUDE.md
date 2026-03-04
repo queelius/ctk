@@ -108,7 +108,7 @@ Auto-discovers importers/exporters in `ctk/integrations/`. Registry pattern with
 
 **Fluent Python API** (`ctk/api.py`): `CTK` class with builder pattern — `CTK("db.db").search("python").limit(10).get()`
 
-**MCP Server** (`ctk/interfaces/mcp/`): Modular MCP server with handler modules for search, conversation, metadata, and analysis (semantic search, similarity, clustering). 13 tools total. Entry point: `python -m ctk.mcp_server` (thin wrapper). Handlers in `ctk/interfaces/mcp/handlers/`.
+**MCP Server** (`ctk/interfaces/mcp/`): Modular MCP server with handler modules for search, conversation, metadata, analysis, and SQL. 7 tools total: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar`, `semantic_search`, `execute_sql`. Entry point: `python -m ctk.mcp_server` (thin wrapper). Handlers in `ctk/interfaces/mcp/handlers/`.
 
 **View System** (`ctk/core/views.py`): YAML-based named collections. Selection types: `ITEMS`, `QUERY`, `SQL`, `UNION/INTERSECT/SUBTRACT`. CLI: `ctk view create/list/show/eval`.
 
@@ -158,8 +158,9 @@ starred = to_bool(starred_val) if starred_val is not None else None
 - Unit tests in `tests/unit/`, integration tests in `tests/integration/`
 - ~2300 unit tests pass, 1 pre-existing failure (test_taggers)
 - 9 integration test failures (pre-existing, old CLI command names)
-- Coverage threshold: 59% (enforced in pytest.ini via `--cov-fail-under=59`)
+- Coverage threshold: 59% (enforced in pytest.ini via `--cov-fail-under=59`, config in `.coveragerc`)
 - Well-tested modules: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)
+- Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key` — skip with `-m "not requires_ollama"`
 
 ### Release Process
 - Version bumps: `ctk/__init__.py`, `setup.py`, `CITATION.cff`
