@@ -4,6 +4,7 @@ Based on copikit approach for finding and parsing chat sessions
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
@@ -14,6 +15,8 @@ from typing import Any, Dict, List, Optional
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
+
+logger = logging.getLogger(__name__)
 
 
 class CopilotImporter(ImporterPlugin):
@@ -136,7 +139,7 @@ class CopilotImporter(ImporterPlugin):
                             if conv:
                                 conversations.append(conv)
                     except Exception as e:
-                        print(f"Error reading {session_file}: {e}")
+                        logger.error("Error reading %s: %s", session_file, e)
 
             # Also look for editing sessions if needed (future enhancement)
             edit_dir = ws_dir / "chatEditingSessions"
@@ -190,7 +193,7 @@ class CopilotImporter(ImporterPlugin):
 
             conn.close()
         except Exception as e:
-            print(f"Error reading database {db_path}: {e}")
+            logger.error("Error reading database %s: %s", db_path, e)
 
         return conversations
 

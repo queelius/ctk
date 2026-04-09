@@ -2,11 +2,14 @@
 OpenAI-based auto-tagger
 """
 
+import logging
 from typing import Optional
 
 import requests
 
 from ctk.integrations.taggers.base import BaseLLMTagger
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAITagger(BaseLLMTagger):
@@ -21,7 +24,7 @@ class OpenAITagger(BaseLLMTagger):
     def call_api(self, prompt: str) -> Optional[str]:
         """Call OpenAI API"""
         if not self.api_key:
-            print(
+            logger.error(
                 "OpenAI API key not set. Set OPENAI_API_KEY environment variable or add to ~/.ctk/config.json"
             )
             return None
@@ -55,12 +58,12 @@ class OpenAITagger(BaseLLMTagger):
                 error_msg = (
                     response.json().get("error", {}).get("message", response.text)
                 )
-                print(f"OpenAI API error: {error_msg}")
+                logger.error("OpenAI API error: %s", error_msg)
 
         except requests.exceptions.Timeout:
-            print(f"OpenAI API timeout after {self.timeout} seconds")
+            logger.error("OpenAI API timeout after %s seconds", self.timeout)
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            logger.error("OpenAI API error: %s", e)
 
         return None
 

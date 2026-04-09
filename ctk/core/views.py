@@ -1096,8 +1096,6 @@ class ViewEvaluator:
 
         elif op == "intersect":
             # Intersection: only conversations in ALL views
-            if not evaluated_views:
-                return []
             id_sets = [
                 set(item.conversation.id for item in ev.items) for ev in evaluated_views
             ]
@@ -1114,8 +1112,6 @@ class ViewEvaluator:
 
         elif op == "subtract":
             # Difference: A - B - C - ...
-            if not evaluated_views:
-                return []
             base_convs = {
                 item.conversation.id: item.conversation
                 for item in evaluated_views[0].items
