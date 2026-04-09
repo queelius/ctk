@@ -1806,7 +1806,7 @@ class ConversationDB:
 
         # Update title
         if not new_title:
-            new_title = f"Copy of {original.title}"
+            new_title = f"{original.title} (copy)" if original.title else "(copy)"
         original.title = new_title
 
         # Update ID
@@ -2020,67 +2020,6 @@ class ConversationDB:
                 return True
 
             return False
-
-    def duplicate_conversation(self, conversation_id: str) -> Optional[str]:
-        """
-        Deep copy a conversation with a new auto-generated UUID.
-
-        Args:
-            conversation_id: ID of conversation to duplicate
-
-        Returns:
-            New conversation ID if successful, None otherwise
-        """
-        with self.session_scope() as session:
-            # Get original conversation
-            original = session.get(ConversationModel, conversation_id)
-            if not original:
-                return None
-
-            # Generate new UUID
-            import uuid
-
-            new_id = str(uuid.uuid4())
-
-            # Create new conversation model
-            new_conv = ConversationModel(
-                id=new_id,
-                title=f"{original.title} (copy)" if original.title else None,
-                source=original.source,
-                model=original.model,
-                project=original.project,
-                created_at=datetime.now(),
-                updated_at=datetime.now(),
-                starred=False,  # Don't copy starred status
-                pinned=False,  # Don't copy pinned status
-                archived=False,  # Don't copy archived status
-                starred_at=None,
-                pinned_at=None,
-                archived_at=None,
-            )
-
-            # Copy all messages
-            for msg in original.messages:
-                new_msg = MessageModel(
-                    id=str(uuid.uuid4()),
-                    conversation_id=new_id,
-                    role=msg.role,
-                    content=msg.content,
-                    parent_id=msg.parent_id,
-                    timestamp=msg.timestamp,
-                    model=msg.model,
-                    metadata_=msg.metadata_,
-                )
-                new_conv.messages.append(new_msg)
-
-            # Copy all tags
-            for tag in original.tags:
-                new_conv.tags.append(tag)
-
-            session.add(new_conv)
-            session.commit()
-
-            return new_id
 
     def update_conversation_metadata(
         self,

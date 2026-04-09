@@ -889,50 +889,8 @@ class TestJSONLImportData:
         assert "content" not in msg.metadata
 
 
-# ---------------------------------------------------------------------------
-# TestJSONLTimestampParsing
-# ---------------------------------------------------------------------------
-class TestJSONLTimestampParsing:
-    """Tests for JSONLImporter._parse_timestamp()"""
-
-    def setup_method(self):
-        self.importer = JSONLImporter()
-
-    @pytest.mark.unit
-    def test_parse_unix_int_timestamp(self):
-        """Integer Unix timestamp is parsed correctly."""
-        result = self.importer._parse_timestamp(1700000000)
-        assert result == datetime.fromtimestamp(1700000000)
-
-    @pytest.mark.unit
-    def test_parse_unix_float_timestamp(self):
-        """Float Unix timestamp is parsed correctly."""
-        result = self.importer._parse_timestamp(1700000000.123)
-        assert result == datetime.fromtimestamp(1700000000.123)
-
-    @pytest.mark.unit
-    def test_parse_iso_string_timestamp(self):
-        """ISO-format string timestamp is parsed correctly."""
-        result = self.importer._parse_timestamp("2024-06-15T10:30:00")
-        assert result == datetime(2024, 6, 15, 10, 30, 0)
-
-    @pytest.mark.unit
-    def test_parse_invalid_string_returns_none(self):
-        """Non-ISO string returns None."""
-        result = self.importer._parse_timestamp("not-a-date")
-        assert result is None
-
-    @pytest.mark.unit
-    def test_parse_none_returns_none(self):
-        """None input returns None."""
-        result = self.importer._parse_timestamp(None)
-        assert result is None
-
-    @pytest.mark.unit
-    def test_parse_overflow_int_returns_none(self):
-        """Extremely large int that overflows returns None."""
-        result = self.importer._parse_timestamp(99999999999999)
-        assert result is None
+# Timestamp parsing is delegated to ctk.core.utils.parse_timestamp,
+# whose tests live in tests/unit/test_utils.py.
 
 
 # ---------------------------------------------------------------------------

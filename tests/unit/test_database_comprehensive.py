@@ -762,9 +762,6 @@ class TestDuplicateConversation:
     """Test conversation duplication"""
 
     @pytest.mark.unit
-    @pytest.mark.skip(
-        reason="duplicate_conversation has a bug - uses starred/pinned/archived instead of starred_at/pinned_at/archived_at"
-    )
     def test_duplicate_conversation(self, temp_db, sample_conversation):
         """Test duplicating a conversation"""
         temp_db.save_conversation(sample_conversation)

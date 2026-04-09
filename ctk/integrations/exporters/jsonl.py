@@ -39,16 +39,7 @@ class JSONLExporter(ExporterPlugin):
 
         for conv in conversations:
             # Get the linear path based on selection
-            if path_selection == "longest":
-                messages = conv.get_longest_path()
-            elif path_selection == "first":
-                paths = conv.get_all_paths()
-                messages = paths[0] if paths else []
-            elif path_selection == "last":
-                paths = conv.get_all_paths()
-                messages = paths[-1] if paths else []
-            else:
-                messages = conv.get_longest_path()
+            messages = self.select_path(conv, path_selection)
 
             if format_type == "messages":
                 # Standard messages format

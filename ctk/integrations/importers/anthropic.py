@@ -77,7 +77,11 @@ class AnthropicImporter(ImporterPlugin):
             "claude-instant": "Claude Instant",
         }
 
-        for key, value in model_map.items():
+        # Sort by key length DESC so specific prefixes (claude-3-opus) match
+        # before generic ones (claude-3). See CLAUDE.md for the gotcha.
+        sorted_map = sorted(model_map.items(), key=lambda kv: len(kv[0]), reverse=True)
+
+        for key, value in sorted_map:
             if key in model.lower():
                 return value
 
@@ -85,7 +89,7 @@ class AnthropicImporter(ImporterPlugin):
         messages = conv_data.get("messages", [])
         for msg in messages:
             if "model" in msg:
-                for key, value in model_map.items():
+                for key, value in sorted_map:
                     if key in msg["model"].lower():
                         return value
 

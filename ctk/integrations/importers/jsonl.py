@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
 
 
 class JSONLImporter(ImporterPlugin):
@@ -299,9 +300,9 @@ class JSONLImporter(ImporterPlugin):
                 # Extract timestamp if available
                 timestamp = None
                 if "timestamp" in msg_data:
-                    timestamp = self._parse_timestamp(msg_data["timestamp"])
+                    timestamp = parse_timestamp(msg_data["timestamp"])
                 elif "created_at" in msg_data:
-                    timestamp = self._parse_timestamp(msg_data["created_at"])
+                    timestamp = parse_timestamp(msg_data["created_at"])
 
                 # Create message
                 message = Message(
@@ -325,18 +326,3 @@ class JSONLImporter(ImporterPlugin):
 
         return conversations
 
-    def _parse_timestamp(self, timestamp: Any) -> Optional[datetime]:
-        """Parse timestamp from various formats"""
-        if isinstance(timestamp, (int, float)):
-            try:
-                return datetime.fromtimestamp(timestamp)
-            except (ValueError, OSError, OverflowError):
-                return None
-
-        if isinstance(timestamp, str):
-            try:
-                return datetime.fromisoformat(timestamp)
-            except (ValueError, TypeError):
-                return None
-
-        return None

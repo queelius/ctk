@@ -132,7 +132,7 @@ class JSONExporter(ExporterPlugin):
                     exported_conversations.append(conv_data)
             else:
                 # Export selected path
-                path = self._select_path(conv, path_selection)
+                path = self.select_path(conv, path_selection)
                 conv_data = {
                     "title": conv.title,
                     "messages": self._messages_to_openai_format(path),
@@ -162,7 +162,7 @@ class JSONExporter(ExporterPlugin):
                     }
                     data["conversations"].append(conv_data)
             else:
-                path = self._select_path(conv, path_selection)
+                path = self.select_path(conv, path_selection)
                 conv_data = {
                     "uuid": conv.id,
                     "name": conv.title,
@@ -214,7 +214,7 @@ class JSONExporter(ExporterPlugin):
                     base_data["paths"].append(path_data)
             else:
                 # Single path
-                path = self._select_path(conv, path_selection)
+                path = self.select_path(conv, path_selection)
                 base_data["messages"] = self._messages_to_generic_format(path)
 
             exported_conversations.append(base_data)
@@ -391,19 +391,6 @@ class JSONExporter(ExporterPlugin):
             MessageRole.TOOL_RESULT: "tool_result",
         }
         return mapping.get(role, "human")
-
-    def _select_path(self, conv: ConversationTree, selection: str) -> List[Message]:
-        """Select a path based on strategy"""
-        if selection == "longest":
-            return conv.get_longest_path()
-        elif selection == "first":
-            paths = conv.get_all_paths()
-            return paths[0] if paths else []
-        elif selection == "last":
-            paths = conv.get_all_paths()
-            return paths[-1] if paths else []
-        else:
-            return conv.get_longest_path()
 
     def _json_serial(self, obj):
         """JSON serializer for objects not serializable by default"""

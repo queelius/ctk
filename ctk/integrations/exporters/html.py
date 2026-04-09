@@ -2948,7 +2948,7 @@ function renderSearchResults(results, query) {
         snippet.className = 'search-result-snippet';
         const firstMatch = result.matches[0];
         const text = firstMatch.text.substring(0, 200);
-        snippet.innerHTML = highlightText(text, query);
+        appendHighlightedText(snippet, text, query);
         div.appendChild(snippet);
 
         div.addEventListener('click', () => {
@@ -2960,9 +2960,37 @@ function renderSearchResults(results, query) {
     }
 }
 
-function highlightText(text, query) {
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<span class="highlight">$1</span>');
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function appendHighlightedText(container, text, query) {
+    // Safe DOM-based highlighting: never injects user input into HTML.
+    container.textContent = '';
+    if (!query) {
+        container.textContent = text;
+        return;
+    }
+    const pattern = new RegExp(escapeRegex(query), 'gi');
+    const matches = Array.from(text.matchAll(pattern));
+    if (matches.length === 0) {
+        container.textContent = text;
+        return;
+    }
+    let cursor = 0;
+    for (const m of matches) {
+        if (m.index > cursor) {
+            container.appendChild(document.createTextNode(text.slice(cursor, m.index)));
+        }
+        const span = document.createElement('span');
+        span.className = 'highlight';
+        span.textContent = m[0];
+        container.appendChild(span);
+        cursor = m.index + m[0].length;
+    }
+    if (cursor < text.length) {
+        container.appendChild(document.createTextNode(text.slice(cursor)));
+    }
 }
 
 // ==================== Browse ====================

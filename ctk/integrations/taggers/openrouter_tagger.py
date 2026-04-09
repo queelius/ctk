@@ -2,11 +2,14 @@
 OpenRouter-based auto-tagger (supports many models)
 """
 
+import logging
 from typing import Optional
 
 import requests
 
 from ctk.integrations.taggers.base import BaseLLMTagger
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterTagger(BaseLLMTagger):
@@ -21,7 +24,7 @@ class OpenRouterTagger(BaseLLMTagger):
     def call_api(self, prompt: str) -> Optional[str]:
         """Call OpenRouter API"""
         if not self.api_key:
-            print(
+            logger.error(
                 "OpenRouter API key not set. Set OPENROUTER_API_KEY environment variable or add to ~/.ctk/config.json"
             )
             return None
@@ -57,12 +60,12 @@ class OpenRouterTagger(BaseLLMTagger):
                 error_msg = (
                     response.json().get("error", {}).get("message", response.text)
                 )
-                print(f"OpenRouter API error: {error_msg}")
+                logger.error("OpenRouter API error: %s", error_msg)
 
         except requests.exceptions.Timeout:
-            print(f"OpenRouter API timeout after {self.timeout} seconds")
+            logger.error("OpenRouter API timeout after %s seconds", self.timeout)
         except Exception as e:
-            print(f"OpenRouter API error: {e}")
+            logger.error("OpenRouter API error: %s", e)
 
         return None
 

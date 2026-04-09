@@ -271,16 +271,7 @@ class HugoExporter(ExporterPlugin):
         lines = []
 
         # Get messages in order
-        if path_selection == "longest":
-            path = conv.get_longest_path()
-        elif path_selection == "first":
-            paths = conv.get_all_paths()
-            path = paths[0] if paths else []
-        elif path_selection == "last":
-            paths = conv.get_all_paths()
-            path = paths[-1] if paths else []
-        else:
-            path = conv.get_longest_path()
+        path = self.select_path(conv, path_selection)
 
         # Check if conversation has branches
         has_branches = len(conv.get_all_paths()) > 1

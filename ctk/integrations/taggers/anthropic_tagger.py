@@ -2,11 +2,14 @@
 Anthropic Claude-based auto-tagger
 """
 
+import logging
 from typing import Optional
 
 import requests
 
 from ctk.integrations.taggers.base import BaseLLMTagger
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicTagger(BaseLLMTagger):
@@ -21,7 +24,7 @@ class AnthropicTagger(BaseLLMTagger):
     def call_api(self, prompt: str) -> Optional[str]:
         """Call Anthropic API"""
         if not self.api_key:
-            print(
+            logger.error(
                 "Anthropic API key not set. Set ANTHROPIC_API_KEY environment variable or add to ~/.ctk/config.json"
             )
             return None
@@ -50,12 +53,12 @@ class AnthropicTagger(BaseLLMTagger):
                 error_msg = (
                     response.json().get("error", {}).get("message", response.text)
                 )
-                print(f"Anthropic API error: {error_msg}")
+                logger.error("Anthropic API error: %s", error_msg)
 
         except requests.exceptions.Timeout:
-            print(f"Anthropic API timeout after {self.timeout} seconds")
+            logger.error("Anthropic API timeout after %s seconds", self.timeout)
         except Exception as e:
-            print(f"Anthropic API error: {e}")
+            logger.error("Anthropic API error: %s", e)
 
         return None
 

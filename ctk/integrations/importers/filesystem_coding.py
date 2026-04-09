@@ -3,6 +3,7 @@ Filesystem-based importer for coding agent conversations
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
@@ -14,6 +15,8 @@ from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
+
+logger = logging.getLogger(__name__)
 
 
 class FilesystemCodingImporter(ImporterPlugin):
@@ -138,7 +141,7 @@ class FilesystemCodingImporter(ImporterPlugin):
 
                 conn.close()
             except Exception as e:
-                print(f"Error reading {db_path}: {e}")
+                logger.error("Error reading %s: %s", db_path, e)
 
         # Also look for JSON files
         json_paths = list(path.glob("**/*conversation*.json")) + list(
@@ -159,7 +162,7 @@ class FilesystemCodingImporter(ImporterPlugin):
                         if conv:
                             conversations.append(conv)
             except Exception as e:
-                print(f"Error reading {json_path}: {e}")
+                logger.error("Error reading %s: %s", json_path, e)
 
         return conversations
 
@@ -299,24 +302,33 @@ class FilesystemCodingImporter(ImporterPlugin):
 
                 conn.close()
             except Exception as e:
-                print(f"Error reading Cursor database: {e}")
+                logger.error("Error reading Cursor database: %s", e)
 
         return conversations
 
     def _parse_cursor_conversation(self, row: Any) -> Optional[ConversationTree]:
-        """Parse Cursor conversation data"""
-        # Implementation would depend on Cursor's actual format
-        # This is a placeholder
+        """Parse Cursor conversation data (stub — format not yet supported)."""
+        logger.warning(
+            "Cursor row parser is a stub; row skipped. File an issue with a sample export to add support."
+        )
         return None
 
     def _import_claude_code(self, path: Path) -> List[ConversationTree]:
-        """Import Claude Code conversations"""
-        # Would implement based on Claude Code's storage format
+        """Import Claude Code conversations (stub — format not yet supported)."""
+        logger.warning(
+            "Claude Code importer is a stub and returned no conversations (path=%s). "
+            "File an issue with a sample export to add support.",
+            path,
+        )
         return []
 
     def _import_codeium(self, path: Path) -> List[ConversationTree]:
-        """Import Codeium conversations"""
-        # Would implement based on Codeium's storage format
+        """Import Codeium conversations (stub — format not yet supported)."""
+        logger.warning(
+            "Codeium importer is a stub and returned no conversations (path=%s). "
+            "File an issue with a sample export to add support.",
+            path,
+        )
         return []
 
     def _import_generic(self, path: Path) -> List[ConversationTree]:

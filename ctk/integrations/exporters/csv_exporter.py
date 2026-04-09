@@ -7,6 +7,23 @@ from typing import Any, List
 from ctk.core.models import ConversationTree
 from ctk.core.plugin import ExporterPlugin
 
+# Cell prefixes that spreadsheet apps (Excel, Google Sheets, LibreOffice)
+# interpret as formulas. A cell that begins with one of these can trigger
+# command execution or data exfiltration when opened.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell(value: Any) -> Any:
+    """Neutralise potential CSV formula-injection prefixes.
+
+    Non-string values pass through unchanged; strings starting with a
+    formula prefix get a leading single quote so spreadsheets treat them
+    as literal text.
+    """
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 class CSVExporter(ExporterPlugin):
     """Export conversations as CSV/TSV files for spreadsheets and data analysis."""
@@ -73,13 +90,13 @@ class CSVExporter(ExporterPlugin):
             writer.writerow(
                 [
                     conv.id,
-                    conv.title or "",
-                    meta.source or "",
-                    meta.model or "",
+                    _safe_cell(conv.title or ""),
+                    _safe_cell(meta.source or ""),
+                    _safe_cell(meta.model or ""),
                     meta.created_at.isoformat() if meta.created_at else "",
                     meta.updated_at.isoformat() if meta.updated_at else "",
                     len(conv.message_map),
-                    ";".join(meta.tags) if meta.tags else "",
+                    _safe_cell(";".join(meta.tags) if meta.tags else ""),
                     "true" if meta.starred_at else "false",
                     "true" if meta.pinned_at else "false",
                     "true" if meta.archived_at else "false",
@@ -100,7 +117,7 @@ class CSVExporter(ExporterPlugin):
         writer.writerow(headers)
 
         for conv in conversations:
-            path = self._select_path(conv, path_selection)
+            path = self.select_path(conv, path_selection)
 
             for msg in path:
                 content = (
@@ -111,27 +128,15 @@ class CSVExporter(ExporterPlugin):
                 writer.writerow(
                     [
                         conv.id,
-                        conv.title or "",
+                        _safe_cell(conv.title or ""),
                         msg.id,
                         msg.role.value if hasattr(msg.role, "value") else str(msg.role),
-                        content,
+                        _safe_cell(content),
                         msg.timestamp.isoformat() if msg.timestamp else "",
                         msg.parent_id or "",
                     ]
                 )
 
-    def _select_path(self, conv, path_selection):
-        """Select a message path based on the path_selection strategy."""
-        if path_selection == "longest":
-            return conv.get_longest_path()
-        elif path_selection == "first":
-            paths = conv.get_all_paths()
-            return paths[0] if paths else []
-        elif path_selection == "last":
-            paths = conv.get_all_paths()
-            return paths[-1] if paths else []
-        else:
-            return conv.get_longest_path()
 
 
 # Register the exporter

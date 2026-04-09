@@ -2,11 +2,14 @@
 Ollama-based auto-tagger
 """
 
+import logging
 from typing import Optional
 
 import requests
 
 from ctk.integrations.taggers.base import BaseLLMTagger
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaTagger(BaseLLMTagger):
@@ -38,15 +41,17 @@ class OllamaTagger(BaseLLMTagger):
                 result = response.json()
                 return result.get("response", "")
             else:
-                print(f"Ollama API error: {response.status_code} - {response.text}")
+                logger.error("Ollama API error: %s - %s", response.status_code, response.text)
 
         except requests.exceptions.ConnectionError:
-            print(f"Could not connect to Ollama at {self.base_url}")
-            print("Make sure Ollama is running (ollama serve)")
+            logger.error(
+                "Could not connect to Ollama at %s. Make sure Ollama is running (ollama serve)",
+                self.base_url,
+            )
         except requests.exceptions.Timeout:
-            print(f"Ollama API timeout after {self.timeout} seconds")
+            logger.error("Ollama API timeout after %s seconds", self.timeout)
         except Exception as e:
-            print(f"Ollama API error: {e}")
+            logger.error("Ollama API error: %s", e)
 
         return None
 

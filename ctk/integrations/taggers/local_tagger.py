@@ -2,11 +2,14 @@
 Local LLM auto-tagger (OpenAI-compatible endpoints)
 """
 
+import logging
 from typing import Optional
 
 import requests
 
 from ctk.integrations.taggers.base import BaseLLMTagger
+
+logger = logging.getLogger(__name__)
 
 
 class LocalTagger(BaseLLMTagger):
@@ -59,7 +62,7 @@ class LocalTagger(BaseLLMTagger):
             except (requests.exceptions.RequestException, ValueError):
                 pass
 
-        print(f"Could not connect to local LLM at {self.base_url}")
+        logger.error("Could not connect to local LLM at %s", self.base_url)
         return None
 
     def check_connection(self) -> bool:

@@ -218,7 +218,7 @@ class MarkdownExporter(ExporterPlugin):
                             output.write("\n#### Alternative Path\n\n")
                         self._write_conversation_path(output, path, include_timestamps)
                 else:
-                    path = self._select_path(conv, path_selection)
+                    path = self.select_path(conv, path_selection)
                     self._write_conversation_path(output, path, include_timestamps)
 
         content = output.getvalue()
@@ -385,19 +385,6 @@ class MarkdownExporter(ExporterPlugin):
             if len(children) > 1:
                 return True
         return False
-
-    def _select_path(self, conv: ConversationTree, selection: str) -> List[Message]:
-        """Select a path based on strategy"""
-        if selection == "longest":
-            return conv.get_longest_path()
-        elif selection == "first":
-            paths = conv.get_all_paths()
-            return paths[0] if paths else []
-        elif selection == "last":
-            paths = conv.get_all_paths()
-            return paths[-1] if paths else []
-        else:
-            return conv.get_longest_path()
 
     def _get_role_emoji(self, role: MessageRole) -> str:
         """Get emoji for message role"""

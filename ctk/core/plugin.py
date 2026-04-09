@@ -314,6 +314,27 @@ class ExporterPlugin(BasePlugin):
         """Export ConversationTree objects to target format"""
         pass
 
+    @staticmethod
+    def select_path(conv: ConversationTree, selection: str = "longest") -> List[Any]:
+        """Select a linear message path from a (possibly branching) conversation.
+
+        Args:
+            conv: Conversation to extract a path from.
+            selection: ``"longest"`` (default), ``"first"``, or ``"last"``.
+                Unknown values fall back to ``"longest"``.
+
+        Returns:
+            List of Message objects along the chosen path (possibly empty).
+        """
+        if selection == "first":
+            paths = conv.get_all_paths()
+            return paths[0] if paths else []
+        if selection == "last":
+            paths = conv.get_all_paths()
+            return paths[-1] if paths else []
+        # "longest" and any unknown value fall through to the longest path
+        return conv.get_longest_path()
+
     def export_to_file(
         self, conversations: List[ConversationTree], file_path: str, **kwargs
     ) -> None:
