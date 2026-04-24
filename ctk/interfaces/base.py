@@ -249,10 +249,28 @@ class BaseInterface(ABC):
         return query
 
     def handle_error(self, exception: Exception) -> InterfaceResponse:
-        """Standard error handling"""
+        """Standard error handling.
+
+        Logs the full exception (including traceback) server-side, but
+        returns only an opaque message + the exception class name to the
+        client. This prevents leaking SQL error text, file paths, or
+        schema details to network clients.
+
+        If you want the raw text in the response for local debugging,
+        set the ``CTK_REST_DEBUG_ERRORS`` env var to a truthy value.
+        """
+        import os
+
         self.logger.error(
             f"Error in {self.__class__.__name__}: {str(exception)}", exc_info=True
         )
-        return InterfaceResponse.error(
-            message=f"An error occurred: {str(exception)}", errors=[str(exception)]
+        debug = os.environ.get("CTK_REST_DEBUG_ERRORS", "").lower() in (
+            "1", "true", "yes", "on",
         )
+        if debug:
+            public_message = f"An error occurred: {exception}"
+            public_errors = [str(exception)]
+        else:
+            public_message = "An internal error occurred."
+            public_errors = [exception.__class__.__name__]
+        return InterfaceResponse.error(message=public_message, errors=public_errors)
