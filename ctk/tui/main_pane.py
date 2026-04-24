@@ -95,9 +95,11 @@ class ChatInput(TextArea):
         super().__init__(id="input-area", language=None, show_line_numbers=False)
 
     def _on_key(self, event) -> None:
-        # Enter submits, shift+enter inserts newline. TextArea's default
-        # behavior inserts a newline on Enter, so we intercept first.
-        if event.key == "enter" and not event.shift:
+        # Textual encodes modifier combos in the key string itself:
+        # plain "enter" submits; "shift+enter" (or ctrl+enter) inserts a
+        # newline via TextArea's default handler. The Key event has no
+        # `.shift` attribute — rely on the string key instead.
+        if event.key == "enter":
             text = self.text.strip()
             if text:
                 event.stop()
@@ -105,7 +107,8 @@ class ChatInput(TextArea):
                 self.post_message(self.Submitted(self, text))
                 self.clear()
                 return
-        # Fall through to TextArea's default handler for everything else.
+        # Fall through to TextArea's default handler for everything else
+        # (including shift+enter, which inserts a newline).
 
 
 class MainPane(Vertical):

@@ -110,3 +110,26 @@ async def test_search_filters_sidebar(seeded_db):
         app.sidebar.refresh_list(search=app._search_input.value)
         await pilot.pause()
         assert app.sidebar._table.row_count == 0
+
+
+async def test_enter_key_does_not_crash_on_textual_key_event(seeded_db):
+    """Regression: Textual Key events have no `.shift` attribute.
+
+    An earlier version of ChatInput._on_key read `event.shift` which
+    raised AttributeError on every real keystroke, crashing the TUI the
+    moment a user pressed Enter in the input.
+    """
+    _, db = seeded_db
+    from ctk.tui.app import CTKApp
+
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Move focus to the chat input (empty buffer keeps us out of the
+        # submit branch, but exercises the attribute access path).
+        assert app.main is not None
+        app.main.input.focus()
+        await pilot.pause()
+        # This press would previously raise AttributeError.
+        await pilot.press("enter")
+        await pilot.pause()

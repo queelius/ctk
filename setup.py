@@ -56,4 +56,9 @@ setup(
         ],
     },
     include_package_data=True,
+    package_data={
+        # Textual reads styles.tcss via CSS_PATH at runtime, so it must
+        # ride along in the wheel even though it's not a .py file.
+        "ctk.tui": ["*.tcss"],
+    },
 )
