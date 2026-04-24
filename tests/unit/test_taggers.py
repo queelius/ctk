@@ -1,15 +1,18 @@
-"""
-Unit tests for taggers
+"""Unit tests for the two taggers that ship with ctk.
+
+Earlier versions shipped OllamaTagger / AnthropicTagger / OpenRouterTagger
+/ LocalTagger; those were removed in 2.10.0 because they all spoke the
+OpenAI chat-completions protocol. OpenAITagger (wrapping the openai SDK)
+now covers every remote endpoint.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
-import responses
 
 from ctk.core.models import (ConversationTree, Message, MessageContent,
                              MessageRole)
-from ctk.taggers.ollama_tagger import OllamaTagger
 from ctk.taggers.openai_tagger import OpenAITagger
 from ctk.taggers.tfidf_tagger import TFIDFTagger
 
@@ -135,177 +138,98 @@ class TestTFIDFTagger:
         assert isinstance(analysis["suggested_tags"], list)
 
 
-class TestOllamaTagger:
-    """Test Ollama-based tagger"""
+def _mock_chat_response(content: str) -> MagicMock:
+    """Build a minimal stand-in for an openai ChatCompletion response.
 
-    @pytest.mark.unit
-    @responses.activate
-    def test_call_api_success(self):
-        """Test successful API call to Ollama"""
-        responses.add(
-            responses.POST,
-            "http://localhost:11434/api/generate",
-            json={"response": '["python", "programming", "api"]'},
-            status=200,
-        )
+    We only touch ``.choices[0].message.content`` in the tagger, so the
+    stand-in can stop at that attribute chain.
+    """
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
 
-        tagger = OllamaTagger(base_url="http://localhost:11434")
-        response = tagger.call_api("Test prompt")
 
-        assert response == '["python", "programming", "api"]'
+def _mock_models_response(ids: list) -> SimpleNamespace:
+    return SimpleNamespace(
+        data=[SimpleNamespace(id=i, created=0, owned_by="test") for i in ids]
+    )
 
-    @pytest.mark.unit
-    @responses.activate
-    def test_call_api_failure(self):
-        """Test handling API failure"""
-        responses.add(responses.POST, "http://localhost:11434/api/generate", status=500)
 
-        tagger = OllamaTagger(base_url="http://localhost:11434")
-        response = tagger.call_api("Test prompt")
+def _patch_openai_client(mock_client: MagicMock):
+    """Patch the openai.OpenAI constructor globally.
 
-        assert response is None
-
-    @pytest.mark.unit
-    @responses.activate
-    def test_check_connection(self):
-        """Test checking Ollama connection"""
-        responses.add(
-            responses.GET,
-            "http://localhost:11434/api/tags",
-            json={"models": []},
-            status=200,
-        )
-
-        tagger = OllamaTagger(base_url="http://localhost:11434")
-        is_connected = tagger.check_connection()
-
-        assert is_connected is True
-
-    @pytest.mark.unit
-    @responses.activate
-    def test_list_models(self):
-        """Test listing available models"""
-        responses.add(
-            responses.GET,
-            "http://localhost:11434/api/tags",
-            json={"models": [{"name": "llama2"}, {"name": "codellama"}]},
-            status=200,
-        )
-
-        tagger = OllamaTagger(base_url="http://localhost:11434")
-        models = tagger.list_models()
-
-        assert "llama2" in models
-        assert "codellama" in models
-
-    @pytest.mark.unit
-    def test_parse_tags_response(self):
-        """Test parsing LLM response for tags"""
-        tagger = OllamaTagger()
-
-        # Test JSON array response
-        response = '["Python", "Machine Learning", "API"]'
-        tags = tagger.parse_tags_response(response)
-
-        assert "python" in tags
-        assert "machine-learning" in tags
-        assert "api" in tags
-
-        # Test comma-separated response
-        response = "python, machine learning, data science"
-        tags = tagger.parse_tags_response(response)
-
-        assert "python" in tags
-        assert "machine-learning" in tags
-        assert "data-science" in tags
-
-        # Test malformed response
-        response = "Some random text without proper format"
-        tags = tagger.parse_tags_response(response)
-        assert isinstance(tags, list)
+    The tagger imports ``from openai import OpenAI`` inside a method,
+    so patching the source module catches every callsite regardless of
+    import timing.
+    """
+    return patch("openai.OpenAI", return_value=mock_client)
 
 
 class TestOpenAITagger:
-    """Test OpenAI-based tagger"""
+    """Tests for the single LLM tagger now that taggers use the openai SDK."""
 
     @pytest.mark.unit
-    @responses.activate
     def test_call_api_success(self):
-        """Test successful API call to OpenAI"""
-        responses.add(
-            responses.POST,
-            "https://api.openai.com/v1/chat/completions",
-            json={
-                "choices": [{"message": {"content": '["python", "api", "testing"]'}}]
-            },
-            status=200,
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _mock_chat_response(
+            '["python", "api", "testing"]'
         )
 
-        tagger = OpenAITagger(api_key="test_key")
-        response = tagger.call_api("Test prompt")
+        with _patch_openai_client(mock_client):
+            tagger = OpenAITagger(api_key="test_key")
+            response = tagger.call_api("Test prompt")
 
         assert response == '["python", "api", "testing"]'
+        # Sanity: we actually talked to the patched SDK.
+        mock_client.chat.completions.create.assert_called_once()
 
     @pytest.mark.unit
-    def test_call_api_no_key(self):
-        """Test API call without API key"""
-        tagger = OpenAITagger(api_key=None)
-        response = tagger.call_api("Test prompt")
+    def test_call_api_error_returns_none(self):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = RuntimeError("boom")
+
+        with _patch_openai_client(mock_client):
+            tagger = OpenAITagger(api_key="test_key")
+            response = tagger.call_api("Test prompt")
 
         assert response is None
 
     @pytest.mark.unit
-    @responses.activate
-    def test_call_api_error(self):
-        """Test handling API error response"""
-        responses.add(
-            responses.POST,
-            "https://api.openai.com/v1/chat/completions",
-            json={"error": {"message": "Invalid API key"}},
-            status=401,
-        )
+    def test_call_api_unexpected_shape_returns_none(self):
+        # A response with no choices trips the AttributeError/IndexError guard.
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = SimpleNamespace(choices=[])
 
-        tagger = OpenAITagger(api_key="invalid_key")
-        response = tagger.call_api("Test prompt")
+        with _patch_openai_client(mock_client):
+            tagger = OpenAITagger(api_key="test_key")
+            response = tagger.call_api("Test prompt")
 
         assert response is None
 
     @pytest.mark.unit
-    @responses.activate
     def test_list_models(self):
-        """Test listing available models"""
-        responses.add(
-            responses.GET,
-            "https://api.openai.com/v1/models",
-            json={"data": [{"id": "gpt-3.5-turbo"}, {"id": "gpt-4"}]},
-            status=200,
+        mock_client = MagicMock()
+        mock_client.models.list.return_value = _mock_models_response(
+            ["gpt-3.5-turbo", "gpt-4"]
         )
 
-        tagger = OpenAITagger(api_key="test_key")
-        models = tagger.list_models()
+        with _patch_openai_client(mock_client):
+            tagger = OpenAITagger(api_key="test_key")
+            models = tagger.list_models()
 
-        assert "gpt-3.5-turbo" in models
-        assert "gpt-4" in models
+        assert models == ["gpt-3.5-turbo", "gpt-4"]
 
     @pytest.mark.unit
-    @responses.activate
     def test_tag_conversation(self, sample_conversation):
-        """Test tagging a conversation"""
-        responses.add(
-            responses.POST,
-            "https://api.openai.com/v1/chat/completions",
-            json={
-                "choices": [
-                    {"message": {"content": '["conversation", "greeting", "chat"]'}}
-                ]
-            },
-            status=200,
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = _mock_chat_response(
+            '["conversation", "greeting", "chat"]'
         )
 
-        tagger = OpenAITagger(api_key="test_key")
-        tags = tagger.tag_conversation(sample_conversation)
+        with _patch_openai_client(mock_client):
+            tagger = OpenAITagger(api_key="test_key")
+            tags = tagger.tag_conversation(sample_conversation)
 
-        assert isinstance(tags, list)
         assert "conversation" in tags
         assert "greeting" in tags
         assert "chat" in tags

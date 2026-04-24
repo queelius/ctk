@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="conversation-tk",
-    version="2.9.0",
+    version="2.10.0",
     author="Alex Towell",
     author_email="lex@metafunctor.com",
     description="A robust toolkit for managing tree-based conversations from multiple sources",
@@ -40,6 +40,7 @@ setup(
         "scikit-learn>=1.3.0",
         "numpy>=1.24.0",
         "textual>=0.50.0",
+        "openai>=1.40.0",
     ],
     extras_require={
         "dev": [

@@ -1,438 +1,319 @@
-"""
-Tests for OpenAI LLM provider.
+"""Tests for the OpenAI-compatible LLM provider.
+
+This file used to mock ``requests`` against the hand-rolled HTTP
+implementation. The provider was rewritten in 2.10.0 to wrap the
+official ``openai`` SDK, so these tests mock the SDK client directly —
+a smaller surface and a more stable contract.
 """
 
-import json
-from unittest.mock import MagicMock, Mock, patch
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
-import requests
 
 from ctk.llm.base import (AuthenticationError, ChatResponse,
-                                       ContextLengthError, LLMProviderError,
-                                       Message, MessageRole,
-                                       ModelNotFoundError, RateLimitError)
+                          ContextLengthError, LLMProviderError, Message,
+                          MessageRole, ModelNotFoundError, RateLimitError)
 from ctk.llm.openai import OpenAIProvider
 
 
+pytestmark = pytest.mark.unit
+
+
+# ---------------------------------------------------------------------------
+# Mock helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_chat_response(
+    content: str,
+    finish_reason: str = "stop",
+    tool_calls=None,
+    model: str = "gpt-3.5-turbo",
+    response_id: str = "resp-1",
+):
+    """Build a stand-in for an openai ChatCompletion response object."""
+    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    choice = SimpleNamespace(message=message, finish_reason=finish_reason)
+    usage = SimpleNamespace(prompt_tokens=5, completion_tokens=7, total_tokens=12)
+    return SimpleNamespace(
+        choices=[choice], model=model, usage=usage, id=response_id
+    )
+
+
+def _make_models_response(ids):
+    return SimpleNamespace(
+        data=[SimpleNamespace(id=i, created=0, owned_by="test") for i in ids]
+    )
+
+
+def _make_chat_stream(chunks):
+    """Yield mock streaming chunks mirroring the openai SDK shape."""
+    for piece in chunks:
+        delta = SimpleNamespace(content=piece)
+        choice = SimpleNamespace(delta=delta, finish_reason=None)
+        yield SimpleNamespace(choices=[choice])
+
+
+@pytest.fixture
+def mock_openai():
+    """Patch ``openai.OpenAI`` to return a MagicMock and yield it."""
+    mock_client = MagicMock()
+    with patch("openai.OpenAI", return_value=mock_client):
+        yield mock_client
+
+
+# ---------------------------------------------------------------------------
+# Initialization
+# ---------------------------------------------------------------------------
+
+
 class TestOpenAIProviderInit:
-    """Test OpenAI provider initialization."""
-
-    def test_init_with_defaults(self):
-        """Test initialization with default values."""
+    def test_defaults(self, mock_openai):
         provider = OpenAIProvider({"api_key": "test-key"})
-
         assert provider.api_key == "test-key"
-        assert provider.base_url == "https://api.openai.com"
+        assert provider.base_url == "https://api.openai.com/v1"
         assert provider.model == "gpt-3.5-turbo"
         assert provider.timeout == 120
 
-    def test_init_with_custom_values(self):
-        """Test initialization with custom configuration."""
+    def test_overrides(self, mock_openai):
         provider = OpenAIProvider(
             {
-                "api_key": "custom-key",
-                "base_url": "https://custom.api.com",
-                "model": "gpt-4",
+                "api_key": "k",
+                "base_url": "http://muse.local:8080/v1",
+                "model": "muse-7b",
                 "timeout": 60,
-                "organization": "org-123",
             }
         )
-
-        assert provider.api_key == "custom-key"
-        assert provider.base_url == "https://custom.api.com"
-        assert provider.model == "gpt-4"
+        assert provider.base_url == "http://muse.local:8080/v1"
+        assert provider.model == "muse-7b"
         assert provider.timeout == 60
-        assert provider.organization == "org-123"
 
-    def test_base_url_trailing_slash_stripped(self):
-        """Test that trailing slash is stripped from base URL."""
-        provider = OpenAIProvider(
-            {
-                "api_key": "key",
-                "base_url": "https://api.example.com/",
-            }
-        )
-
-        assert provider.base_url == "https://api.example.com"
+    def test_missing_api_key_still_constructs(self, mock_openai):
+        # Local endpoints don't enforce auth; the SDK gets a placeholder
+        # so we don't crash in __init__.
+        provider = OpenAIProvider({"base_url": "http://local/v1"})
+        assert provider.api_key is None
 
 
-class TestOpenAIProviderHeaders:
-    """Test header generation."""
-
-    def test_get_headers_basic(self):
-        """Test basic headers without organization."""
-        provider = OpenAIProvider({"api_key": "sk-test123"})
-        headers = provider._get_headers()
-
-        assert headers["Authorization"] == "Bearer sk-test123"
-        assert headers["Content-Type"] == "application/json"
-        assert "OpenAI-Organization" not in headers
-
-    def test_get_headers_with_organization(self):
-        """Test headers with organization."""
-        provider = OpenAIProvider(
-            {
-                "api_key": "sk-test123",
-                "organization": "org-xyz",
-            }
-        )
-        headers = provider._get_headers()
-
-        assert headers["OpenAI-Organization"] == "org-xyz"
+# ---------------------------------------------------------------------------
+# chat()
+# ---------------------------------------------------------------------------
 
 
 class TestOpenAIProviderChat:
-    """Test chat functionality."""
+    def test_returns_chat_response(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_chat_response("hi")
+        provider = OpenAIProvider({"api_key": "k"})
 
-    @pytest.fixture
-    def provider(self):
-        """Create a provider instance."""
-        return OpenAIProvider({"api_key": "test-key", "model": "gpt-4"})
+        response = provider.chat([Message(role=MessageRole.USER, content="hello")])
 
-    @pytest.fixture
-    def mock_response_success(self):
-        """Create a successful mock response."""
-        return {
-            "id": "chatcmpl-123",
-            "object": "chat.completion",
-            "created": 1677858242,
-            "model": "gpt-4",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": "Hello! How can I help you?",
-                    },
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 10,
-                "completion_tokens": 20,
-                "total_tokens": 30,
-            },
+        assert isinstance(response, ChatResponse)
+        assert response.content == "hi"
+        assert response.finish_reason == "stop"
+        assert response.usage == {
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12,
         }
 
-    def test_chat_success(self, provider, mock_response_success):
-        """Test successful chat completion."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = True
-            mock_post.return_value.json.return_value = mock_response_success
+    def test_extracts_tool_calls(self, mock_openai):
+        tool_call = SimpleNamespace(
+            id="tc-1",
+            function=SimpleNamespace(
+                name="get_weather", arguments='{"city": "SF"}'
+            ),
+        )
+        mock_openai.chat.completions.create.return_value = _make_chat_response(
+            "", tool_calls=[tool_call]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
 
-            messages = [Message(role=MessageRole.USER, content="Hello")]
-            response = provider.chat(messages)
+        response = provider.chat([Message(role=MessageRole.USER, content="w?")])
 
-            assert isinstance(response, ChatResponse)
-            assert response.content == "Hello! How can I help you?"
-            assert response.model == "gpt-4"
-            assert response.finish_reason == "stop"
-            assert response.usage["total_tokens"] == 30
+        assert response.tool_calls == [
+            {"id": "tc-1", "name": "get_weather", "arguments": {"city": "SF"}}
+        ]
 
-    def test_chat_requires_api_key(self):
-        """Test that chat raises error without API key."""
-        provider = OpenAIProvider({"model": "gpt-4"})
+    def test_tool_call_with_bad_json_degrades_to_empty_dict(self, mock_openai):
+        tool_call = SimpleNamespace(
+            id="tc-1",
+            function=SimpleNamespace(name="x", arguments="not json"),
+        )
+        mock_openai.chat.completions.create.return_value = _make_chat_response(
+            "", tool_calls=[tool_call]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
 
-        with pytest.raises(AuthenticationError):
-            provider.chat([Message(role=MessageRole.USER, content="Hello")])
+        response = provider.chat([Message(role=MessageRole.USER, content="w?")])
 
-    def test_chat_with_tools(self, provider, mock_response_success):
-        """Test chat with tool definitions."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = True
-            mock_post.return_value.json.return_value = mock_response_success
-
-            messages = [Message(role=MessageRole.USER, content="Search for cats")]
-            tools = [
-                {
-                    "name": "search",
-                    "description": "Search the web",
-                    "input_schema": {"type": "object", "properties": {}},
-                }
-            ]
-
-            provider.chat(messages, tools=tools)
-
-            # Verify tools were passed to API
-            call_args = mock_post.call_args
-            payload = call_args.kwargs["json"]
-            assert "tools" in payload
-            assert payload["tools"][0]["function"]["name"] == "search"
-
-    def test_chat_extracts_tool_calls(self, provider):
-        """Test extraction of tool calls from response."""
-        response_with_tools = {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            {
-                                "id": "call_123",
-                                "type": "function",
-                                "function": {
-                                    "name": "search",
-                                    "arguments": '{"query": "cats"}',
-                                },
-                            }
-                        ],
-                    },
-                    "finish_reason": "tool_calls",
-                }
-            ],
-            "model": "gpt-4",
-        }
-
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = True
-            mock_post.return_value.json.return_value = response_with_tools
-
-            messages = [Message(role=MessageRole.USER, content="Search")]
-            response = provider.chat(messages)
-
-            assert response.tool_calls is not None
-            assert len(response.tool_calls) == 1
-            assert response.tool_calls[0]["name"] == "search"
-            assert response.tool_calls[0]["arguments"] == {"query": "cats"}
+        # We log and fall back to {} rather than raising, so the caller
+        # always gets a structured tool_calls list.
+        assert response.tool_calls == [
+            {"id": "tc-1", "name": "x", "arguments": {}}
+        ]
 
 
-class TestOpenAIProviderErrorHandling:
-    """Test error handling."""
-
-    @pytest.fixture
-    def provider(self):
-        return OpenAIProvider({"api_key": "test-key", "model": "gpt-4"})
-
-    def test_authentication_error(self, provider):
-        """Test handling of 401 authentication errors."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = False
-            mock_post.return_value.status_code = 401
-            mock_post.return_value.json.return_value = {
-                "error": {"message": "Invalid API key"}
-            }
-
-            with pytest.raises(AuthenticationError) as exc_info:
-                provider.chat([Message(role=MessageRole.USER, content="Hi")])
-
-            assert "Invalid API key" in str(exc_info.value)
-
-    def test_rate_limit_error(self, provider):
-        """Test handling of 429 rate limit errors."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = False
-            mock_post.return_value.status_code = 429
-            mock_post.return_value.json.return_value = {
-                "error": {"message": "Rate limit exceeded"}
-            }
-
-            with pytest.raises(RateLimitError):
-                provider.chat([Message(role=MessageRole.USER, content="Hi")])
-
-    def test_model_not_found_error(self, provider):
-        """Test handling of 404 model not found errors."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = False
-            mock_post.return_value.status_code = 404
-            mock_post.return_value.json.return_value = {
-                "error": {"message": "Model not found"}
-            }
-
-            with pytest.raises(ModelNotFoundError):
-                provider.chat([Message(role=MessageRole.USER, content="Hi")])
-
-    def test_context_length_error(self, provider):
-        """Test handling of context length errors."""
-        with patch("requests.post") as mock_post:
-            mock_post.return_value.ok = False
-            mock_post.return_value.status_code = 400
-            mock_post.return_value.json.return_value = {
-                "error": {
-                    "message": "This model's maximum context length is exceeded",
-                    "type": "context_length_exceeded",
-                }
-            }
-
-            with pytest.raises(ContextLengthError):
-                provider.chat([Message(role=MessageRole.USER, content="Hi")])
-
-    def test_connection_error(self, provider):
-        """Test handling of connection errors."""
-        with patch("requests.post") as mock_post:
-            mock_post.side_effect = Exception("Connection failed")
-
-            with pytest.raises(LLMProviderError) as exc_info:
-                provider.chat([Message(role=MessageRole.USER, content="Hi")])
-
-            assert "Unexpected error" in str(exc_info.value)
+# ---------------------------------------------------------------------------
+# stream_chat()
+# ---------------------------------------------------------------------------
 
 
 class TestOpenAIProviderStreamChat:
-    """Test streaming chat functionality."""
+    def test_yields_chunks(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_chat_stream(
+            ["Hel", "lo", "!"]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
 
-    @pytest.fixture
-    def provider(self):
-        return OpenAIProvider({"api_key": "test-key", "model": "gpt-4"})
+        chunks = list(
+            provider.stream_chat([Message(role=MessageRole.USER, content="hi")])
+        )
 
-    def test_stream_chat_yields_chunks(self, provider):
-        """Test that stream_chat yields content chunks."""
-        sse_data = [
-            b'data: {"choices":[{"delta":{"content":"Hello"}}]}',
-            b'data: {"choices":[{"delta":{"content":" world"}}]}',
-            b"data: [DONE]",
-        ]
-
-        with patch("requests.post") as mock_post:
-            mock_response = Mock()
-            mock_response.ok = True
-            mock_response.iter_lines.return_value = iter(sse_data)
-            mock_post.return_value = mock_response
-
-            messages = [Message(role=MessageRole.USER, content="Hi")]
-            chunks = list(provider.stream_chat(messages))
-
-            assert chunks == ["Hello", " world"]
+        assert chunks == ["Hel", "lo", "!"]
 
 
-class TestOpenAIProviderGetModels:
-    """Test model listing functionality."""
-
-    @pytest.fixture
-    def provider(self):
-        return OpenAIProvider({"api_key": "test-key"})
-
-    def test_get_models_filters_chat_models(self, provider):
-        """Test that get_models filters to chat models."""
-        mock_response = {
-            "data": [
-                {"id": "gpt-4", "created": 1234, "owned_by": "openai"},
-                {"id": "gpt-3.5-turbo", "created": 1234, "owned_by": "openai"},
-                {
-                    "id": "davinci-002",
-                    "created": 1234,
-                    "owned_by": "openai",
-                },  # Not a chat model
-                {
-                    "id": "whisper-1",
-                    "created": 1234,
-                    "owned_by": "openai",
-                },  # Audio model
-            ]
-        }
-
-        with patch("requests.get") as mock_get:
-            mock_get.return_value.ok = True
-            mock_get.return_value.json.return_value = mock_response
-
-            models = provider.get_models()
-
-            model_ids = [m.id for m in models]
-            assert "gpt-4" in model_ids
-            assert "gpt-3.5-turbo" in model_ids
-            assert "davinci-002" not in model_ids
-            assert "whisper-1" not in model_ids
-
-    def test_get_models_estimates_context_window(self, provider):
-        """Test context window estimation based on model name."""
-        mock_response = {
-            "data": [
-                {"id": "gpt-4-turbo", "created": 1234, "owned_by": "openai"},
-                {"id": "gpt-4-32k", "created": 1234, "owned_by": "openai"},
-                {"id": "gpt-3.5-turbo-16k", "created": 1234, "owned_by": "openai"},
-            ]
-        }
-
-        with patch("requests.get") as mock_get:
-            mock_get.return_value.ok = True
-            mock_get.return_value.json.return_value = mock_response
-
-            models = provider.get_models()
-
-            model_map = {m.id: m for m in models}
-
-            assert model_map["gpt-4-turbo"].context_window == 128000
-            assert model_map["gpt-4-32k"].context_window == 32000
-            assert model_map["gpt-3.5-turbo-16k"].context_window == 16000
+# ---------------------------------------------------------------------------
+# Error translation
+# ---------------------------------------------------------------------------
 
 
-class TestOpenAIProviderToolFormatting:
-    """Test tool formatting for API."""
+def _instantiate_sdk_exc(cls, msg: str):
+    """Construct a bare SDK exception for raising in tests.
 
-    def test_format_tools_for_api(self):
-        """Test conversion of generic tools to OpenAI format."""
-        provider = OpenAIProvider({"api_key": "key"})
+    The openai SDK exception hierarchy has wildly varying __init__
+    signatures (some need a real httpx.Response, some don't). We skip
+    __init__ entirely via ``__new__`` — the provider only checks
+    ``isinstance`` against the class, not any instance state.
+    """
+    exc = cls.__new__(cls)
+    # Set ``args`` so ``str(exc)`` still renders a useful message.
+    exc.args = (msg,)
+    return exc
+
+
+class TestOpenAIProviderErrorHandling:
+    @pytest.mark.parametrize(
+        "sdk_exc_name, ctk_exc",
+        [
+            ("AuthenticationError", AuthenticationError),
+            ("RateLimitError", RateLimitError),
+            ("NotFoundError", ModelNotFoundError),
+            ("APIConnectionError", LLMProviderError),
+            ("APITimeoutError", LLMProviderError),
+        ],
+    )
+    def test_sdk_exceptions_translate(self, mock_openai, sdk_exc_name, ctk_exc):
+        import openai
+
+        sdk_exc_cls = getattr(openai, sdk_exc_name)
+        mock_openai.chat.completions.create.side_effect = _instantiate_sdk_exc(
+            sdk_exc_cls, "boom"
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+
+        with pytest.raises(ctk_exc):
+            provider.chat([Message(role=MessageRole.USER, content="hi")])
+
+    def test_context_length_in_bad_request(self, mock_openai):
+        import openai
+
+        mock_openai.chat.completions.create.side_effect = _instantiate_sdk_exc(
+            openai.BadRequestError, "context length 8192 exceeded"
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+
+        with pytest.raises(ContextLengthError):
+            provider.chat([Message(role=MessageRole.USER, content="hi")])
+
+
+# ---------------------------------------------------------------------------
+# get_models() + is_available()
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIProviderModels:
+    def test_get_models(self, mock_openai):
+        mock_openai.with_options.return_value = mock_openai
+        mock_openai.models.list.return_value = _make_models_response(
+            ["gpt-4", "gpt-3.5-turbo", "embedding-001"]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+
+        models = provider.get_models()
+        ids = [m.id for m in models]
+
+        # All models are returned; ordering is alphabetical.
+        assert ids == sorted(ids)
+        assert "gpt-4" in ids
+
+    def test_get_models_estimates_context_window(self, mock_openai):
+        mock_openai.with_options.return_value = mock_openai
+        mock_openai.models.list.return_value = _make_models_response(
+            ["gpt-4-turbo", "gpt-3.5-turbo", "custom-local"]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+
+        models = {m.id: m for m in provider.get_models()}
+        assert models["gpt-4-turbo"].context_window == 128_000
+        assert models["gpt-3.5-turbo"].context_window == 4_096
+
+    def test_is_available_true(self, mock_openai):
+        mock_openai.with_options.return_value = mock_openai
+        mock_openai.models.list.return_value = _make_models_response(["gpt-4"])
+        provider = OpenAIProvider({"api_key": "k"})
+        assert provider.is_available() is True
+
+    def test_is_available_false_on_error(self, mock_openai):
+        mock_openai.with_options.return_value = mock_openai
+        mock_openai.models.list.side_effect = RuntimeError("dead")
+        provider = OpenAIProvider({"api_key": "k"})
+        assert provider.is_available() is False
+
+
+# ---------------------------------------------------------------------------
+# Tool formatting helpers
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIProviderToolFormat:
+    def test_format_tools_for_api(self, mock_openai):
+        provider = OpenAIProvider({"api_key": "k"})
 
         tools = [
             {
                 "name": "get_weather",
-                "description": "Get weather for a location",
+                "description": "Fetch weather for a city",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "location": {"type": "string"},
+                    "properties": {"city": {"type": "string"}},
+                },
+            }
+        ]
+        formatted = provider.format_tools_for_api(tools)
+
+        assert formatted == [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Fetch weather for a city",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"city": {"type": "string"}},
                     },
-                    "required": ["location"],
                 },
             }
         ]
 
-        formatted = provider.format_tools_for_api(tools)
-
-        assert len(formatted) == 1
-        assert formatted[0]["type"] == "function"
-        assert formatted[0]["function"]["name"] == "get_weather"
-        assert formatted[0]["function"]["description"] == "Get weather for a location"
-        assert formatted[0]["function"]["parameters"]["type"] == "object"
-
-    def test_format_tool_result_message(self):
-        """Test formatting of tool result as message."""
-        provider = OpenAIProvider({"api_key": "key"})
-
-        result = {"temperature": 72, "conditions": "sunny"}
+    def test_format_tool_result_message(self, mock_openai):
+        provider = OpenAIProvider({"api_key": "k"})
         msg = provider.format_tool_result_message(
-            "get_weather",
-            result,
-            tool_call_id="call_123",
+            "get_weather", {"temp": 72}, tool_call_id="tc-1"
         )
-
         assert msg.role == MessageRole.TOOL
-        assert json.loads(msg.content) == result
-        assert msg.metadata["tool_call_id"] == "call_123"
-
-
-class TestOpenAIProviderAvailability:
-    """Test availability checking."""
-
-    def test_is_available_true(self):
-        """Test is_available returns True when API is accessible."""
-        provider = OpenAIProvider({"api_key": "key"})
-
-        with patch("requests.get") as mock_get:
-            mock_get.return_value.ok = True
-
-            assert provider.is_available() is True
-
-    def test_is_available_false_no_key(self):
-        """Test is_available returns False without API key."""
-        provider = OpenAIProvider({"model": "gpt-4"})
-
-        assert provider.is_available() is False
-
-    def test_is_available_false_on_error(self):
-        """Test is_available returns False on connection error."""
-        provider = OpenAIProvider({"api_key": "key"})
-
-        with patch("requests.get") as mock_get:
-            mock_get.side_effect = requests.exceptions.ConnectionError(
-                "Connection failed"
-            )
-
-            assert provider.is_available() is False
-
-    def test_supports_tool_calling(self):
-        """Test that OpenAI provider supports tool calling."""
-        provider = OpenAIProvider({"api_key": "key"})
-
-        assert provider.supports_tool_calling() is True
+        assert msg.metadata == {"tool_call_id": "tc-1"}
+        # Dict results are JSON-encoded in the message content.
+        assert "72" in msg.content

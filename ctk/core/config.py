@@ -22,30 +22,24 @@ class Config:
 
     DEFAULT_CONFIG_PATH = Path.home() / ".ctk" / "config.json"
 
-    # Default configuration
+    # Default configuration.
+    #
+    # As of 2.10.0 ctk ships a single LLM provider: an OpenAI-compatible
+    # client. Set ``providers.openai.base_url`` to whatever endpoint you
+    # use (real OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM
+    # Studio, Ollama's ``/v1`` route at localhost:11434, etc.).
     DEFAULTS = {
         "providers": {
-            "ollama": {
-                "base_url": "http://localhost:11434",
-                "default_model": "llama2",
-                "timeout": 30,
-            },
             "openai": {
-                "base_url": "https://api.openai.com",
+                "base_url": "https://api.openai.com/v1",
                 "default_model": "gpt-3.5-turbo",
                 "timeout": 30,
             },
-            "anthropic": {
-                "base_url": "https://api.anthropic.com",
-                "default_model": "claude-3-haiku-20240307",
-                "timeout": 30,
-            },
-            # Note: openrouter and local providers removed - use ollama for local models
         },
         "database": {"default_path": "~/.ctk/conversations.db"},
         "tagging": {
             "auto_tag": True,
-            "default_provider": "ollama",
+            "default_provider": "openai",
             "max_tags": 10,
             "use_tfidf": True,
         },
