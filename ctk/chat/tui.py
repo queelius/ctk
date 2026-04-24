@@ -537,15 +537,35 @@ class ChatTUI:
         "unpin": {"usage": "unpin", "desc": "Unpin the current conversation"},
         "fork": {
             "usage": "fork <num>",
-            "desc": "Fork conversation from a message number in current path",
-            "details": "Creates a new conversation starting from the specified message. Use /history to see message numbers.",
+            "desc": "Fork conversation from a message number (truncates subsequent messages)",
+            "details": (
+                "Creates a new conversation under a new ID, starting fresh "
+                "from the specified message. Ancestors are kept so the LLM "
+                "has context, but the descendants and sibling branches are "
+                "pruned. Use /branch instead if you want to keep the full "
+                "tree as siblings. Use /history to see message numbers."
+            ),
             "examples": ["fork 5", "fork 0"],
         },
         "fork-id": {
             "usage": "fork-id <id>",
-            "desc": "Fork conversation from a message by ID",
-            "details": "Accepts full or partial message ID. Use /tree to see message IDs.",
+            "desc": "Fork conversation from a message by ID (truncates)",
+            "details": (
+                "Same as /fork but accepts a full or partial message ID. "
+                "Ancestors are kept; descendants and sibling branches are "
+                "pruned. Use /tree to see message IDs."
+            ),
             "examples": ["fork-id abc123"],
+        },
+        "branch": {
+            "usage": "branch",
+            "desc": "Create a sibling conversation that preserves the full tree",
+            "details": (
+                "Saves the current conversation, assigns a new ID, but keeps "
+                "every message in memory. Chatting next creates a new "
+                "sibling of the current message's subtree. Use /fork instead "
+                "to start fresh from a specific message."
+            ),
         },
         "duplicate": {
             "usage": "duplicate [title]",
@@ -3753,24 +3773,58 @@ Available operations:
         print(f"  Current path preserved: {len(current_path)} messages")
         print(f"  Full tree preserved: {len(self.message_map)} messages")
 
+    def _truncate_tree_to_path(self, target_msg: "TreeMessage") -> None:
+        """Prune the tree so only ancestors and target_msg remain.
+
+        Fork semantics: "start fresh from this point". After calling this,
+        ``message_map`` contains exactly the path from root to target_msg,
+        target_msg has no children, and new messages appended via chat
+        become the first child of target_msg (not siblings to a pre-existing
+        branch).
+
+        If you want the other semantics — keep the full tree, continue
+        from target_msg as a sibling of its original children — use
+        ``branch_conversation`` instead.
+        """
+        kept_ids = {m.id for m in target_msg.get_path_to_root()}
+        self.message_map = {
+            mid: msg for mid, msg in self.message_map.items() if mid in kept_ids
+        }
+        # Re-link each kept message's children list so nothing points at
+        # a pruned subtree.
+        for msg in self.message_map.values():
+            msg.children = [c for c in msg.children if c.id in kept_ids]
+        # target_msg is now a leaf by construction (kept_ids is a strict
+        # ancestor chain + target itself, so target has no kept descendants).
+        # Be explicit anyway in case a duplicate id snuck through.
+        target_msg.children = []
+
     def fork_conversation(self, msg_num: int):
-        """Fork conversation from a specific message number in current path (saves as new conversation)"""
+        """Fork conversation at position ``msg_num`` in the current path.
+
+        Truncates the tree so the new conversation starts fresh from
+        target_msg. Ancestors are kept so the LLM sees the same context,
+        but descendants and sibling branches are removed.
+        """
         current_path = self.get_current_path()
 
         if msg_num < 0 or msg_num >= len(current_path):
             print(f"Error: Message number must be 0-{len(current_path)-1}")
             return
 
-        # Save current conversation if it has an ID
+        # Save current conversation if it has an ID — this preserves the
+        # full original tree before we prune.
         if self.current_conversation_id and self.db:
             print("Saving current conversation...")
             self.save_conversation()
 
-        # Move current position to the specified message
         target_msg = current_path[msg_num]
+
+        # Prune BEFORE changing the conversation id so that any later save
+        # writes only the truncated tree under the new id.
+        self._truncate_tree_to_path(target_msg)
         self.current_message = target_msg
 
-        # Create new conversation ID
         old_id = self.current_conversation_id
         self.current_conversation_id = str(uuid.uuid4())
         old_title = self.conversation_title
@@ -3784,10 +3838,13 @@ Available operations:
         print(f"✓ Forked conversation at message {msg_num}")
         print(f"  New ID: {self.current_conversation_id[:8]}...")
         print(f"  Messages in new path: {len(new_path)}")
-        print(f"  (Full tree preserved: {len(self.message_map)} messages)")
+        print(f"  Tree pruned to path; use /branch to keep full tree")
 
     def fork_conversation_by_id(self, target_id: str):
-        """Fork conversation from a message by ID (full or partial)"""
+        """Fork conversation from a message by ID (full or partial).
+
+        Same truncate semantics as :meth:`fork_conversation`.
+        """
         if not self.root:
             print("Error: No conversation tree")
             return
@@ -3817,10 +3874,10 @@ Available operations:
             print("Saving current conversation...")
             self.save_conversation()
 
-        # Move current position to the specified message
+        # Prune BEFORE changing the conversation id.
+        self._truncate_tree_to_path(target_msg)
         self.current_message = target_msg
 
-        # Create new conversation ID
         old_id = self.current_conversation_id
         self.current_conversation_id = str(uuid.uuid4())
         old_title = self.conversation_title
@@ -3834,7 +3891,7 @@ Available operations:
         print(f"✓ Forked conversation at message {msg_id[:8]}...")
         print(f"  New ID: {self.current_conversation_id[:8]}...")
         print(f"  Messages in new path: {len(new_path)}")
-        print(f"  (Full tree preserved: {len(self.message_map)} messages)")
+        print(f"  Tree pruned to path; use /branch to keep full tree")
 
     def load_file_context(self, filepath: str):
         """Load file content into conversation context"""

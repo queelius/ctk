@@ -13,6 +13,10 @@ from ctk.core import registry
 from ctk.core.models import ConversationTree
 from ctk.interfaces.base import (BaseInterface, InterfaceResponse,
                                  ResponseStatus)
+from ctk.interfaces.rest._validation import (MAX_YAML_BYTES, check_yaml_size,
+                                             clamp_limit, clamp_offset,
+                                             safe_upload_filename,
+                                             validate_export_format)
 
 
 class RestInterface(BaseInterface):
@@ -25,7 +29,10 @@ class RestInterface(BaseInterface):
         self.app = Flask(__name__)
         CORS(self.app)  # Enable CORS for web frontends
 
-        # Configure Flask
+        # Configure Flask. Set a conservative payload cap BEFORE merging
+        # user config so callers can still raise it explicitly if they
+        # need to accept larger uploads.
+        self.app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MiB
         self.app.config.update(config or {})
 
         # Setup routes
@@ -56,8 +63,15 @@ class RestInterface(BaseInterface):
         except Exception as e:
             return self.handle_error(e)
 
-    def run(self, host: str = "0.0.0.0", port: int = 5000, debug: bool = False):
-        """Run the Flask server"""
+    def run(self, host: str = "127.0.0.1", port: int = 5000, debug: bool = False):
+        """Run the Flask server.
+
+        Defaults to 127.0.0.1 because this API ships without
+        authentication; binding to 0.0.0.0 would expose the whole
+        database to the network. Pass ``host="0.0.0.0"`` explicitly if
+        you know you want that (e.g., running inside a trusted
+        container network).
+        """
         self.app.run(host=host, port=port, debug=debug)
 
     def _setup_routes(self):
@@ -71,8 +85,8 @@ class RestInterface(BaseInterface):
         @self.app.route("/api/conversations", methods=["GET"])
         def list_conversations_route():
             """List conversations with pagination and filters"""
-            limit = request.args.get("limit", 100, type=int)
-            offset = request.args.get("offset", 0, type=int)
+            limit = clamp_limit(request.args.get("limit", type=int))
+            offset = clamp_offset(request.args.get("offset", type=int))
             sort_by = request.args.get("sort_by", "updated_at")
 
             filters = {}
@@ -152,14 +166,29 @@ class RestInterface(BaseInterface):
                     else None
                 )
 
-                # Save uploaded file temporarily
+                # Sanitize the user-supplied filename: reject path
+                # separators, special characters, and non-whitelisted
+                # extensions before we interpolate into the temp-file path.
+                try:
+                    _name, suffix = safe_upload_filename(file.filename)
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 400
+
+                # Save uploaded file temporarily. Use an explicit tempdir
+                # so we control cleanup; pass only the sanitized suffix.
+                import os
                 import tempfile
 
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=file.filename
-                ) as tmp:
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                try:
                     file.save(tmp.name)
+                    tmp.close()
                     response = self.import_conversations(tmp.name, format_type, tags)
+                finally:
+                    try:
+                        os.unlink(tmp.name)
+                    except OSError:
+                        pass
 
                 return self._format_response(response)
             else:
@@ -176,7 +205,10 @@ class RestInterface(BaseInterface):
         def export_conversations_route():
             """Export conversations to specified format"""
             data = request.get_json()
-            format_type = data.get("format", "jsonl")
+            try:
+                format_type = validate_export_format(data.get("format"))
+            except ValueError as exc:
+                return jsonify({"error": str(exc)}), 400
             conversation_ids = data.get("conversation_ids")
             filters = data.get("filters", {})
 
@@ -333,8 +365,8 @@ class RestInterface(BaseInterface):
         @self.app.route("/api/tags/<path:tag>/conversations", methods=["GET"])
         def list_conversations_by_tag_route(tag: str):
             """List conversations with a specific tag"""
-            limit = request.args.get("limit", 100, type=int)
-            offset = request.args.get("offset", 0, type=int)
+            limit = clamp_limit(request.args.get("limit", type=int))
+            offset = clamp_offset(request.args.get("offset", type=int))
             response = self.list_conversations_by_tag(tag, limit, offset)
             return self._format_response(response)
 
@@ -358,7 +390,7 @@ class RestInterface(BaseInterface):
         def get_timeline_route():
             """Get conversation timeline/analytics"""
             granularity = request.args.get("granularity", "day")
-            limit = request.args.get("limit", 30, type=int)
+            limit = clamp_limit(request.args.get("limit", type=int), default=30)
             response = self.get_timeline(granularity, limit)
             return self._format_response(response)
 
@@ -404,6 +436,10 @@ class RestInterface(BaseInterface):
             if "yaml" in content_type:
                 # YAML body
                 yaml_content = request.get_data(as_text=True)
+                try:
+                    check_yaml_size(yaml_content)
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 413
                 response = self.create_view_from_yaml(yaml_content)
             else:
                 # JSON body
@@ -426,6 +462,10 @@ class RestInterface(BaseInterface):
             content_type = request.content_type or ""
             if "yaml" in content_type:
                 yaml_content = request.get_data(as_text=True)
+                try:
+                    check_yaml_size(yaml_content)
+                except ValueError as exc:
+                    return jsonify({"error": str(exc)}), 413
                 response = self.update_view_from_yaml(view_name, yaml_content)
             else:
                 data = request.get_json()
