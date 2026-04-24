@@ -658,6 +658,13 @@ def cmd_view(args):
     store = ViewStore(args.db)
     action = args.view_action
 
+    if not action:
+        print(
+            "Error: view subcommand required. Try: "
+            "list, create, show, add, remove, delete, check, eval"
+        )
+        return 1
+
     if action == "list":
         views = store.list_views_detailed()
         if not views:
@@ -871,7 +878,10 @@ def cmd_view(args):
         return 0
 
     else:
-        print(f"Unknown action: {action}")
+        print(
+            f"Unknown view action: {action}. Valid actions: "
+            "list, create, show, add, remove, delete, check, eval"
+        )
         return 1
 
 
