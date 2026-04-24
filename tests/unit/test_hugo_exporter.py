@@ -1,5 +1,5 @@
 """
-Tests for ctk.integrations.exporters.hugo module.
+Tests for ctk.exporters.hugo module.
 
 Tests the Hugo page bundle exporter including:
 - _get_target_dir: Organization strategies (none, tags, source, date)
@@ -18,7 +18,7 @@ import pytest
 
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
-from ctk.integrations.exporters.hugo import HugoExporter
+from ctk.exporters.hugo import HugoExporter
 
 
 @pytest.fixture

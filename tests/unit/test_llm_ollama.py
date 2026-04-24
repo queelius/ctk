@@ -15,10 +15,10 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ctk.integrations.llm.base import (ChatResponse, LLMProviderError, Message,
+from ctk.llm.base import (ChatResponse, LLMProviderError, Message,
                                        MessageRole, ModelInfo,
                                        ModelNotFoundError)
-from ctk.integrations.llm.ollama import OllamaProvider
+from ctk.llm.ollama import OllamaProvider
 
 # ==================== Fixtures ====================
 
@@ -126,7 +126,7 @@ class TestOllamaProviderInitialization:
 class TestOllamaChat:
     """Test chat method behavior."""
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_success(
         self, mock_post, ollama_provider, sample_messages, mock_ollama_chat_response
     ):
@@ -149,7 +149,7 @@ class TestOllamaChat:
         assert response.usage["completion_tokens"] == 10
         assert response.usage["total_tokens"] == 25
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_sends_correct_payload(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -176,7 +176,7 @@ class TestOllamaChat:
         assert payload["options"]["num_predict"] == 100
         assert len(payload["messages"]) == 2
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_with_tools(self, mock_post, ollama_provider, sample_messages):
         """Given tools in kwargs, chat should include them in payload."""
         # Given: Mock response
@@ -198,7 +198,7 @@ class TestOllamaChat:
         assert "tools" in payload
         assert payload["tools"] == tools
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_with_tool_calls_in_response(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -225,7 +225,7 @@ class TestOllamaChat:
         assert response.tool_calls is not None
         assert len(response.tool_calls) == 1
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_connection_error(self, mock_post, ollama_provider, sample_messages):
         """Given connection error, should raise LLMProviderError with helpful message."""
         # Given: Mock connection error
@@ -240,7 +240,7 @@ class TestOllamaChat:
         with pytest.raises(LLMProviderError, match="Cannot connect to Ollama"):
             ollama_provider.chat(sample_messages)
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_timeout_error(self, mock_post, ollama_provider, sample_messages):
         """Given timeout, should raise LLMProviderError."""
         # Given: Mock timeout
@@ -252,7 +252,7 @@ class TestOllamaChat:
         with pytest.raises(LLMProviderError, match="timed out"):
             ollama_provider.chat(sample_messages)
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_model_not_found(self, mock_post, ollama_provider, sample_messages):
         """Given 404 error, should raise ModelNotFoundError."""
         # Given: Mock 404 error
@@ -269,7 +269,7 @@ class TestOllamaChat:
         with pytest.raises(ModelNotFoundError, match="not found"):
             ollama_provider.chat(sample_messages)
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_chat_http_error(self, mock_post, ollama_provider, sample_messages):
         """Given HTTP error (non-404), should raise LLMProviderError."""
         # Given: Mock 500 error
@@ -298,7 +298,7 @@ class TestOllamaChat:
 class TestOllamaStreamChat:
     """Test streaming chat functionality."""
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_stream_chat_yields_chunks(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -319,7 +319,7 @@ class TestOllamaStreamChat:
         # Then: Should yield all content chunks
         assert chunks == ["Hello", " there", "!"]
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_stream_chat_sends_stream_true(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -337,7 +337,7 @@ class TestOllamaStreamChat:
         payload = mock_post.call_args[1]["json"]
         assert payload["stream"] is True
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_stream_chat_handles_empty_lines(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -359,7 +359,7 @@ class TestOllamaStreamChat:
         # Then: Should only yield non-empty content
         assert chunks == ["Hello", "!"]
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_stream_chat_connection_error(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -373,7 +373,7 @@ class TestOllamaStreamChat:
         with pytest.raises(LLMProviderError, match="Cannot connect"):
             list(ollama_provider.stream_chat(sample_messages))
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_stream_chat_timeout_error(
         self, mock_post, ollama_provider, sample_messages
     ):
@@ -394,8 +394,8 @@ class TestOllamaStreamChat:
 class TestOllamaGetModels:
     """Test model listing functionality."""
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.post")
     def test_get_models_success(
         self, mock_post, mock_get, ollama_provider, mock_ollama_models_response
     ):
@@ -420,8 +420,8 @@ class TestOllamaGetModels:
         assert models[0].supports_streaming is True
         assert models[0].metadata["size"] == 4661224224
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.post")
     def test_get_models_with_context_window(self, mock_post, mock_get, ollama_provider):
         """Given model with context info, should extract context_window."""
         # Given: Mock with context window info
@@ -445,7 +445,7 @@ class TestOllamaGetModels:
         # Then: Should have context window
         assert models[0].context_window == 4096
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.get")
     def test_get_models_connection_error(self, mock_get, ollama_provider):
         """Given connection error, should raise LLMProviderError."""
         # Given: Mock connection error
@@ -457,7 +457,7 @@ class TestOllamaGetModels:
         with pytest.raises(LLMProviderError, match="Cannot connect"):
             ollama_provider.get_models()
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.get")
     def test_get_models_handles_exceptions(self, mock_get, ollama_provider):
         """Given unexpected error, should raise LLMProviderError."""
         # Given: Mock unexpected error
@@ -474,7 +474,7 @@ class TestOllamaGetModels:
 class TestOllamaGetModelInfo:
     """Test detailed model info retrieval."""
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_get_model_info_success(self, mock_post, ollama_provider):
         """Given valid model name, should return model info dict."""
         # Given: Mock model info response
@@ -494,7 +494,7 @@ class TestOllamaGetModelInfo:
         assert isinstance(info, dict)
         assert "modelfile" in info
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_get_model_info_not_found(self, mock_post, ollama_provider):
         """Given non-existent model, should return None."""
         # Given: Mock 404 response
@@ -513,7 +513,7 @@ class TestOllamaGetModelInfo:
         # Then: Should return None
         assert info is None
 
-    @patch("ctk.integrations.llm.ollama.requests.post")
+    @patch("ctk.llm.ollama.requests.post")
     def test_get_model_info_connection_error(self, mock_post, ollama_provider):
         """Given connection error, should raise LLMProviderError."""
         # Given: Mock connection error
@@ -532,7 +532,7 @@ class TestOllamaGetModelInfo:
 class TestOllamaIsAvailable:
     """Test Ollama availability check."""
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.get")
     def test_is_available_when_running(self, mock_get, ollama_provider):
         """Given Ollama is running, should return True."""
         # Given: Mock successful response
@@ -546,7 +546,7 @@ class TestOllamaIsAvailable:
         # Then: Should return True
         assert available is True
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.get")
     def test_is_available_when_not_running(self, mock_get, ollama_provider):
         """Given Ollama is not running, should return False."""
         # Given: Mock connection error
@@ -560,7 +560,7 @@ class TestOllamaIsAvailable:
         # Then: Should return False
         assert available is False
 
-    @patch("ctk.integrations.llm.ollama.requests.get")
+    @patch("ctk.llm.ollama.requests.get")
     def test_is_available_timeout(self, mock_get, ollama_provider):
         """Given timeout, should return False."""
         # Given: Mock timeout

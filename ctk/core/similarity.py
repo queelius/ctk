@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from ctk.core.models import ConversationTree, MessageRole
-from ctk.integrations.embeddings.base import (AggregationStrategy,
+from ctk.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider)
 
@@ -173,11 +173,11 @@ class ConversationEmbedder:
         provider_name = self.config.provider.lower()
 
         if provider_name == "tfidf":
-            from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+            from ctk.embeddings.tfidf import TFIDFEmbedding
 
             return TFIDFEmbedding(self.config.provider_config)
         elif provider_name == "ollama":
-            from ctk.integrations.embeddings.ollama import OllamaEmbedding
+            from ctk.embeddings.ollama import OllamaEmbedding
 
             return OllamaEmbedding(self.config.provider_config)
         else:
@@ -666,8 +666,15 @@ class SimilarityComputer:
             return cosine_similarity(vec1, vec2)
 
         elif self.metric == SimilarityMetric.DOT_PRODUCT:
-            # Dot product (assumes normalized vectors)
-            return float(np.dot(vec1, vec2))
+            # Normalize both vectors first so the result is bounded in [-1, 1],
+            # matching cosine similarity semantics. Prior code returned raw dot
+            # product, which could exceed 1.0 for un-normalized embeddings
+            # (e.g. TF-IDF) and break downstream code that assumes a bounded range.
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            return float(np.dot(vec1, vec2) / (norm1 * norm2))
 
         elif self.metric == SimilarityMetric.EUCLIDEAN:
             # Euclidean distance, converted to similarity

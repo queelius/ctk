@@ -363,9 +363,9 @@ class PluginRegistry:
         self._discovered = False
         # Security: Only allow plugins from trusted directories
         self.allowed_plugin_dirs: Set[str] = set(allowed_plugin_dirs or [])
-        # Add default integrations directory
+        # Add default package base directory (holds importers/, exporters/, ...)
         base_dir = Path(__file__).parent.parent
-        self.allowed_plugin_dirs.add(str(base_dir / "integrations"))
+        self.allowed_plugin_dirs.add(str(base_dir))
 
     def register_importer(self, name: str, plugin: ImporterPlugin):
         """Register an importer plugin"""
@@ -376,33 +376,73 @@ class PluginRegistry:
         self.exporters[name] = plugin
 
     def discover_plugins(self, plugin_dir: Optional[str] = None):
-        """Discover and load plugins from directory"""
-        if self._discovered:
+        """Discover and load plugins.
+
+        With no argument, loads built-in importers and exporters by
+        importing ``ctk.importers`` / ``ctk.exporters`` and walking
+        ``__subclasses__()`` — trusted, fast, no AST validation.
+
+        With an explicit ``plugin_dir`` argument, loads third-party plugins
+        from that directory with full AST-based security validation. The
+        directory must be in ``allowed_plugin_dirs``.
+        """
+        if plugin_dir is None:
+            if self._discovered:
+                return
+            self._load_builtin_plugins()
+            self._discovered = True
             return
 
-        if plugin_dir is None:
-            # Default to integrations directory
-            base_dir = Path(__file__).parent.parent
-            plugin_dir = base_dir / "integrations"
-        else:
-            plugin_dir = Path(plugin_dir)
-
-        # Security: Validate plugin directory is allowed
+        plugin_dir = Path(plugin_dir)
         if not self._is_plugin_dir_allowed(plugin_dir):
             logger.warning(f"Plugin directory not allowed: {plugin_dir}")
             return
 
-        # Discover importers
         importers_dir = plugin_dir / "importers"
         if importers_dir.exists():
             self._load_plugins_from_dir(importers_dir, ImporterPlugin, self.importers)
 
-        # Discover exporters
         exporters_dir = plugin_dir / "exporters"
         if exporters_dir.exists():
             self._load_plugins_from_dir(exporters_dir, ExporterPlugin, self.exporters)
 
-        self._discovered = True
+    def _load_builtin_plugins(self):
+        """Load first-party importers and exporters via package imports."""
+        # Trigger imports so every built-in plugin class is registered as a subclass.
+        import ctk.importers  # noqa: F401
+        import ctk.exporters  # noqa: F401
+
+        self._register_subclasses(ImporterPlugin, self.importers)
+        self._register_subclasses(ExporterPlugin, self.exporters)
+
+    def _register_subclasses(
+        self, base_class: Type, registry: Dict[str, BasePlugin]
+    ) -> None:
+        """Instantiate and register every concrete subclass of ``base_class``."""
+
+        def all_subclasses(cls: Type) -> Set[Type]:
+            found: Set[Type] = set()
+            for sub in cls.__subclasses__():
+                found.add(sub)
+                found.update(all_subclasses(sub))
+            return found
+
+        for cls in all_subclasses(base_class):
+            if inspect.isabstract(cls):
+                continue
+            try:
+                instance = cls()
+            except Exception as e:
+                logger.error(f"Error instantiating plugin {cls.__name__}: {e}")
+                continue
+
+            if not self._validate_plugin_instance(instance):
+                logger.warning(f"Plugin validation failed: {cls.__name__}")
+                continue
+
+            plugin_name = instance.name or cls.__name__
+            registry[plugin_name] = instance
+            logger.debug(f"Loaded built-in plugin: {plugin_name}")
 
     def _load_plugins_from_dir(
         self, directory: Path, base_class: Type, registry: Dict[str, BasePlugin]

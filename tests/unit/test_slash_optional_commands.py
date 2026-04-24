@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ctk.integrations.chat.tui import ChatTUI
+from ctk.chat.tui import ChatTUI
 
 
 class TestCommandRouting:

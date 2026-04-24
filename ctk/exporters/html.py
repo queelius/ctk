@@ -3293,12 +3293,15 @@ function showConversation(conv, pathLeafId) {
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'conversation-title';
-    titleDiv.innerHTML = `
-        ${conv.title}
-        <button class="btn btn-secondary" onclick="state.toggleFavorite('${conv.id}'); renderConversationList();">
-            ${state.favorites.has(conv.id) ? '⭐' : '☆'}
-        </button>
-    `;
+    titleDiv.appendChild(document.createTextNode((conv.title || '') + ' '));
+    const favBtn = document.createElement('button');
+    favBtn.className = 'btn btn-secondary';
+    favBtn.textContent = state.favorites.has(conv.id) ? '⭐' : '☆';
+    favBtn.addEventListener('click', () => {
+        state.toggleFavorite(conv.id);
+        renderConversationList();
+    });
+    titleDiv.appendChild(favBtn);
     header.appendChild(titleDiv);
 
     const actions = document.createElement('div');
@@ -3343,10 +3346,16 @@ function showConversation(conv, pathLeafId) {
 
     // Action buttons
     const buttonsDiv = document.createElement('div');
-    buttonsDiv.innerHTML = `
-        <button class="btn btn-secondary" onclick="addToCollectionPrompt(['${conv.id}'])">Add to Collection</button>
-        <button class="btn btn-secondary" onclick="copyConversation('${conv.id}')">Copy</button>
-    `;
+    const addToCollBtn = document.createElement('button');
+    addToCollBtn.className = 'btn btn-secondary';
+    addToCollBtn.textContent = 'Add to Collection';
+    addToCollBtn.addEventListener('click', () => addToCollectionPrompt([conv.id]));
+    buttonsDiv.appendChild(addToCollBtn);
+    const copyConvBtn = document.createElement('button');
+    copyConvBtn.className = 'btn btn-secondary';
+    copyConvBtn.textContent = 'Copy';
+    copyConvBtn.addEventListener('click', () => copyConversation(conv.id));
+    buttonsDiv.appendChild(copyConvBtn);
     actions.appendChild(buttonsDiv);
 
     header.appendChild(actions);
@@ -3397,11 +3406,23 @@ function createMessageElement(conv, msg) {
 
     const actions = document.createElement('div');
     actions.className = 'message-actions';
-    actions.innerHTML = `
-        <button class="message-action" onclick="addAnnotation('${conv.id}', '${msg.id}')">📝 Note</button>
-        ${msg.has_code ? `<button class="message-action" onclick="extractCode('${conv.id}', '${msg.id}')">💾 Save Code</button>` : ''}
-        <button class="message-action" onclick="copyMessage('${msg.id}')">📋 Copy</button>
-    `;
+    const noteBtn = document.createElement('button');
+    noteBtn.className = 'message-action';
+    noteBtn.textContent = '📝 Note';
+    noteBtn.addEventListener('click', () => addAnnotation(conv.id, msg.id));
+    actions.appendChild(noteBtn);
+    if (msg.has_code) {
+        const saveCodeBtn = document.createElement('button');
+        saveCodeBtn.className = 'message-action';
+        saveCodeBtn.textContent = '💾 Save Code';
+        saveCodeBtn.addEventListener('click', () => extractCode(conv.id, msg.id));
+        actions.appendChild(saveCodeBtn);
+    }
+    const copyMsgBtn = document.createElement('button');
+    copyMsgBtn.className = 'message-action';
+    copyMsgBtn.textContent = '📋 Copy';
+    copyMsgBtn.addEventListener('click', () => copyMessage(msg.id));
+    actions.appendChild(copyMsgBtn);
     header.appendChild(actions);
 
     if (msg.role === 'assistant') {
@@ -3817,10 +3838,14 @@ function renderTimeline() {
 
         const headerDiv = document.createElement('div');
         headerDiv.className = 'timeline-period-header';
-        headerDiv.innerHTML = `
-            <span class="timeline-period-title">${group.label}</span>
-            <span class="timeline-period-count">${group.conversations.length} conversation${group.conversations.length !== 1 ? 's' : ''}</span>
-        `;
+        const periodTitle = document.createElement('span');
+        periodTitle.className = 'timeline-period-title';
+        periodTitle.textContent = group.label;
+        headerDiv.appendChild(periodTitle);
+        const periodCount = document.createElement('span');
+        periodCount.className = 'timeline-period-count';
+        periodCount.textContent = `${group.conversations.length} conversation${group.conversations.length !== 1 ? 's' : ''}`;
+        headerDiv.appendChild(periodCount);
         periodDiv.appendChild(headerDiv);
 
         const itemsDiv = document.createElement('div');
@@ -3846,16 +3871,33 @@ function renderTimeline() {
                 minute: '2-digit'
             });
 
-            itemDiv.innerHTML = `
-                <div class="timeline-item-title">${conv.title}</div>
-                <div class="timeline-item-meta">
-                    <span class="timeline-item-date">${timeStr}</span>
-                    <span>${conv.message_count} messages</span>
-                    <span>${conv.source}</span>
-                    ${conv.model ? `<span>${conv.model}</span>` : ''}
-                    ${state.ratings[conv.id] ? `<span>${'⭐'.repeat(state.ratings[conv.id])}</span>` : ''}
-                </div>
-            `;
+            const titleEl = document.createElement('div');
+            titleEl.className = 'timeline-item-title';
+            titleEl.textContent = conv.title || '';
+            itemDiv.appendChild(titleEl);
+            const metaEl = document.createElement('div');
+            metaEl.className = 'timeline-item-meta';
+            const dateSpan = document.createElement('span');
+            dateSpan.className = 'timeline-item-date';
+            dateSpan.textContent = timeStr;
+            metaEl.appendChild(dateSpan);
+            const countSpan = document.createElement('span');
+            countSpan.textContent = `${conv.message_count} messages`;
+            metaEl.appendChild(countSpan);
+            const sourceSpan = document.createElement('span');
+            sourceSpan.textContent = conv.source || '';
+            metaEl.appendChild(sourceSpan);
+            if (conv.model) {
+                const modelSpan = document.createElement('span');
+                modelSpan.textContent = conv.model;
+                metaEl.appendChild(modelSpan);
+            }
+            if (state.ratings[conv.id]) {
+                const ratingSpan = document.createElement('span');
+                ratingSpan.textContent = '⭐'.repeat(state.ratings[conv.id]);
+                metaEl.appendChild(ratingSpan);
+            }
+            itemDiv.appendChild(metaEl);
 
             itemDiv.onclick = () => {
                 document.querySelector('[data-tab="browse"]').click();
@@ -4036,10 +4078,18 @@ function renderCollections() {
 
         const actions = document.createElement('div');
         actions.style.cssText = 'display: flex; gap: 0.5rem;';
-        actions.innerHTML = `
-            <button class="btn btn-secondary" onclick="renameCollection(${idx})" title="Rename">✏️</button>
-            <button class="btn btn-danger" onclick="deleteCollection(${idx})" title="Delete">🗑️</button>
-        `;
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'btn btn-secondary';
+        renameBtn.title = 'Rename';
+        renameBtn.textContent = '✏️';
+        renameBtn.addEventListener('click', () => renameCollection(idx));
+        actions.appendChild(renameBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger';
+        deleteBtn.title = 'Delete';
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.addEventListener('click', () => deleteCollection(idx));
+        actions.appendChild(deleteBtn);
         header.appendChild(actions);
 
         div.appendChild(header);
@@ -4064,19 +4114,26 @@ function renderCollections() {
 
                 const convInfo = document.createElement('div');
                 convInfo.style.cssText = 'flex: 1; cursor: pointer;';
-                convInfo.innerHTML = `
-                    <div style="font-weight: 600; margin-bottom: 0.25rem;">${conv.title}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">${conv.message_count} messages • ${conv.source}</div>
-                `;
+                const convTitle = document.createElement('div');
+                convTitle.style.cssText = 'font-weight: 600; margin-bottom: 0.25rem;';
+                convTitle.textContent = conv.title || '';
+                convInfo.appendChild(convTitle);
+                const convMeta = document.createElement('div');
+                convMeta.style.cssText = 'font-size: 0.85rem; color: var(--text-secondary);';
+                convMeta.textContent = `${conv.message_count} messages • ${conv.source || ''}`;
+                convInfo.appendChild(convMeta);
                 convInfo.addEventListener('click', () => {
                     document.querySelector('[data-tab="browse"]').click();
                     setTimeout(() => showConversation(conv), 100);
                 });
 
                 const convActions = document.createElement('div');
-                convActions.innerHTML = `
-                    <button class="btn btn-danger" onclick="removeFromCollection(${idx}, '${convId}')" title="Remove from collection">✕</button>
-                `;
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-danger';
+                removeBtn.title = 'Remove from collection';
+                removeBtn.textContent = '✕';
+                removeBtn.addEventListener('click', () => removeFromCollection(idx, convId));
+                convActions.appendChild(removeBtn);
 
                 convItem.appendChild(convInfo);
                 convItem.appendChild(convActions);
@@ -4143,10 +4200,15 @@ function renderSnippets() {
     state.snippets.forEach(snippet => {
         const div = document.createElement('div');
         div.className = 'snippet-card';
-        div.innerHTML = `
-            <p><small>${snippet.source} • ${new Date(snippet.timestamp).toLocaleDateString()}</small></p>
-            <pre class="snippet-code">${snippet.code}</pre>
-        `;
+        const p = document.createElement('p');
+        const small = document.createElement('small');
+        small.textContent = `${snippet.source || ''} • ${new Date(snippet.timestamp).toLocaleDateString()}`;
+        p.appendChild(small);
+        div.appendChild(p);
+        const pre = document.createElement('pre');
+        pre.className = 'snippet-code';
+        pre.textContent = snippet.code || '';
+        div.appendChild(pre);
         container.appendChild(div);
     });
 }

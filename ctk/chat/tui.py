@@ -28,10 +28,10 @@ from ctk.core.models import MessageRole as DBMessageRole
 from ctk.core.shell_completer import create_shell_completer
 from ctk.core.shell_parser import ShellParser
 from ctk.core.tree import ConversationTreeNavigator, TreeMessage
-from ctk.integrations.llm.base import LLMProvider
-from ctk.integrations.llm.base import Message as LLMMessage
-from ctk.integrations.llm.base import MessageRole as LLMMessageRole
-from ctk.integrations.llm.mcp_client import MCPClient, MCPServer
+from ctk.llm.base import LLMProvider
+from ctk.llm.base import Message as LLMMessage
+from ctk.llm.base import MessageRole as LLMMessageRole
+from ctk.llm.mcp_client import MCPClient, MCPServer
 
 
 # Add to_llm_message method to TreeMessage for TUI use
@@ -1755,7 +1755,7 @@ Tags:"""
 
         print("Asking LLM for tag suggestions...")
         try:
-            from ctk.integrations.llm.base import Message, MessageRole
+            from ctk.llm.base import Message, MessageRole
 
             response = self.provider.chat(
                 [Message(role=MessageRole.USER, content=tag_prompt)], temperature=0.3
@@ -2193,7 +2193,7 @@ Available operations:
         formatted_tools = self.provider.format_tools_for_api(tools)
 
         # Build messages
-        from ctk.integrations.llm.base import Message, MessageRole
+        from ctk.llm.base import Message, MessageRole
 
         messages = [
             Message(role=MessageRole.SYSTEM, content=system_prompt),
@@ -2653,22 +2653,32 @@ Available operations:
 
         return "/".join(segments)
 
+    def _at_vfs_conversation_path(self) -> bool:
+        """True when the TUI cwd points at a conversation or message node.
+
+        Several navigation commands want to prefer VFS loading over stale
+        internal tree state whenever the user is under ``/chats/<id>/...``.
+        Returning False on any parse error keeps callers safe if cwd is
+        unset or points at a virtual dir (``/starred/``, etc.).
+        """
+        if not self.db:
+            return False
+        from ctk.core.vfs import PathType, VFSPathParser
+
+        try:
+            parsed = VFSPathParser.parse(self.vfs_cwd)
+        except (AttributeError, ValueError, KeyError):
+            return False
+        return parsed.path_type in (
+            PathType.CONVERSATION_ROOT,
+            PathType.MESSAGE_NODE,
+        )
+
     def goto_longest_path(self):
         """Navigate to the leaf node of the longest path"""
         from ctk.core.vfs import PathType, VFSPathParser
 
-        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
-        use_vfs = False
-        if self.db:
-            try:
-                parsed = VFSPathParser.parse(self.vfs_cwd)
-                if parsed.path_type in [
-                    PathType.CONVERSATION_ROOT,
-                    PathType.MESSAGE_NODE,
-                ]:
-                    use_vfs = True
-            except (AttributeError, ValueError, KeyError):
-                pass
+        use_vfs = self._at_vfs_conversation_path()
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
         if self.root and not use_vfs:
@@ -2771,18 +2781,7 @@ Available operations:
         """Navigate to the most recently created leaf node"""
         from ctk.core.vfs import PathType, VFSPathParser
 
-        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
-        use_vfs = False
-        if self.db:
-            try:
-                parsed = VFSPathParser.parse(self.vfs_cwd)
-                if parsed.path_type in [
-                    PathType.CONVERSATION_ROOT,
-                    PathType.MESSAGE_NODE,
-                ]:
-                    use_vfs = True
-            except (AttributeError, ValueError, KeyError):
-                pass
+        use_vfs = self._at_vfs_conversation_path()
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
         if self.root and not use_vfs:
@@ -2884,18 +2883,7 @@ Available operations:
         """Show information about current position in tree"""
         from ctk.core.vfs import PathType, VFSPathParser
 
-        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
-        use_vfs = False
-        if self.db:
-            try:
-                parsed = VFSPathParser.parse(self.vfs_cwd)
-                if parsed.path_type in [
-                    PathType.CONVERSATION_ROOT,
-                    PathType.MESSAGE_NODE,
-                ]:
-                    use_vfs = True
-            except (AttributeError, ValueError, KeyError):
-                pass
+        use_vfs = self._at_vfs_conversation_path()
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
         if self.root and self.current_message and not use_vfs:
@@ -3135,19 +3123,9 @@ Available operations:
                 count += count_descendants_in_conv(conversation, child.id)
             return count
 
-        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
-        # This handles the case where self.current_message is stale
-        use_vfs = False
-        if self.db:
-            try:
-                parsed = VFSPathParser.parse(self.vfs_cwd)
-                if parsed.path_type in [
-                    PathType.CONVERSATION_ROOT,
-                    PathType.MESSAGE_NODE,
-                ]:
-                    use_vfs = True
-            except (AttributeError, ValueError, KeyError):
-                pass
+        # Prefer VFS loading when cwd points at a conversation (handles
+        # stale self.current_message across reopens).
+        use_vfs = self._at_vfs_conversation_path()
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
         if self.current_message and not use_vfs:
@@ -3382,18 +3360,7 @@ Available operations:
         """
         from ctk.core.vfs import PathType, VFSPathParser
 
-        # Check if we're at a VFS conversation path - if so, prioritize VFS loading
-        use_vfs = False
-        if self.db:
-            try:
-                parsed = VFSPathParser.parse(self.vfs_cwd)
-                if parsed.path_type in [
-                    PathType.CONVERSATION_ROOT,
-                    PathType.MESSAGE_NODE,
-                ]:
-                    use_vfs = True
-            except (AttributeError, ValueError, KeyError):
-                pass
+        use_vfs = self._at_vfs_conversation_path()
 
         # If internal tree is loaded AND we're not navigating via VFS, use internal state
         if self.root and not use_vfs:
@@ -3538,25 +3505,25 @@ Available operations:
         # Export using appropriate exporter
         try:
             if fmt == "markdown":
-                from ctk.integrations.exporters.markdown import \
+                from ctk.exporters.markdown import \
                     MarkdownExporter
 
                 exporter = MarkdownExporter()
                 exporter.export_conversations([tree], output_file=filename)
             elif fmt == "json":
-                from ctk.integrations.exporters.json import JSONExporter
+                from ctk.exporters.json import JSONExporter
 
                 exporter = JSONExporter()
                 exporter.export_conversations(
                     [tree], output_file=filename, format="ctk"
                 )
             elif fmt == "jsonl":
-                from ctk.integrations.exporters.jsonl import JSONLExporter
+                from ctk.exporters.jsonl import JSONLExporter
 
                 exporter = JSONLExporter()
                 exporter.export_conversations([tree], output_file=filename)
             elif fmt == "html":
-                from ctk.integrations.exporters.html import HTMLExporter
+                from ctk.exporters.html import HTMLExporter
 
                 exporter = HTMLExporter()
                 exporter.export_conversations([tree], output_path=filename)

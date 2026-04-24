@@ -96,11 +96,11 @@ class TestPluginRegistryInitialization:
         assert len(plugin_registry.exporters) == 0
 
     def test_registry_has_default_allowed_dirs(self, plugin_registry):
-        """Given new registry, should have integrations dir as trusted"""
+        """Given new registry, should have the ctk package dir as trusted"""
         assert len(plugin_registry.allowed_plugin_dirs) > 0
-        # Should contain path to integrations directory
+        # Should contain path to the ctk package (which holds importers/, exporters/)
         dirs_str = " ".join(plugin_registry.allowed_plugin_dirs)
-        assert "integrations" in dirs_str
+        assert "ctk" in dirs_str
 
     def test_registry_accepts_custom_allowed_dirs(self):
         """Given custom allowed dirs, registry should store them"""

@@ -6,6 +6,7 @@ that's more convenient for navigation and display than the database
 ConversationTree model.
 """
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, List, Optional, Tuple
@@ -18,6 +19,8 @@ from .models import ConversationTree
 from .models import Message as DBMessage
 from .models import MessageContent
 from .models import MessageRole as DBMessageRole
+
+logger = logging.getLogger(__name__)
 
 
 class TreeMessage:
@@ -264,6 +267,7 @@ class ConversationTreeNavigator:
             self.message_map[tree_msg.id] = tree_msg
 
         # Second pass: link parents and children
+        orphans: List[TreeMessage] = []
         for tree_msg in self.message_map.values():
             parent_id = getattr(tree_msg, "_parent_id", None)
             if parent_id:
@@ -272,13 +276,28 @@ class ConversationTreeNavigator:
                     tree_msg.parent = parent
                     parent.children.append(tree_msg)
 
-            # Set root (message with no parent)
+            # Collect every root candidate (message whose parent did not resolve)
             if not tree_msg.parent:
-                self.root = tree_msg
+                orphans.append(tree_msg)
 
             # Clean up temporary attribute
             if hasattr(tree_msg, "_parent_id"):
                 delattr(tree_msg, "_parent_id")
+
+        # Pick a deterministic root: earliest timestamp, then smallest id.
+        # Prior code overwrote self.root on each orphan and silently lost
+        # earlier branches when multiple orphans existed.
+        if orphans:
+            orphans.sort(key=lambda m: (m.timestamp, m.id))
+            self.root = orphans[0]
+            if len(orphans) > 1:
+                extra_ids = [m.id for m in orphans[1:]]
+                logger.warning(
+                    "Tree has %d orphan message(s) in addition to root; "
+                    "their subtrees are unreachable: %s",
+                    len(orphans) - 1,
+                    extra_ids,
+                )
 
     def get_all_paths(self) -> List[List[TreeMessage]]:
         """Get all paths from root to leaves"""

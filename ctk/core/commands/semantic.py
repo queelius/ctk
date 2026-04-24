@@ -103,7 +103,7 @@ class SemanticCommands:
             )
 
         try:
-            from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+            from ctk.embeddings.tfidf import TFIDFEmbedding
 
             # Re-fit TF-IDF on corpus so we can embed the query in the same space
             texts = self._get_corpus_texts(embeddings)

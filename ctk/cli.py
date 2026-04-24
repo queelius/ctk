@@ -41,7 +41,7 @@ def cmd_import(args):
         print(f"Auto-searching for {args.format} data...")
 
         if args.format == "copilot":
-            from ctk.integrations.importers.copilot import CopilotImporter
+            from ctk.importers.copilot import CopilotImporter
 
             found_paths = CopilotImporter.find_copilot_data()
 
@@ -658,6 +658,13 @@ def cmd_view(args):
     store = ViewStore(args.db)
     action = args.view_action
 
+    if not action:
+        print(
+            "Error: view subcommand required. Try: "
+            "list, create, show, add, remove, delete, check, eval"
+        )
+        return 1
+
     if action == "list":
         views = store.list_views_detailed()
         if not views:
@@ -871,7 +878,10 @@ def cmd_view(args):
         return 0
 
     else:
-        print(f"Unknown action: {action}")
+        print(
+            f"Unknown view action: {action}. Valid actions: "
+            "list, create, show, add, remove, delete, check, eval"
+        )
         return 1
 
 
@@ -895,8 +905,8 @@ def cmd_plugins(args):
 def cmd_auto_tag(args):
     """Auto-tag conversations using LLM"""
     from ctk.core.config import get_config
-    from ctk.integrations.llm.base import Message, MessageRole
-    from ctk.integrations.llm.ollama import OllamaProvider
+    from ctk.llm.base import Message, MessageRole
+    from ctk.llm.ollama import OllamaProvider
 
     if not args.db:
         print("Error: Database path required")
@@ -1046,8 +1056,8 @@ Tags:"""
 def cmd_say(args):
     """One-shot message to LLM with full tool support (same as TUI 'say' command)"""
     from ctk.core.config import get_config
-    from ctk.integrations.chat.tui import ChatTUI
-    from ctk.integrations.llm.ollama import OllamaProvider
+    from ctk.chat.tui import ChatTUI
+    from ctk.llm.ollama import OllamaProvider
 
     # Join query words
     message = " ".join(args.message)
@@ -1655,7 +1665,7 @@ def execute_ask_tool(
                 return f"Conversation {conv_id} not found"
 
             if export_format == "markdown":
-                from ctk.integrations.exporters.markdown import \
+                from ctk.exporters.markdown import \
                     MarkdownExporter
 
                 exporter = MarkdownExporter()
@@ -2072,8 +2082,8 @@ def cmd_chat(args):
     """Start interactive chat with LLM"""
     # Import here to avoid loading if not needed
     from ctk.core.config import get_config
-    from ctk.integrations.chat.tui import ChatTUI
-    from ctk.integrations.llm.ollama import OllamaProvider
+    from ctk.chat.tui import ChatTUI
+    from ctk.llm.ollama import OllamaProvider
 
     # Load config
     cfg = get_config()
@@ -3284,19 +3294,6 @@ def main():
         return dispatch_config_command(args)
 
     return commands[args.command](args)
-
-
-def _get_command_handlers():
-    """Get mapping of command names to handler functions"""
-    return {
-        "import": cmd_import,
-        "export": cmd_export,
-        "list": cmd_list,
-        "search": cmd_search,
-        "stats": cmd_stats,
-        "view": cmd_view,
-        "plugins": cmd_plugins,
-    }
 
 
 if __name__ == "__main__":

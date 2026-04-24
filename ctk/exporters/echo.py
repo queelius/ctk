@@ -168,7 +168,7 @@ class ECHOExporter(ExporterPlugin):
 
         # Generate HTML site if requested
         if include_site:
-            from ctk.integrations.exporters.html import HTMLExporter
+            from ctk.exporters.html import HTMLExporter
 
             site_dir = output_path / "site"
             site_dir.mkdir(exist_ok=True)

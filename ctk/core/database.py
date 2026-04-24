@@ -35,6 +35,16 @@ from .pagination import decode_cursor, encode_cursor
 logger = logging.getLogger(__name__)
 
 
+def _escape_like(pattern: str) -> str:
+    """Escape LIKE special chars so % and _ match literally.
+
+    Callers wrap the result with % wildcards and pair it with
+    ``ESCAPE '\\'``. Without this, a query like ``50%_off`` silently
+    expands its semantics and returns unrelated matches.
+    """
+    return pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @contextmanager
 def migration_lock(lock_path: Path, timeout: float = 30.0):
     """
@@ -1275,43 +1285,48 @@ class ConversationDB:
 
             # Text search
             if query_text:
+                like_pattern = f"%{_escape_like(query_text)}%"
                 if fts_ids is not None:
                     query = query.filter(ConversationModel.id.in_(fts_ids))
                 elif title_only:
                     query = query.filter(
-                        ConversationModel.title.ilike(f"%{query_text}%")
+                        ConversationModel.title.ilike(like_pattern, escape="\\")
                     )
                 elif content_only:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             text(
                                 "json_extract(messages.content_json, '$.text') "
-                                "LIKE :query"
+                                "LIKE :query ESCAPE '\\'"
                             )
-                        ).params(query=f"%{query_text}%")
+                        ).params(query=like_pattern)
                     else:
                         query = query.filter(
                             MessageModel.content_json["text"].astext.ilike(
-                                f"%{query_text}%"
+                                like_pattern, escape="\\"
                             )
                         )
                 else:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                ConversationModel.title.ilike(
+                                    like_pattern, escape="\\"
+                                ),
                                 text(
                                     "json_extract(messages.content_json, "
-                                    "'$.text') LIKE :query"
+                                    "'$.text') LIKE :query ESCAPE '\\'"
                                 ),
                             )
-                        ).params(query=f"%{query_text}%")
+                        ).params(query=like_pattern)
                     else:
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                ConversationModel.title.ilike(
+                                    like_pattern, escape="\\"
+                                ),
                                 MessageModel.content_json["text"].astext.ilike(
-                                    f"%{query_text}%"
+                                    like_pattern, escape="\\"
                                 ),
                             )
                         )
@@ -1328,7 +1343,7 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{model}%"))
+                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
 
             # Tag filters
             if tags:
@@ -1472,24 +1487,26 @@ class ConversationDB:
 
             # Text search - use FTS5 results or fall back to LIKE
             if query_text:
+                like_pattern = f"%{_escape_like(query_text)}%"
                 if fts_ids is not None:
                     # Use pre-computed FTS5 results
                     query = query.filter(ConversationModel.id.in_(fts_ids))
                 elif title_only:
                     query = query.filter(
-                        ConversationModel.title.ilike(f"%{query_text}%")
+                        ConversationModel.title.ilike(like_pattern, escape="\\")
                     )
                 elif content_only:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             text(
-                                "json_extract(messages.content_json, '$.text') LIKE :query"
+                                "json_extract(messages.content_json, '$.text') "
+                                "LIKE :query ESCAPE '\\'"
                             )
-                        ).params(query=f"%{query_text}%")
+                        ).params(query=like_pattern)
                     else:
                         query = query.filter(
                             MessageModel.content_json["text"].astext.ilike(
-                                f"%{query_text}%"
+                                like_pattern, escape="\\"
                             )
                         )
                 else:
@@ -1497,18 +1514,23 @@ class ConversationDB:
                     if "sqlite" in str(self.engine.url):
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                ConversationModel.title.ilike(
+                                    like_pattern, escape="\\"
+                                ),
                                 text(
-                                    "json_extract(messages.content_json, '$.text') LIKE :query"
+                                    "json_extract(messages.content_json, "
+                                    "'$.text') LIKE :query ESCAPE '\\'"
                                 ),
                             )
-                        ).params(query=f"%{query_text}%")
+                        ).params(query=like_pattern)
                     else:
                         query = query.filter(
                             or_(
-                                ConversationModel.title.ilike(f"%{query_text}%"),
+                                ConversationModel.title.ilike(
+                                    like_pattern, escape="\\"
+                                ),
                                 MessageModel.content_json["text"].astext.ilike(
-                                    f"%{query_text}%"
+                                    like_pattern, escape="\\"
                                 ),
                             )
                         )
@@ -1525,7 +1547,7 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{model}%"))
+                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
 
             # Tag filters
             if tags:

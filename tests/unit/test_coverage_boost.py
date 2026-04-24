@@ -10,9 +10,9 @@ import pytest
 
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
-from ctk.integrations.exporters.jsonl import JSONLExporter
-from ctk.integrations.importers.gemini import GeminiImporter
-from ctk.integrations.importers.jsonl import JSONLImporter
+from ctk.exporters.jsonl import JSONLExporter
+from ctk.importers.gemini import GeminiImporter
+from ctk.importers.jsonl import JSONLImporter
 
 
 class TestJSONLExporterExtended:

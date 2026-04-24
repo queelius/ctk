@@ -10,10 +10,10 @@ import pytest
 
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
-from ctk.integrations.exporters.echo import ECHOExporter
-from ctk.integrations.exporters.json import JSONExporter
-from ctk.integrations.exporters.jsonl import JSONLExporter
-from ctk.integrations.exporters.markdown import MarkdownExporter
+from ctk.exporters.echo import ECHOExporter
+from ctk.exporters.json import JSONExporter
+from ctk.exporters.jsonl import JSONLExporter
+from ctk.exporters.markdown import MarkdownExporter
 
 
 class TestJSONLExporter:

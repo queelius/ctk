@@ -7,7 +7,7 @@ from typing import Optional
 
 import requests
 
-from ctk.integrations.taggers.base import BaseLLMTagger
+from ctk.taggers.base import BaseLLMTagger
 
 logger = logging.getLogger(__name__)
 

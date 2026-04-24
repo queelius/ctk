@@ -1,6 +1,6 @@
 """Tests for HTML export chat/tree features."""
 
-from ctk.integrations.exporters.html import HTMLExporter
+from ctk.exporters.html import HTMLExporter
 
 
 class TestConversationTreeJS:

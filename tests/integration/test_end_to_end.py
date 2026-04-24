@@ -10,11 +10,11 @@ import pytest
 
 from ctk.core.database import ConversationDB
 from ctk.core.plugin import registry
-from ctk.integrations.exporters.jsonl import JSONLExporter
-from ctk.integrations.exporters.markdown import MarkdownExporter
-from ctk.integrations.importers.anthropic import AnthropicImporter
-from ctk.integrations.importers.openai import OpenAIImporter
-from ctk.integrations.taggers.tfidf_tagger import TFIDFTagger
+from ctk.exporters.jsonl import JSONLExporter
+from ctk.exporters.markdown import MarkdownExporter
+from ctk.importers.anthropic import AnthropicImporter
+from ctk.importers.openai import OpenAIImporter
+from ctk.taggers.tfidf_tagger import TFIDFTagger
 
 
 class TestImportExportPipeline:
@@ -75,7 +75,7 @@ class TestImportExportPipeline:
         exporter.export_to_file([sample_conversation], str(jsonl_file))
 
         # Import back
-        from ctk.integrations.importers.jsonl import JSONLImporter
+        from ctk.importers.jsonl import JSONLImporter
 
         importer = JSONLImporter()
 

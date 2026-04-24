@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterator, List, Optional
 import requests
 
 from ctk.core.constants import DEFAULT_TIMEOUT
-from ctk.integrations.llm.base import (AuthenticationError, ChatResponse,
+from ctk.llm.base import (AuthenticationError, ChatResponse,
                                        ContextLengthError, LLMProvider,
                                        LLMProviderError, Message, MessageRole,
                                        ModelInfo, ModelNotFoundError,

@@ -13,7 +13,7 @@ from ctk.core.similarity import (ConversationEmbedder,
                                  ConversationGraph, ConversationGraphBuilder,
                                  ConversationLink, SimilarityComputer,
                                  SimilarityMetric, SimilarityResult)
-from ctk.integrations.embeddings.base import (AggregationStrategy,
+from ctk.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider,
                                               EmbeddingResponse)
@@ -421,7 +421,7 @@ class TestConversationEmbedder:
         """_load_provider should load TFIDFEmbedding for 'tfidf'."""
         config = ConversationEmbeddingConfig(provider="tfidf")
         embedder = ConversationEmbedder(config=config)
-        from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+        from ctk.embeddings.tfidf import TFIDFEmbedding
 
         assert isinstance(embedder.provider, TFIDFEmbedding)
 
@@ -619,11 +619,21 @@ class TestSimilarityComputer:
 
     def test_dot_product_similarity(self, embedder):
         sc = SimilarityComputer(embedder=embedder, metric=SimilarityMetric.DOT_PRODUCT)
+        # Two vectors pointing along the same axis with different magnitudes
+        # now give a bounded cosine-style score (1.0) rather than raw dot (0.5).
         v1 = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         v2 = np.array([0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         result = sc.compute_similarity(v1, v2)
-        assert result.similarity == pytest.approx(0.5, abs=1e-6)
+        assert result.similarity == pytest.approx(1.0, abs=1e-6)
         assert result.method == "dot"
+
+    def test_dot_product_similarity_zero_vector(self, embedder):
+        sc = SimilarityComputer(embedder=embedder, metric=SimilarityMetric.DOT_PRODUCT)
+        v1 = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        v2 = np.zeros(8)
+        result = sc.compute_similarity(v1, v2)
+        # Zero-norm vector -> 0 rather than NaN from a divide-by-zero.
+        assert result.similarity == 0.0
 
     def test_manhattan_similarity_identical(self, embedder):
         sc = SimilarityComputer(embedder=embedder, metric=SimilarityMetric.MANHATTAN)

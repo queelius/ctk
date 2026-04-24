@@ -237,7 +237,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
     try:
         from ctk.core.similarity import (ConversationEmbedder,
                                          ConversationEmbeddingConfig)
-        from ctk.integrations.embeddings.base import (AggregationStrategy,
+        from ctk.embeddings.base import (AggregationStrategy,
                                                       ChunkingStrategy)
 
         config = ConversationEmbeddingConfig(
@@ -248,7 +248,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
 
         # For TF-IDF, we need a fitted vectorizer
         if provider_name == "tfidf":
-            from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+            from ctk.embeddings.tfidf import TFIDFEmbedding
 
             tfidf = TFIDFEmbedding(config.provider_config)
 

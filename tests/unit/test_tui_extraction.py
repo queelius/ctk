@@ -16,7 +16,7 @@ class TestTuiNetworkExtraction:
 
     def test_module_exists(self):
         """tui_network module should be importable."""
-        from ctk.integrations.chat import tui_network
+        from ctk.chat import tui_network
 
         assert hasattr(tui_network, "handle_net_command")
 
@@ -24,7 +24,7 @@ class TestTuiNetworkExtraction:
         """handle_net_command should accept (db, args, **context)."""
         import inspect
 
-        from ctk.integrations.chat.tui_network import handle_net_command
+        from ctk.chat.tui_network import handle_net_command
 
         sig = inspect.signature(handle_net_command)
         params = list(sig.parameters.keys())
@@ -33,14 +33,14 @@ class TestTuiNetworkExtraction:
 
     def test_tui_delegates_to_module(self):
         """ChatTUI.handle_net_command should delegate to tui_network module."""
-        from ctk.integrations.chat.tui_network import handle_net_command
+        from ctk.chat.tui_network import handle_net_command
 
         # Verify the function exists and is callable
         assert callable(handle_net_command)
 
     def test_no_db_returns_error(self):
         """handle_net_command with no db should print error."""
-        from ctk.integrations.chat.tui_network import handle_net_command
+        from ctk.chat.tui_network import handle_net_command
 
         with patch("builtins.print") as mock_print:
             handle_net_command(db=None, args="embeddings")
@@ -48,7 +48,7 @@ class TestTuiNetworkExtraction:
 
     def test_unknown_subcmd(self):
         """Unknown subcommand should print error with available commands."""
-        from ctk.integrations.chat.tui_network import handle_net_command
+        from ctk.chat.tui_network import handle_net_command
 
         mock_db = MagicMock()
         with patch("builtins.print") as mock_print:
@@ -59,7 +59,7 @@ class TestTuiNetworkExtraction:
 
     def test_empty_args_handled(self):
         """Empty args string should be handled gracefully."""
-        from ctk.integrations.chat.tui_network import handle_net_command
+        from ctk.chat.tui_network import handle_net_command
 
         mock_db = MagicMock()
         # Empty args should not crash (may print error about missing subcmd)
@@ -75,7 +75,7 @@ class TestTuiVfsExtraction:
 
     def test_module_exists(self):
         """tui_vfs module should be importable."""
-        from ctk.integrations.chat import tui_vfs
+        from ctk.chat import tui_vfs
 
         assert hasattr(tui_vfs, "handle_cd")
         assert hasattr(tui_vfs, "handle_ls")
@@ -83,7 +83,7 @@ class TestTuiVfsExtraction:
 
     def test_all_handlers_present(self):
         """All VFS handlers should be present."""
-        from ctk.integrations.chat import tui_vfs
+        from ctk.chat import tui_vfs
 
         expected = [
             "handle_cd",
@@ -100,7 +100,7 @@ class TestTuiVfsExtraction:
 
     def test_handle_pwd_returns_cwd(self):
         """handle_pwd should print the current working directory."""
-        from ctk.integrations.chat.tui_vfs import handle_pwd
+        from ctk.chat.tui_vfs import handle_pwd
 
         with patch("builtins.print") as mock_print:
             handle_pwd(vfs_cwd="/chats")
@@ -113,7 +113,7 @@ class TestTuiMcpExtraction:
 
     def test_module_exists(self):
         """tui_mcp module should be importable."""
-        from ctk.integrations.chat import tui_mcp
+        from ctk.chat import tui_mcp
 
         assert hasattr(tui_mcp, "handle_mcp_command")
 
@@ -121,7 +121,7 @@ class TestTuiMcpExtraction:
         """handle_mcp_command should accept (mcp_client, args, **context)."""
         import inspect
 
-        from ctk.integrations.chat.tui_mcp import handle_mcp_command
+        from ctk.chat.tui_mcp import handle_mcp_command
 
         sig = inspect.signature(handle_mcp_command)
         params = list(sig.parameters.keys())
@@ -142,7 +142,6 @@ class TestTuiLineCount:
             "..",
             "..",
             "ctk",
-            "integrations",
             "chat",
             "tui.py",
         )

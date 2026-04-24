@@ -16,7 +16,7 @@ def handle_mcp_command(mcp_client, args, mcp_auto_tools_ref=None):
     Returns:
         Updated mcp_auto_tools value if 'auto' subcommand was used, else None.
     """
-    from ctk.integrations.llm.mcp_client import MCPServer
+    from ctk.llm.mcp_client import MCPServer
 
     parts = args.split(maxsplit=1)
     if not parts or not parts[0].strip():

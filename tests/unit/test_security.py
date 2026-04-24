@@ -18,7 +18,7 @@ import pytest
 from ctk.core.config import SENSITIVE_KEYS, Config
 from ctk.core.plugin import PluginASTValidator, PluginSecurityError
 from ctk.core.vfs import VFSPathParser, VFSSecurityError
-from ctk.integrations.exporters.markdown import (MarkdownExporter,
+from ctk.exporters.markdown import (MarkdownExporter,
                                                  PathTraversalError)
 from ctk.mcp_server import (MAX_ID_LENGTH, MAX_LIMIT, MAX_QUERY_LENGTH,
                             MAX_TITLE_LENGTH, ValidationError,

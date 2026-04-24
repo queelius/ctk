@@ -25,7 +25,7 @@ def handle_net_command(
                                      ConversationEmbedder,
                                      ConversationEmbeddingConfig,
                                      SimilarityComputer, SimilarityMetric)
-    from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+    from ctk.embeddings.tfidf import TFIDFEmbedding
 
     if not db:
         print("Error: No database configured")

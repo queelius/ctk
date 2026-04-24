@@ -1,1 +1,0 @@
-"""Integration plugins for various chat formats"""
