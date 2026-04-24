@@ -11,7 +11,7 @@ from datetime import datetime
 import pytest
 
 from ctk.core.models import ContentType, MessageRole
-from ctk.integrations.importers.anthropic import AnthropicImporter
+from ctk.importers.anthropic import AnthropicImporter
 
 
 class TestAnthropicValidation:

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from ctk.core.models import MessageRole
-from ctk.integrations.importers.copilot import CopilotImporter
+from ctk.importers.copilot import CopilotImporter
 
 
 @pytest.fixture

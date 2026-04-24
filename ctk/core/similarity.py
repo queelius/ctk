@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from ctk.core.models import ConversationTree, MessageRole
-from ctk.integrations.embeddings.base import (AggregationStrategy,
+from ctk.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider)
 
@@ -173,11 +173,11 @@ class ConversationEmbedder:
         provider_name = self.config.provider.lower()
 
         if provider_name == "tfidf":
-            from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+            from ctk.embeddings.tfidf import TFIDFEmbedding
 
             return TFIDFEmbedding(self.config.provider_config)
         elif provider_name == "ollama":
-            from ctk.integrations.embeddings.ollama import OllamaEmbedding
+            from ctk.embeddings.ollama import OllamaEmbedding
 
             return OllamaEmbedding(self.config.provider_config)
         else:

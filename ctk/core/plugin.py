@@ -363,9 +363,9 @@ class PluginRegistry:
         self._discovered = False
         # Security: Only allow plugins from trusted directories
         self.allowed_plugin_dirs: Set[str] = set(allowed_plugin_dirs or [])
-        # Add default integrations directory
+        # Add default package base directory (holds importers/, exporters/, ...)
         base_dir = Path(__file__).parent.parent
-        self.allowed_plugin_dirs.add(str(base_dir / "integrations"))
+        self.allowed_plugin_dirs.add(str(base_dir))
 
     def register_importer(self, name: str, plugin: ImporterPlugin):
         """Register an importer plugin"""
@@ -381,9 +381,9 @@ class PluginRegistry:
             return
 
         if plugin_dir is None:
-            # Default to integrations directory
+            # Default to package base; importers/ and exporters/ live directly under it
             base_dir = Path(__file__).parent.parent
-            plugin_dir = base_dir / "integrations"
+            plugin_dir = base_dir
         else:
             plugin_dir = Path(plugin_dir)
 

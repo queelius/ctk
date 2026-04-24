@@ -9,7 +9,7 @@ import requests
 
 from ctk.core.constants import (DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT,
                                 MODEL_LIST_TIMEOUT, SHORT_TIMEOUT)
-from ctk.integrations.llm.base import (ChatResponse, LLMProvider,
+from ctk.llm.base import (ChatResponse, LLMProvider,
                                        LLMProviderError, Message, MessageRole,
                                        ModelInfo, ModelNotFoundError)
 

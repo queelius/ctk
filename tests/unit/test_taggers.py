@@ -9,9 +9,9 @@ import responses
 
 from ctk.core.models import (ConversationTree, Message, MessageContent,
                              MessageRole)
-from ctk.integrations.taggers.ollama_tagger import OllamaTagger
-from ctk.integrations.taggers.openai_tagger import OpenAITagger
-from ctk.integrations.taggers.tfidf_tagger import TFIDFTagger
+from ctk.taggers.ollama_tagger import OllamaTagger
+from ctk.taggers.openai_tagger import OpenAITagger
+from ctk.taggers.tfidf_tagger import TFIDFTagger
 
 
 class TestTFIDFTagger:
@@ -317,7 +317,7 @@ class TestBaseLLMTagger:
     @pytest.mark.unit
     def test_extract_text(self, branching_conversation):
         """Test text extraction from conversation"""
-        from ctk.integrations.taggers.base import BaseLLMTagger
+        from ctk.taggers.base import BaseLLMTagger
 
         # Create a mock tagger
         class MockTagger(BaseLLMTagger):
@@ -338,7 +338,7 @@ class TestBaseLLMTagger:
     @pytest.mark.unit
     def test_create_tagging_prompt(self):
         """Test prompt creation for tagging"""
-        from ctk.integrations.taggers.base import BaseLLMTagger
+        from ctk.taggers.base import BaseLLMTagger
 
         class MockTagger(BaseLLMTagger):
             def get_provider_name(self):
@@ -357,7 +357,7 @@ class TestBaseLLMTagger:
     @pytest.mark.unit
     def test_parse_categorization_response(self):
         """Test parsing categorization response"""
-        from ctk.integrations.taggers.base import BaseLLMTagger
+        from ctk.taggers.base import BaseLLMTagger
 
         class MockTagger(BaseLLMTagger):
             def get_provider_name(self):

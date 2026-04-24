@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ctk.integrations.llm.anthropic import AnthropicProvider
-from ctk.integrations.llm.base import (AuthenticationError, ChatResponse,
+from ctk.llm.anthropic import AnthropicProvider
+from ctk.llm.base import (AuthenticationError, ChatResponse,
                                        ContextLengthError, LLMProviderError,
                                        Message, MessageRole,
                                        ModelNotFoundError, RateLimitError)

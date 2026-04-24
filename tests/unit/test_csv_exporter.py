@@ -12,7 +12,7 @@ import pytest
 
 from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
                              MessageContent, MessageRole)
-from ctk.integrations.exporters.csv_exporter import CSVExporter
+from ctk.exporters.csv_exporter import CSVExporter
 
 
 class TestCSVExporterValidation:

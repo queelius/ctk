@@ -118,7 +118,7 @@ def create_session_commands(
                 success=False, output="", error="system requires a message"
             )
 
-        from ctk.integrations.llm.base import MessageRole as LLMMessageRole
+        from ctk.llm.base import MessageRole as LLMMessageRole
 
         tui_instance.add_message(LLMMessageRole.SYSTEM, args.strip())
         return CommandResult(

@@ -13,7 +13,7 @@ from ctk.core.similarity import (ConversationEmbedder,
                                  ConversationGraph, ConversationGraphBuilder,
                                  ConversationLink, SimilarityComputer,
                                  SimilarityMetric, SimilarityResult)
-from ctk.integrations.embeddings.base import (AggregationStrategy,
+from ctk.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider,
                                               EmbeddingResponse)
@@ -421,7 +421,7 @@ class TestConversationEmbedder:
         """_load_provider should load TFIDFEmbedding for 'tfidf'."""
         config = ConversationEmbeddingConfig(provider="tfidf")
         embedder = ConversationEmbedder(config=config)
-        from ctk.integrations.embeddings.tfidf import TFIDFEmbedding
+        from ctk.embeddings.tfidf import TFIDFEmbedding
 
         assert isinstance(embedder.provider, TFIDFEmbedding)
 

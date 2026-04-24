@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from ctk.core.models import ConversationTree, MessageRole
-from ctk.integrations.importers.filesystem_coding import \
+from ctk.importers.filesystem_coding import \
     FilesystemCodingImporter
 
 # ---------------------------------------------------------------------------

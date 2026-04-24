@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from ctk.core.models import MessageRole
-from ctk.integrations.importers.anthropic import AnthropicImporter
-from ctk.integrations.importers.gemini import GeminiImporter
-from ctk.integrations.importers.jsonl import JSONLImporter
-from ctk.integrations.importers.openai import OpenAIImporter
+from ctk.importers.anthropic import AnthropicImporter
+from ctk.importers.gemini import GeminiImporter
+from ctk.importers.jsonl import JSONLImporter
+from ctk.importers.openai import OpenAIImporter
 
 
 class TestOpenAIImporter:

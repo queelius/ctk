@@ -11,7 +11,7 @@ from datetime import datetime
 import pytest
 
 from ctk.core.models import MessageRole
-from ctk.integrations.importers.gemini import GeminiImporter
+from ctk.importers.gemini import GeminiImporter
 
 # ---------------------------------------------------------------------------
 # Helpers

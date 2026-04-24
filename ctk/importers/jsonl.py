@@ -84,7 +84,12 @@ class JSONLImporter(ImporterPlugin):
         }
 
         data_str = str(data).lower()
-        for hint, name in model_hints.items():
+        # Sort by key length DESC so specific hints (deepseek) match before
+        # shorter overlapping ones (yi is a substring of many strings). See
+        # CLAUDE.md gotcha — this mirrors the OpenAI/Gemini/Anthropic fix.
+        for hint, name in sorted(
+            model_hints.items(), key=lambda kv: len(kv[0]), reverse=True
+        ):
             if hint in data_str:
                 return name
 

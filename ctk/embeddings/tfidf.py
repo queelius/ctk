@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
+from ctk.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
                                               EmbeddingProviderError,
                                               EmbeddingResponse)
 

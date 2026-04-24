@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 import requests
 
-from ctk.integrations.llm.base import (AuthenticationError, ChatResponse,
+from ctk.llm.base import (AuthenticationError, ChatResponse,
                                        ContextLengthError, LLMProviderError,
                                        Message, MessageRole,
                                        ModelNotFoundError, RateLimitError)
-from ctk.integrations.llm.openai import OpenAIProvider
+from ctk.llm.openai import OpenAIProvider
 
 
 class TestOpenAIProviderInit:

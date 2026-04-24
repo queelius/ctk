@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ctk.integrations.embeddings.base import (AggregationStrategy,
+from ctk.embeddings.base import (AggregationStrategy,
                                               ChunkingStrategy,
                                               EmbeddingProvider,
                                               EmbeddingResponse)

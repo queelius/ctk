@@ -16,7 +16,7 @@ from unittest.mock import patch
 import pytest
 
 from ctk.core.models import MessageContent, MessageRole, ToolCall
-from ctk.integrations.importers.openai import OpenAIImporter
+from ctk.importers.openai import OpenAIImporter
 
 
 @pytest.fixture

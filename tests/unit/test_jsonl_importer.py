@@ -11,7 +11,7 @@ from datetime import datetime
 import pytest
 
 from ctk.core.models import MessageRole
-from ctk.integrations.importers.jsonl import JSONLImporter
+from ctk.importers.jsonl import JSONLImporter
 
 
 # ---------------------------------------------------------------------------
@@ -209,13 +209,13 @@ class TestJSONLModelDetection:
         assert self.importer._detect_model(data) == "Qwen"
 
     @pytest.mark.unit
-    def test_multiple_hints_first_wins(self):
-        """When multiple hints match, the first in iteration order wins."""
-        # model_hints is an ordered dict (Python 3.7+).
-        # "llama" comes before "mistral" in the dict, so LLaMA should win.
+    def test_multiple_hints_longest_wins(self):
+        """When multiple hints match, the longest one wins (deterministic)."""
+        # Hints are sorted by length DESC so specific names beat generic ones.
+        # "mistral" (7 chars) beats "llama" (5 chars).
         data = "trained on llama and mistral"
         result = self.importer._detect_model(data)
-        assert result == "LLaMA"
+        assert result == "Mistral"
 
     @pytest.mark.unit
     def test_no_hints_returns_local_llm(self):

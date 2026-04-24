@@ -63,7 +63,7 @@ def cmd_models(args):
     # Try to get models from the provider
     try:
         if provider_name == "ollama":
-            from ctk.integrations.llm.ollama import OllamaProvider
+            from ctk.llm.ollama import OllamaProvider
 
             provider = OllamaProvider(
                 {
@@ -147,7 +147,7 @@ def cmd_test(args):
 
     try:
         if provider_name == "ollama":
-            from ctk.integrations.llm.ollama import OllamaProvider
+            from ctk.llm.ollama import OllamaProvider
 
             provider = OllamaProvider(
                 {
@@ -191,7 +191,7 @@ def cmd_test(args):
                 return 1
 
         elif provider_name == "openai":
-            from ctk.integrations.llm.openai import OpenAIProvider
+            from ctk.llm.openai import OpenAIProvider
 
             api_key = config.get_api_key("openai")
             if not api_key:
@@ -214,7 +214,7 @@ def cmd_test(args):
                 return 1
 
         elif provider_name == "anthropic":
-            from ctk.integrations.llm.anthropic import AnthropicProvider
+            from ctk.llm.anthropic import AnthropicProvider
 
             api_key = config.get_api_key("anthropic")
             if not api_key:

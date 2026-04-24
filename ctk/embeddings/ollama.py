@@ -8,7 +8,7 @@ import requests
 
 from ctk.core.constants import (EMBEDDING_TIMEOUT, MODEL_LIST_TIMEOUT,
                                 SHORT_TIMEOUT)
-from ctk.integrations.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
+from ctk.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
                                               EmbeddingProviderError,
                                               EmbeddingResponse,
                                               ModelNotFoundError)

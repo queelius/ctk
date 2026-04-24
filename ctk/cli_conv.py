@@ -470,7 +470,7 @@ def cmd_reply(args):
     """Get an LLM response and append it to a conversation"""
     from ctk.core.config import get_config
     from ctk.core.models import Message, MessageContent, MessageRole
-    from ctk.integrations.llm.ollama import OllamaProvider
+    from ctk.llm.ollama import OllamaProvider
 
     with ConversationDB(args.db) as db:
         conv_id = resolve_conversation_id(db, args.id)
@@ -680,7 +680,7 @@ def cmd_summarize(args):
     from rich.console import Console
 
     from ctk.core.config import get_config
-    from ctk.integrations.llm.ollama import OllamaProvider
+    from ctk.llm.ollama import OllamaProvider
 
     console = Console()
 

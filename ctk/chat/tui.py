@@ -28,10 +28,10 @@ from ctk.core.models import MessageRole as DBMessageRole
 from ctk.core.shell_completer import create_shell_completer
 from ctk.core.shell_parser import ShellParser
 from ctk.core.tree import ConversationTreeNavigator, TreeMessage
-from ctk.integrations.llm.base import LLMProvider
-from ctk.integrations.llm.base import Message as LLMMessage
-from ctk.integrations.llm.base import MessageRole as LLMMessageRole
-from ctk.integrations.llm.mcp_client import MCPClient, MCPServer
+from ctk.llm.base import LLMProvider
+from ctk.llm.base import Message as LLMMessage
+from ctk.llm.base import MessageRole as LLMMessageRole
+from ctk.llm.mcp_client import MCPClient, MCPServer
 
 
 # Add to_llm_message method to TreeMessage for TUI use
@@ -1755,7 +1755,7 @@ Tags:"""
 
         print("Asking LLM for tag suggestions...")
         try:
-            from ctk.integrations.llm.base import Message, MessageRole
+            from ctk.llm.base import Message, MessageRole
 
             response = self.provider.chat(
                 [Message(role=MessageRole.USER, content=tag_prompt)], temperature=0.3
@@ -2193,7 +2193,7 @@ Available operations:
         formatted_tools = self.provider.format_tools_for_api(tools)
 
         # Build messages
-        from ctk.integrations.llm.base import Message, MessageRole
+        from ctk.llm.base import Message, MessageRole
 
         messages = [
             Message(role=MessageRole.SYSTEM, content=system_prompt),
@@ -3538,25 +3538,25 @@ Available operations:
         # Export using appropriate exporter
         try:
             if fmt == "markdown":
-                from ctk.integrations.exporters.markdown import \
+                from ctk.exporters.markdown import \
                     MarkdownExporter
 
                 exporter = MarkdownExporter()
                 exporter.export_conversations([tree], output_file=filename)
             elif fmt == "json":
-                from ctk.integrations.exporters.json import JSONExporter
+                from ctk.exporters.json import JSONExporter
 
                 exporter = JSONExporter()
                 exporter.export_conversations(
                     [tree], output_file=filename, format="ctk"
                 )
             elif fmt == "jsonl":
-                from ctk.integrations.exporters.jsonl import JSONLExporter
+                from ctk.exporters.jsonl import JSONLExporter
 
                 exporter = JSONLExporter()
                 exporter.export_conversations([tree], output_file=filename)
             elif fmt == "html":
-                from ctk.integrations.exporters.html import HTMLExporter
+                from ctk.exporters.html import HTMLExporter
 
                 exporter = HTMLExporter()
                 exporter.export_conversations([tree], output_path=filename)
