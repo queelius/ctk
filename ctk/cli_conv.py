@@ -467,10 +467,11 @@ def cmd_fork(args):
 
 
 def cmd_reply(args):
-    """Get an LLM response and append it to a conversation"""
-    from ctk.core.config import get_config
+    """Get an LLM response and append it to a conversation."""
     from ctk.core.models import Message, MessageContent, MessageRole
-    from ctk.llm.ollama import OllamaProvider
+    from ctk.llm.base import Message as LLMMessage
+    from ctk.llm.base import MessageRole as LLMMessageRole
+    from ctk.llm.factory import build_provider
 
     with ConversationDB(args.db) as db:
         conv_id = resolve_conversation_id(db, args.id)
@@ -482,49 +483,48 @@ def cmd_reply(args):
             print(f"Error: Conversation {args.id} not found")
             return 1
 
-        # Get conversation history for context
         messages = conv.get_longest_path()
         if not messages:
             print("Error: Conversation has no messages")
             return 1
 
-        # Build message history for LLM
+        # Translate the stored path into the LLM Message type.
+        role_map = {
+            MessageRole.USER: LLMMessageRole.USER,
+            MessageRole.ASSISTANT: LLMMessageRole.ASSISTANT,
+            MessageRole.SYSTEM: LLMMessageRole.SYSTEM,
+        }
         history = []
         for msg in messages:
-            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
-            content = msg.content.text if msg.content else ""
-            history.append({"role": role, "content": content})
-
-        # Initialize provider
-        cfg = get_config()
-        provider_name = args.provider or "ollama"
-        provider_config = cfg.get_provider_config(provider_name)
-
-        config = {
-            "model": args.model or provider_config.get("default_model", "llama2"),
-            "base_url": provider_config.get("base_url", "http://localhost:11434"),
-            "timeout": provider_config.get("timeout", 120),
-        }
+            llm_role = role_map.get(msg.role)
+            if llm_role is None:
+                continue
+            content = msg.content.get_text() if hasattr(msg.content, "get_text") else ""
+            if not content:
+                continue
+            history.append(LLMMessage(role=llm_role, content=content))
 
         try:
-            provider = OllamaProvider(config)
+            provider = build_provider(
+                model=getattr(args, "model", None),
+                base_url=getattr(args, "base_url", None),
+            )
         except Exception as e:
             print(f"Error: Failed to initialize provider: {e}")
             return 1
 
         if not provider.is_available():
-            print(f"Error: Cannot connect to {provider_name}")
+            print(f"Error: Cannot connect to {provider.base_url}")
             return 1
 
-        # Get response
-        print(f"Getting response from {config['model']}...")
+        print(f"Getting response from {provider.model}...")
         try:
             response_text = ""
-            for chunk in provider.chat(history, stream=True):
+            for chunk in provider.stream_chat(history):
                 if chunk:
                     print(chunk, end="", flush=True)
                     response_text += chunk
-            print()  # Newline after response
+            print()
         except Exception as e:
             print(f"\nError getting response: {e}")
             return 1
@@ -533,13 +533,12 @@ def cmd_reply(args):
             print("Error: Empty response from LLM")
             return 1
 
-        # Create response message
         parent_id = messages[-1].id
         response_message = Message(
             role=MessageRole.ASSISTANT,
             content=MessageContent(text=response_text),
             parent_id=parent_id,
-            metadata={"model": config["model"]},
+            metadata={"model": provider.model},
         )
 
         conv.add_message(response_message)
@@ -679,8 +678,9 @@ def cmd_summarize(args):
     """Generate an LLM summary for a conversation"""
     from rich.console import Console
 
-    from ctk.core.config import get_config
-    from ctk.llm.ollama import OllamaProvider
+    from ctk.llm.base import Message as LLMMessage
+    from ctk.llm.base import MessageRole as LLMMessageRole
+    from ctk.llm.factory import build_provider
 
     console = Console()
 
@@ -734,28 +734,19 @@ def cmd_summarize(args):
         if len(full_text) > max_chars:
             full_text = full_text[:max_chars] + "\n\n[TRUNCATED]"
 
-        # Initialize LLM provider
-        cfg = get_config()
-        provider_name = args.provider or "ollama"
-        provider_config = cfg.get_provider_config(provider_name)
-
-        config = {
-            "model": args.model or provider_config.get("default_model", "llama2"),
-            "base_url": provider_config.get("base_url", "http://localhost:11434"),
-            "timeout": provider_config.get("timeout", 120),
-        }
-
         try:
-            provider = OllamaProvider(config)
+            provider = build_provider(
+                model=getattr(args, "model", None),
+                base_url=getattr(args, "base_url", None),
+            )
         except Exception as e:
             print(f"Error: Failed to initialize provider: {e}")
             return 1
 
         if not provider.is_available():
-            print(f"Error: Cannot connect to {provider_name}")
+            print(f"Error: Cannot connect to {provider.base_url}")
             return 1
 
-        # Build summary prompt
         prompt = f"""Summarize this conversation in 2-3 concise sentences. Focus on the main topic and key points discussed.
 
 Conversation ({path_desc}, {len(messages)} messages):
@@ -764,17 +755,17 @@ Conversation ({path_desc}, {len(messages)} messages):
 
 Summary:"""
 
-        console.print(f"Generating summary using {config['model']}...")
+        console.print(f"Generating summary using {provider.model}...")
 
         try:
             summary_text = ""
-            for chunk in provider.chat(
-                [{"role": "user", "content": prompt}], stream=True
+            for chunk in provider.stream_chat(
+                [LLMMessage(role=LLMMessageRole.USER, content=prompt)]
             ):
                 if chunk:
                     print(chunk, end="", flush=True)
                     summary_text += chunk
-            print()  # Newline after response
+            print()
         except Exception as e:
             print(f"\nError generating summary: {e}")
             return 1
@@ -1002,9 +993,9 @@ def add_conv_commands(subparsers):
     reply_parser.add_argument("id", help="Conversation ID (full or partial)")
     reply_parser.add_argument("--db", "-d", required=True, help="Database path")
     reply_parser.add_argument(
-        "--provider", "-p", default="ollama", help="LLM provider (default: ollama)"
+        "--base-url", help="OpenAI-compatible endpoint (default: from config)"
     )
-    reply_parser.add_argument("--model", "-m", help="Model to use")
+    reply_parser.add_argument("--model", "-m", help="Model to use (default: from config)")
 
     # export (single conversation)
     export_conv_parser = conv_subparsers.add_parser(
@@ -1037,9 +1028,9 @@ def add_conv_commands(subparsers):
     summarize_parser.add_argument("id", help="Conversation ID (full or partial)")
     summarize_parser.add_argument("--db", "-d", required=True, help="Database path")
     summarize_parser.add_argument(
-        "--provider", "-p", default="ollama", help="LLM provider (default: ollama)"
+        "--base-url", help="OpenAI-compatible endpoint (default: from config)"
     )
-    summarize_parser.add_argument("--model", "-m", help="Model to use")
+    summarize_parser.add_argument("--model", "-m", help="Model to use (default: from config)")
     summarize_parser.add_argument(
         "--path", type=int, help="Specific path index to summarize"
     )

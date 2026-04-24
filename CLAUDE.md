@@ -114,7 +114,7 @@ Auto-discovers importers/exporters in `ctk/`. Registry pattern with `ImporterPlu
 
 **View System** (`ctk/core/views.py`): YAML-based named collections. Selection types: `ITEMS`, `QUERY`, `SQL`, `UNION/INTERSECT/SUBTRACT`. CLI: `ctk view create/list/show/eval`.
 
-**LLM Integration** (`ctk/llm/`): Abstract `LLMProvider` with implementations for Ollama, OpenAI, Anthropic. Tool calling via `ctk/core/tools.py` and `ctk/core/tools_registry.py`.
+**LLM Integration** (`ctk/llm/`): Abstract `LLMProvider` with a single implementation (`OpenAIProvider`) that wraps the official `openai` SDK. Targets any OpenAI-compatible endpoint (real OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio, or Ollama via `http://localhost:11434/v1`). Configure via `~/.ctk/config.json` under `providers.openai.{base_url,default_model,timeout}`; build instances via `ctk.llm.factory.build_provider()`. Tool calling via `ctk/core/tools.py` and `ctk/core/tools_registry.py`.
 
 **Shared Utilities**:
 - `ctk/core/formatting.py`: `format_conversations_table()` (Rich tables with emoji flags)

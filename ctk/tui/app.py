@@ -186,8 +186,12 @@ class CTKApp(App):
 
     def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
         if self.provider is None:
-            self.notify("No LLM provider configured — run `ctk tui` with one set.",
-                        severity="warning")
+            self.notify(
+                "Chat disabled: no reachable LLM endpoint. "
+                "Fix your config (`ctk config set providers.openai.base_url …`) "
+                "or re-run with --base-url.",
+                severity="warning",
+            )
             return
         if self._streaming_bubble is not None:
             self.notify("A response is still streaming.", severity="warning")
@@ -374,7 +378,7 @@ class CTKApp(App):
                 getattr(self.provider, "model", "?") or "?", style="bold magenta"
             )
         else:
-            text.append("browse-only (no provider)", style="dim")
+            text.append("browse-only · chat disabled", style="dim italic")
         if self._current_tree is not None:
             text.append("   ", style="")
             text.append(self._current_tree.id[:8], style="dim")

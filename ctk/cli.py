@@ -904,30 +904,17 @@ def cmd_plugins(args):
 
 def cmd_auto_tag(args):
     """Auto-tag conversations using LLM"""
-    from ctk.core.config import get_config
     from ctk.llm.base import Message, MessageRole
-    from ctk.llm.ollama import OllamaProvider
+    from ctk.llm.factory import build_provider
 
     if not args.db:
         print("Error: Database path required")
         return 1
 
-    # Load config
-    cfg = get_config()
-    provider_config = cfg.get_provider_config(args.provider)
-
-    # Configure provider
-    config = {
-        "model": args.model,
-        "base_url": provider_config.get("base_url", "http://localhost:11434"),
-        "timeout": provider_config.get("timeout", 120),
-    }
-
-    if args.base_url:
-        config["base_url"] = args.base_url
-
-    # Create provider
-    provider = OllamaProvider(config)
+    provider = build_provider(
+        model=getattr(args, "model", None),
+        base_url=getattr(args, "base_url", None),
+    )
 
     with ConversationDB(args.db) as db:
         # Use search if query provided, otherwise list
@@ -1055,37 +1042,22 @@ Tags:"""
 
 def cmd_say(args):
     """One-shot message to LLM with full tool support (same as TUI 'say' command)"""
-    from ctk.core.config import get_config
     from ctk.chat.tui import ChatTUI
-    from ctk.llm.ollama import OllamaProvider
+    from ctk.llm.factory import build_provider
 
-    # Join query words
     message = " ".join(args.message)
 
-    # Load config
-    cfg = get_config()
-    provider_config = cfg.get_provider_config(args.provider)
-
-    # Configure provider
-    config = {
-        "model": args.model,
-        "base_url": provider_config.get("base_url", "http://localhost:11434"),
-        "timeout": provider_config.get("timeout", 120),
-    }
-    if args.base_url:
-        config["base_url"] = args.base_url
-
-    # Create provider
     try:
-        provider = OllamaProvider(config)
+        provider = build_provider(
+            model=getattr(args, "model", None),
+            base_url=getattr(args, "base_url", None),
+        )
     except Exception as e:
         print(f"Error: Failed to initialize provider: {e}")
         return 1
 
-    # Test connection
     if not provider.is_available():
-        base_url = config.get("base_url", "http://localhost:11434")
-        print(f"Error: Cannot connect to {args.provider} at {base_url}")
+        print(f"Error: Cannot connect to {provider.base_url}")
         return 1
 
     # Create database connection if specified
@@ -2079,99 +2051,70 @@ def cmd_sources(args):
 
 
 def cmd_chat(args):
-    """Start interactive chat with LLM"""
-    # Import here to avoid loading if not needed
-    from ctk.core.config import get_config
+    """Start interactive chat with an OpenAI-compatible LLM endpoint."""
     from ctk.chat.tui import ChatTUI
-    from ctk.llm.ollama import OllamaProvider
+    from ctk.llm.factory import build_provider
 
-    # Load config
-    cfg = get_config()
-    provider_config = cfg.get_provider_config(args.provider)
+    provider = build_provider(
+        model=getattr(args, "model", None),
+        base_url=getattr(args, "base_url", None),
+    )
 
-    # Configure provider (CLI args override config)
-    config = {
-        "model": args.model,
-        "base_url": provider_config.get("base_url", "http://localhost:11434"),
-        "timeout": provider_config.get("timeout", 120),
-    }
-
-    # Override with CLI args if provided
-    if args.base_url:
-        config["base_url"] = args.base_url
-
-    print(f"Initializing {args.provider} provider...")
-    print(f"  Model: {args.model}")
-    if args.base_url:
-        print(f"  URL: {args.base_url}")
+    print(f"Using model {provider.model} at {provider.base_url}")
     if args.db:
         print(f"  Database: {args.db}")
     print()
 
-    # Create provider
-    if args.provider == "ollama":
-        provider = OllamaProvider(config)
-    else:
-        print(f"Error: Unsupported provider: {args.provider}")
-        return 1
-
-    # Test connection
     if not provider.is_available():
-        base_url = config.get("base_url", "http://localhost:11434")
-        print(f"Error: Cannot connect to {args.provider} at {base_url}")
-        print(f"Make sure {args.provider} is running")
+        print(f"Error: Cannot connect to {provider.base_url}")
+        print("Check your endpoint/base_url and that your model is available.")
         return 1
 
-    # Create database connection if specified
     db = None
     if args.db:
         try:
             db = ConversationDB(args.db)
-            print(f"✓ Connected to database")
+            print("✓ Connected to database")
         except Exception as e:
             print(f"Warning: Could not connect to database: {e}")
             print("Continuing without database support...")
 
-    # Create and run chat
     render_markdown = not args.no_markdown
     disable_tools = getattr(args, "no_tools", False)
     chat = ChatTUI(
         provider, db=db, render_markdown=render_markdown, disable_tools=disable_tools
     )
     chat.run()
-
     return 0
 
 
 def cmd_tui(args):
-    """Launch the full-screen Textual TUI (browse + optional chat)."""
+    """Launch the full-screen Textual TUI.
+
+    Chat is enabled by default using whatever provider is configured in
+    ``~/.ctk/config.json`` (or the environment). Pass ``--no-chat`` for
+    browse-only, which skips the connectivity probe entirely.
+    """
+    from ctk.llm.factory import build_provider
     from ctk.tui.app import run as run_tui
 
     provider = None
-    if args.provider:
-        # Build a provider up-front so we can fail fast before the TUI mounts.
-        from ctk.core.config import get_config
-
-        cfg = get_config()
-        provider_config = cfg.get_provider_config(args.provider)
-        config = {
-            "model": args.model,
-            "base_url": args.base_url
-            or provider_config.get("base_url", "http://localhost:11434"),
-            "timeout": provider_config.get("timeout", 120),
-        }
-        if args.provider == "ollama":
-            from ctk.llm.ollama import OllamaProvider
-
-            provider = OllamaProvider(config)
-        else:
-            print(f"Error: Unsupported provider: {args.provider}")
-            return 1
-        if not provider.is_available():
-            print(
-                f"Error: Cannot connect to {args.provider} at {config['base_url']}"
+    if not getattr(args, "no_chat", False):
+        try:
+            provider = build_provider(
+                model=getattr(args, "model", None),
+                base_url=getattr(args, "base_url", None),
             )
-            return 1
+        except Exception as exc:
+            print(f"Chat disabled: could not build provider ({exc})")
+            provider = None
+        else:
+            if not provider.is_available():
+                print(
+                    f"Chat disabled: cannot reach {provider.base_url}. "
+                    "Use --no-chat to silence this, or fix your endpoint."
+                )
+                provider = None
 
     try:
         run_tui(args.db, provider=provider)
@@ -3044,13 +2987,10 @@ def main():
     )
     auto_tag_parser.add_argument("--db", "-d", required=True, help="Database path")
     auto_tag_parser.add_argument(
-        "--provider", default="ollama", choices=["ollama"], help="LLM provider to use"
+        "--model", default=None, help="Model to use for tagging (default: from config)"
     )
     auto_tag_parser.add_argument(
-        "--model", default="llama3.2", help="Model to use for tagging"
-    )
-    auto_tag_parser.add_argument(
-        "--base-url", help="Provider base URL (default: from config)"
+        "--base-url", help="OpenAI-compatible endpoint (default: from config)"
     )
     auto_tag_parser.add_argument(
         "--limit",
@@ -3080,20 +3020,18 @@ def main():
 
     # Chat command
     chat_parser = subparsers.add_parser(
-        "chat", help="Interactive chat with LLM and MCP tools"
+        "chat", help="Interactive chat with an OpenAI-compatible LLM endpoint"
     )
     chat_parser.add_argument(
-        "--model", "-m", default="llama3.2", help="Model to use (default: llama3.2)"
+        "--model",
+        "-m",
+        default=None,
+        help="Model name (default: from config or 'gpt-3.5-turbo')",
     )
     chat_parser.add_argument(
-        "--provider",
-        "-p",
-        default="ollama",
-        choices=["ollama"],
-        help="LLM provider (default: ollama)",
-    )
-    chat_parser.add_argument(
-        "--base-url", help="Base URL for provider (e.g., http://localhost:11434)"
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible endpoint URL (default: from config or https://api.openai.com/v1)",
     )
     chat_parser.add_argument("--db", "-d", help="Database path to save conversations")
     chat_parser.add_argument(
@@ -3113,22 +3051,20 @@ def main():
         "--db", "-d", required=True, help="Database path to browse"
     )
     tui_parser.add_argument(
-        "--provider",
-        "-p",
-        default=None,
-        choices=["ollama"],
-        help="Enable chat in the main pane via this provider (optional)",
-    )
-    tui_parser.add_argument(
         "--model",
         "-m",
-        default="llama3.2",
-        help="Model to use when --provider is set (default: llama3.2)",
+        default=None,
+        help="Model name (default: from config)",
     )
     tui_parser.add_argument(
         "--base-url",
         default=None,
-        help="Base URL for the provider (e.g., http://localhost:11434)",
+        help="OpenAI-compatible endpoint URL (default: from config)",
+    )
+    tui_parser.add_argument(
+        "--no-chat",
+        action="store_true",
+        help="Browse-only mode; don't probe the LLM endpoint on startup",
     )
 
     # Say command - one-shot LLM message with full tool support
@@ -3138,16 +3074,16 @@ def main():
     say_parser.add_argument("message", nargs="+", help="Message to send")
     say_parser.add_argument("--db", "-d", help="Database path (enables CTK tools)")
     say_parser.add_argument(
-        "--model", "-m", default="llama3.2", help="Model to use (default: llama3.2)"
+        "--model",
+        "-m",
+        default=None,
+        help="Model name (default: from config)",
     )
     say_parser.add_argument(
-        "--provider",
-        "-p",
-        default="ollama",
-        choices=["ollama"],
-        help="LLM provider (default: ollama)",
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible endpoint URL (default: from config)",
     )
-    say_parser.add_argument("--base-url", help="Base URL for provider")
     say_parser.add_argument(
         "--no-tools", action="store_true", help="Disable tool calling"
     )

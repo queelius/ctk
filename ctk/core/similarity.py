@@ -169,17 +169,29 @@ class ConversationEmbedder:
         self.provider = provider or self._load_provider()
 
     def _load_provider(self) -> EmbeddingProvider:
-        """Load embedding provider based on config"""
+        """Load embedding provider based on config.
+
+        Two providers ship: ``tfidf`` (no LLM, local) and ``openai``
+        (any OpenAI-compatible ``/v1/embeddings`` endpoint — real
+        OpenAI, Ollama's OpenAI-compat mode on port 11434/v1, vLLM,
+        etc.). The older provider name ``ollama`` is accepted as an
+        alias for ``openai`` with the usual local Ollama base URL.
+        """
         provider_name = self.config.provider.lower()
 
         if provider_name == "tfidf":
             from ctk.embeddings.tfidf import TFIDFEmbedding
 
             return TFIDFEmbedding(self.config.provider_config)
-        elif provider_name == "ollama":
-            from ctk.embeddings.ollama import OllamaEmbedding
+        elif provider_name in ("openai", "ollama"):
+            from ctk.embeddings.openai_embeddings import OpenAIEmbeddingProvider
 
-            return OllamaEmbedding(self.config.provider_config)
+            cfg = dict(self.config.provider_config)
+            # Back-compat: if a caller asked for "ollama", point at the
+            # conventional local port under its OpenAI-compat route.
+            if provider_name == "ollama" and not cfg.get("base_url"):
+                cfg["base_url"] = "http://localhost:11434/v1"
+            return OpenAIEmbeddingProvider(cfg)
         else:
             raise ValueError(f"Unknown embedding provider: {provider_name}")
 
