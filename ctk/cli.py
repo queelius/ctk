@@ -2143,6 +2143,43 @@ def cmd_chat(args):
     return 0
 
 
+def cmd_tui(args):
+    """Launch the full-screen Textual TUI (browse + optional chat)."""
+    from ctk.tui.app import run as run_tui
+
+    provider = None
+    if args.provider:
+        # Build a provider up-front so we can fail fast before the TUI mounts.
+        from ctk.core.config import get_config
+
+        cfg = get_config()
+        provider_config = cfg.get_provider_config(args.provider)
+        config = {
+            "model": args.model,
+            "base_url": args.base_url
+            or provider_config.get("base_url", "http://localhost:11434"),
+            "timeout": provider_config.get("timeout", 120),
+        }
+        if args.provider == "ollama":
+            from ctk.llm.ollama import OllamaProvider
+
+            provider = OllamaProvider(config)
+        else:
+            print(f"Error: Unsupported provider: {args.provider}")
+            return 1
+        if not provider.is_available():
+            print(
+                f"Error: Cannot connect to {args.provider} at {config['base_url']}"
+            )
+            return 1
+
+    try:
+        run_tui(args.db, provider=provider)
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def cmd_show(args):
     """Show a specific conversation"""
     from ctk.core.conversation_display import show_conversation_helper
@@ -3068,6 +3105,32 @@ def main():
         help="Disable tool calling (for models that don't support it)",
     )
 
+    # Textual multi-pane TUI ("ctk tui")
+    tui_parser = subparsers.add_parser(
+        "tui", help="Full-screen multi-pane browse/chat UI (requires --db)"
+    )
+    tui_parser.add_argument(
+        "--db", "-d", required=True, help="Database path to browse"
+    )
+    tui_parser.add_argument(
+        "--provider",
+        "-p",
+        default=None,
+        choices=["ollama"],
+        help="Enable chat in the main pane via this provider (optional)",
+    )
+    tui_parser.add_argument(
+        "--model",
+        "-m",
+        default="llama3.2",
+        help="Model to use when --provider is set (default: llama3.2)",
+    )
+    tui_parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Base URL for the provider (e.g., http://localhost:11434)",
+    )
+
     # Say command - one-shot LLM message with full tool support
     say_parser = subparsers.add_parser(
         "say", help="One-shot message to LLM (same as TUI say)"
@@ -3206,6 +3269,7 @@ def main():
         "auto-tag": cmd_auto_tag,
         "say": cmd_say,
         "chat": cmd_chat,
+        "tui": cmd_tui,
         "sql": cmd_sql,
         "query": cmd_query,
     }

@@ -1,0 +1,117 @@
+/* CTK Textual TUI theme.
+ * Rendered by Textual CSS. Keep selectors tied to widget ids/classes so
+ * ordering tweaks in app.py don't silently unstyle things. */
+
+Screen {
+    background: $surface;
+    color: $text;
+}
+
+/* Sidebar: fixed-width conversation list on the left. */
+#sidebar {
+    width: 38;
+    min-width: 28;
+    border: round $primary;
+    padding: 0 1;
+}
+
+#sidebar-title {
+    color: $accent;
+    text-style: bold;
+    padding: 0 0 1 0;
+}
+
+#sidebar DataTable {
+    height: 1fr;
+}
+
+#sidebar DataTable > .datatable--header {
+    background: $boost;
+    color: $accent;
+    text-style: bold;
+}
+
+#sidebar DataTable > .datatable--cursor {
+    background: $primary 40%;
+    text-style: bold;
+}
+
+/* Main pane: messages on top, input at the bottom. */
+#main {
+    border: round $secondary;
+    padding: 0 1;
+}
+
+#main-header {
+    height: auto;
+    color: $accent;
+    text-style: bold;
+    padding: 0 0 1 0;
+}
+
+#messages {
+    height: 1fr;
+    overflow-y: auto;
+    padding: 0 1;
+}
+
+.message-user {
+    padding: 1 1;
+    margin: 0 0 1 0;
+    border-left: wide $accent;
+    background: $boost;
+}
+
+.message-assistant {
+    padding: 1 1;
+    margin: 0 0 1 0;
+    border-left: wide $success;
+}
+
+.message-system {
+    padding: 0 1;
+    margin: 0 0 1 0;
+    color: $text-muted;
+    text-style: italic;
+}
+
+.message-role {
+    color: $accent;
+    text-style: bold;
+}
+
+/* Chat input area at the bottom of the main pane. */
+#input-area {
+    height: 5;
+    border: round $accent;
+    padding: 0 1;
+}
+
+#input-area.streaming {
+    border: round $warning;
+}
+
+/* Search overlay (toggled with /). */
+#search-overlay {
+    dock: top;
+    height: 3;
+    border: round $warning;
+    padding: 0 1;
+    display: none;
+}
+
+#search-overlay.visible {
+    display: block;
+}
+
+/* Footer status widget on the right of the built-in footer. */
+#status {
+    color: $text-muted;
+    width: auto;
+    padding: 0 1;
+}
+
+#status .streaming {
+    color: $warning;
+    text-style: bold;
+}

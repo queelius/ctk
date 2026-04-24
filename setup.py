@@ -39,6 +39,7 @@ setup(
         "networkx>=3.0",
         "scikit-learn>=1.3.0",
         "numpy>=1.24.0",
+        "textual>=0.50.0",
     ],
     extras_require={
         "dev": [

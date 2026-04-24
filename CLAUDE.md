@@ -36,7 +36,9 @@ make clean            # Remove build artifacts and __pycache__
 
 ### CLI Architecture
 
-Top-level commands in `ctk/cli.py`: `import`, `export`, `view`, `plugins`, `auto-tag`, `chat`, `say`, `query`, `sql`
+Top-level commands in `ctk/cli.py`: `import`, `export`, `view`, `plugins`, `auto-tag`, `chat`, `tui`, `say`, `query`, `sql`
+
+- `ctk tui` launches a Textual multi-pane app (sidebar conversation list + chat main pane). Browse-only without `--provider`; add `--provider ollama --model X` to enable LLM chat in the main pane. The line-oriented `ctk chat` shell is unaffected.
 
 Subcommand groups (each in its own module):
 - `ctk conv` (`cli_conv.py`): show, tree, paths, star, pin, archive, title, delete, duplicate, tag, untag, say, fork, reply, export, info, summarize
@@ -46,7 +48,7 @@ Subcommand groups (each in its own module):
 - `ctk llm` (`cli_llm.py`): provider/model management
 - `ctk config` (`cli_config.py`): configuration management
 
-### Shell-First TUI (`ctk/integrations/chat/tui.py`)
+### Shell-First TUI (`ctk/chat/tui.py`)
 
 Two-mode system entered via `ctk chat`:
 1. **Shell mode** (default): Unix-like VFS navigation
@@ -87,13 +89,13 @@ class CommandResult:
 
 ### Plugin System (`ctk/core/plugin.py`)
 
-Auto-discovers importers/exporters in `ctk/integrations/`. Registry pattern with `ImporterPlugin`/`ExporterPlugin` base classes.
+Auto-discovers importers/exporters in `ctk/`. Registry pattern with `ImporterPlugin`/`ExporterPlugin` base classes.
 
-**Importers** (`ctk/integrations/importers/`): openai, anthropic, gemini, copilot, jsonl, filesystem_coding
+**Importers** (`ctk/importers/`): openai, anthropic, gemini, copilot, jsonl, filesystem_coding
 
-**Exporters** (`ctk/integrations/exporters/`): json, jsonl, markdown, html, hugo, csv, echo
+**Exporters** (`ctk/exporters/`): json, jsonl, markdown, html, hugo, csv, echo
 
-**HTML Exporter Chat Features** (`ctk/integrations/exporters/html.py`): The HTML exporter produces self-contained interactive HTML files with tree-aware chat continuation. Key JS components embedded in the export:
+**HTML Exporter Chat Features** (`ctk/exporters/html.py`): The HTML exporter produces self-contained interactive HTML files with tree-aware chat continuation. Key JS components embedded in the export:
 - **ConversationTree** JS class: mirrors Python `ConversationTree` — builds `childrenMap`/`roots` from `parent_id`, methods: `getChildren()`, `getPathToRoot()`, `getDefaultPath()`, `addMessage()`
 - **ChatClient** JS class: async SSE streaming to OpenAI-compatible endpoints (`/v1/chat/completions`), `AbortController` for cancellation
 - **Path-based rendering**: `showConversation(conv, pathLeafId)` renders selected tree path with branch indicators (`Branch N of M [prev][next]`)
@@ -112,7 +114,7 @@ Auto-discovers importers/exporters in `ctk/integrations/`. Registry pattern with
 
 **View System** (`ctk/core/views.py`): YAML-based named collections. Selection types: `ITEMS`, `QUERY`, `SQL`, `UNION/INTERSECT/SUBTRACT`. CLI: `ctk view create/list/show/eval`.
 
-**LLM Integration** (`ctk/integrations/llm/`): Abstract `LLMProvider` with implementations for Ollama, OpenAI, Anthropic. Tool calling via `ctk/core/tools.py` and `ctk/core/tools_registry.py`.
+**LLM Integration** (`ctk/llm/`): Abstract `LLMProvider` with implementations for Ollama, OpenAI, Anthropic. Tool calling via `ctk/core/tools.py` and `ctk/core/tools_registry.py`.
 
 **Shared Utilities**:
 - `ctk/core/formatting.py`: `format_conversations_table()` (Rich tables with emoji flags)
