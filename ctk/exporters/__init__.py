@@ -1,7 +1,25 @@
-"""Exporter plugins for various chat formats"""
+"""Built-in exporter plugins.
 
-# Import exporters to ensure they're registered
-# Use alias for csv to avoid shadowing Python's built-in csv module
-from . import csv_exporter, echo, html, json, jsonl, markdown
+Importing this package loads every first-party exporter so the plugin
+registry can discover them via ``ExporterPlugin.__subclasses__()``.
 
-__all__ = ["jsonl", "markdown", "json", "html", "echo", "csv_exporter"]
+Add new exporters here to register them automatically.
+"""
+
+from ctk.exporters.csv_exporter import CSVExporter
+from ctk.exporters.echo import ECHOExporter
+from ctk.exporters.html import HTMLExporter
+from ctk.exporters.hugo import HugoExporter
+from ctk.exporters.json import JSONExporter
+from ctk.exporters.jsonl import JSONLExporter
+from ctk.exporters.markdown import MarkdownExporter
+
+__all__ = [
+    "CSVExporter",
+    "ECHOExporter",
+    "HTMLExporter",
+    "HugoExporter",
+    "JSONExporter",
+    "JSONLExporter",
+    "MarkdownExporter",
+]
