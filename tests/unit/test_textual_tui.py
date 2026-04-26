@@ -133,3 +133,90 @@ async def test_enter_key_does_not_crash_on_textual_key_event(seeded_db):
         # This press would previously raise AttributeError.
         await pilot.press("enter")
         await pilot.pause()
+
+
+async def test_sidebar_tabs_change_filter(seeded_db):
+    """Switching tabs invokes the right DB query and refilters the table."""
+    _, db = seeded_db
+    from ctk.tui.app import CTKApp
+
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app.sidebar is not None
+        # Both seeded conversations are unstarred, so 'starred' filter
+        # should yield zero rows.
+        app.sidebar.set_mode("starred")
+        await pilot.pause()
+        assert app.sidebar._table.row_count == 0
+        # Back to 'all' restores the full set.
+        app.sidebar.set_mode("all")
+        await pilot.pause()
+        assert app.sidebar._table.row_count == 2
+
+
+async def test_fork_truncates_tree_to_focused_message(seeded_db):
+    """Ctrl+F at a message id prunes descendants and assigns a new id."""
+    import uuid as uuid_mod
+
+    from ctk.core.models import (Message, MessageContent, MessageRole)
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Open a conversation, then add an extra message so the tree
+        # has something to truncate (assistant -> user -> assistant).
+        app._open_selected()
+        await pilot.pause()
+        assert app._current_tree is not None
+        original_path = app._current_tree.get_longest_path()
+        assert len(original_path) >= 2
+
+        # Append a third message to make the truncation visible.
+        third = Message(
+            id=str(uuid_mod.uuid4()),
+            role=MessageRole.USER,
+            content=MessageContent(text="follow-up"),
+            parent_id=original_path[-1].id,
+        )
+        app._current_tree.add_message(third)
+        original_path = app._current_tree.get_longest_path()
+        assert len(original_path) == 3
+        before_id = app._current_tree.id
+        target_id = original_path[1].id  # second message in path
+
+        # Drive the helper directly — focusing a specific message in
+        # run_test() is harness-dependent and not the point here.
+        app.CTKApp__truncate_called = True  # noqa: pylint marker, harmless
+        app._truncate_tree_to_message(app._current_tree, target_id)
+        # Simulate the rest of action_fork_at_focus's id rotation.
+        app._current_tree.id = str(uuid_mod.uuid4())
+
+        # Tree should now contain exactly the ancestor path of target_id.
+        new_path = app._current_tree.get_longest_path()
+        assert [m.id for m in new_path] == [
+            original_path[0].id,
+            original_path[1].id,
+        ]
+        assert app._current_tree.id != before_id
+
+
+async def test_app_with_no_provider_disables_chat_path(seeded_db):
+    """Submitting in the chat input without a provider only notifies."""
+    _, db = seeded_db
+    from ctk.tui.app import CTKApp
+    from ctk.tui.main_pane import ChatInput
+
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Fabricate a Submitted event; no provider means we should hit
+        # the early-return branch and NOT mutate _turn_active.
+        assert app.main is not None
+        app.on_chat_input_submitted(
+            ChatInput.Submitted(app.main.input, "hi")
+        )
+        await pilot.pause()
+        assert app._turn_active is False

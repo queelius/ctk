@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from rich.text import Text
 from textual import work
@@ -45,8 +45,18 @@ from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble
 from ctk.tui.sidebar import ConversationList
 
 
+# ---------------------------------------------------------------------------
+# Worker → UI thread messages
+#
+# Workers run in threads via @work; they post these messages back to the UI
+# thread so all widget mutations happen on the event loop. Each message
+# class corresponds to one of the dispatch hooks below
+# (``on_<class_snake_case>``).
+# ---------------------------------------------------------------------------
+
+
 class _StreamToken(TextualMessage):
-    """Internal message posted for each streamed assistant token."""
+    """One streamed assistant token (no-tools fast path only)."""
 
     def __init__(self, text: str) -> None:
         super().__init__()
@@ -54,11 +64,75 @@ class _StreamToken(TextualMessage):
 
 
 class _StreamDone(TextualMessage):
-    """Internal message posted when a stream finishes (or errors)."""
+    """A streaming response finished (or errored)."""
 
     def __init__(self, error: Optional[str] = None) -> None:
         super().__init__()
         self.error = error
+
+
+class _ChatAssistantText(TextualMessage):
+    """A complete assistant text block from a non-streaming response.
+
+    Used in the tool-calling path where we can't stream because we need
+    the full response to extract tool_calls. ``final`` indicates whether
+    this is the last assistant turn (no further tool calls coming).
+    """
+
+    def __init__(self, text: str, final: bool) -> None:
+        super().__init__()
+        self.text = text
+        self.final = final
+
+
+class _ChatToolCall(TextualMessage):
+    """A tool call about to execute or just completed.
+
+    ``status`` is one of ``"started"``, ``"ok"``, ``"error"``. The
+    UI renders a small panel for each call so the user can see what
+    the model is doing.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        args: Dict[str, Any],
+        status: str,
+        result: Optional[str] = None,
+    ) -> None:
+        super().__init__()
+        self.name = name
+        self.args = args
+        self.status = status
+        self.result = result
+
+
+class _ChatDone(TextualMessage):
+    """The whole assistant turn (including any tool loops) finished."""
+
+    def __init__(self, error: Optional[str] = None) -> None:
+        super().__init__()
+        self.error = error
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Trim ``text`` to ``limit`` chars with an ellipsis suffix."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
+
+
+def _short_args(args: Dict[str, Any]) -> str:
+    """Render tool args as a compact ``key=value, …`` string for inline display."""
+    if not args:
+        return ""
+    parts = []
+    for k, v in args.items():
+        s = str(v)
+        if len(s) > 30:
+            s = s[:27] + "…"
+        parts.append(f"{k}={s}")
+    return ", ".join(parts)
 
 
 class CTKApp(App):
@@ -75,16 +149,25 @@ class CTKApp(App):
         Binding("ctrl+r", "refresh", "refresh"),
         Binding("ctrl+s", "toggle_star", "star"),
         Binding("ctrl+n", "new_conversation", "new chat"),
+        Binding("ctrl+f", "fork_at_focus", "fork (truncate)"),
+        Binding("ctrl+b", "branch_at_focus", "branch (preserve)"),
     ]
 
     def __init__(
         self,
         db: ConversationDB,
         provider: Optional[LLMProvider] = None,
+        enable_tools: bool = True,
     ) -> None:
         super().__init__()
         self.db = db
         self.provider = provider
+        # Tool calling lights up only if the provider supports it AND the
+        # caller hasn't explicitly disabled it (e.g., for models that
+        # advertise tools but choke on real calls).
+        self.enable_tools = enable_tools and (
+            provider is not None and provider.supports_tool_calling()
+        )
         self.sidebar: Optional[ConversationList] = None
         self.main: Optional[MainPane] = None
         self._search_input: Optional[Input] = None
@@ -92,6 +175,9 @@ class CTKApp(App):
         self._current_tree: Optional[ConversationTree] = None
         self._streaming_bubble: Optional[MessageBubble] = None
         self._streaming_buffer: str = ""
+        # Set when an assistant turn (text or text+tools) is in flight,
+        # so we can ignore double-submits and reflect the state in the UI.
+        self._turn_active: bool = False
 
     # ------------------------------------------------------------------
     # Composition
@@ -193,19 +279,32 @@ class CTKApp(App):
                 severity="warning",
             )
             return
-        if self._streaming_bubble is not None:
-            self.notify("A response is still streaming.", severity="warning")
+        if self._turn_active:
+            self.notify("A response is still in flight.", severity="warning")
             return
 
         assert self.main is not None
 
         user_msg = self._append_user_message(event.text)
-        # Start an empty assistant bubble that the stream worker fills in.
+        self._turn_active = True
+        self.main.set_streaming(True)
+
+        if self.enable_tools:
+            # Tool-aware path: non-streaming, executes any tool calls, loops.
+            self._chat_worker_with_tools(user_msg.id)
+        else:
+            # Fast path: stream tokens straight into a single bubble.
+            self._start_streaming_bubble(user_msg.id)
+            self._stream_worker(self._llm_history_for(self._current_tree))
+
+    def _start_streaming_bubble(self, parent_id: str) -> None:
+        """Set up an empty assistant bubble for the streaming worker to fill."""
+        assert self.main is not None
         assistant_msg = Message(
             id=str(uuid.uuid4()),
             role=MessageRole.ASSISTANT,
             content=MessageContent(text=""),
-            parent_id=user_msg.id,
+            parent_id=parent_id,
             timestamp=datetime.now(),
         )
         if self._current_tree is not None:
@@ -214,14 +313,12 @@ class CTKApp(App):
         self._streaming_buffer = ""
         bubble = MessageBubble(assistant_msg)
         self._streaming_bubble = bubble
-        self.main.messages.mount(Static(Text("bot", style="bold green"),
-                                        classes="message-role"))
+        self.main.messages.mount(
+            Static(Text("bot", style="bold green"), classes="message-role")
+        )
         self.main.messages.mount(bubble)
         self.main.messages.scroll_end(animate=False)
-        self.main.set_streaming(True)
         self._refresh_status()
-
-        self._stream_worker(self._llm_history_for(self._current_tree))
 
     def _append_user_message(self, text: str) -> Message:
         assert self.main is not None
@@ -295,6 +392,180 @@ class CTKApp(App):
             return
         self.post_message(_StreamDone())
 
+    # ------------------------------------------------------------------
+    # Tool-aware chat path
+    # ------------------------------------------------------------------
+    #
+    # When tools are enabled we can't stream — the openai SDK only
+    # surfaces tool_calls on the final non-streaming response, and
+    # reassembling them from streaming deltas is fiddly. The worker
+    # below uses the blocking ``provider.chat()`` and loops until the
+    # model returns a turn with no tool calls.
+    #
+    # All tool execution happens inside the worker thread (calling
+    # ``execute_ask_tool`` which is synchronous). The UI gets discrete
+    # update messages for each phase so widgets are mounted on the main
+    # thread, which Textual requires.
+
+    _MAX_TOOL_TURNS: int = 6
+
+    @work(thread=True, exclusive=True)
+    def _chat_worker_with_tools(self, parent_msg_id: str) -> None:
+        """Run a tool-enabled chat turn.
+
+        ``parent_msg_id`` is the user message we're responding to. It's
+        passed through so the assistant message we ultimately store has
+        a correct parent_id even though tree mutation happens on the UI
+        thread (in the message handlers).
+        """
+        from ctk.core.tools import get_ask_tools  # lazy: tests don't need it
+
+        try:
+            assert self.provider is not None
+
+            history = self._llm_history_for(self._current_tree)
+            tools = get_ask_tools(include_pass_through=False)
+
+            for _turn in range(self._MAX_TOOL_TURNS):
+                response = self.provider.chat(history, tools=tools)
+                content = response.content or ""
+                tool_calls = response.tool_calls or []
+
+                if content:
+                    self.post_message(
+                        _ChatAssistantText(content, final=not tool_calls)
+                    )
+                    history.append(
+                        LLMMessage(
+                            role=LLMMessageRole.ASSISTANT, content=content
+                        )
+                    )
+
+                if not tool_calls:
+                    self.post_message(_ChatDone())
+                    return
+
+                for tc in tool_calls:
+                    name = tc["name"]
+                    args = tc.get("arguments") or {}
+                    self.post_message(
+                        _ChatToolCall(name=name, args=args, status="started")
+                    )
+                    try:
+                        result = self._execute_tool(name, args)
+                        self.post_message(
+                            _ChatToolCall(
+                                name=name, args=args, status="ok", result=result
+                            )
+                        )
+                    except Exception as exc:
+                        self.post_message(
+                            _ChatToolCall(
+                                name=name,
+                                args=args,
+                                status="error",
+                                result=str(exc),
+                            )
+                        )
+                        result = f"Tool error: {exc}"
+
+                    # Feed the result back to the model so the next loop
+                    # iteration can react to it.
+                    history.append(
+                        self.provider.format_tool_result_message(
+                            name, result, tool_call_id=tc.get("id")
+                        )
+                    )
+
+            # Bailed out of the loop without a tool-call-free turn — tell
+            # the user so they don't think the model is still thinking.
+            self.post_message(
+                _ChatDone(
+                    error=(
+                        f"Tool loop exceeded {self._MAX_TOOL_TURNS} turns; "
+                        "stopping. The model may be stuck calling tools."
+                    )
+                )
+            )
+        except Exception as exc:  # pragma: no cover
+            self.post_message(_ChatDone(error=str(exc)))
+
+    def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
+        """Run a CTK tool, returning its result as a string.
+
+        Currently delegates to ``ctk.cli.execute_ask_tool`` which holds
+        the canonical dispatch logic. Kept as a single seam so a future
+        refactor can swap the executor (e.g., MCP-based) without
+        changing the worker.
+        """
+        from ctk.cli import execute_ask_tool
+
+        # ``use_rich`` would print to stdout, which the TUI swallows.
+        # The tool registry returns strings either way.
+        return execute_ask_tool(self.db, name, args, use_rich=False)
+
+    # ----- UI thread handlers for chat-with-tools messages -------------
+
+    def on_chat_assistant_text(self, event: _ChatAssistantText) -> None:
+        """Mount an assistant text bubble for a non-streaming turn."""
+        if self.main is None:
+            return
+        # Append to the in-memory tree so subsequent saves carry the text.
+        if self._current_tree is not None:
+            parent_id = None
+            path = self._current_tree.get_longest_path()
+            if path:
+                parent_id = path[-1].id
+            assistant_msg = Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.ASSISTANT,
+                content=MessageContent(text=event.text),
+                parent_id=parent_id,
+                timestamp=datetime.now(),
+            )
+            self._current_tree.add_message(assistant_msg)
+            self.main.messages.mount(
+                Static(Text("bot", style="bold green"), classes="message-role")
+            )
+            self.main.messages.append_message(assistant_msg)
+        if event.final:
+            # No more tool calls — same cleanup as on_stream_done would do.
+            self._safe_save(
+                self._current_tree
+            ) if self._current_tree else None
+
+    def on_chat_tool_call(self, event: _ChatToolCall) -> None:
+        """Render a tool call panel inline in the message stream."""
+        if self.main is None:
+            return
+        text = Text()
+        if event.status == "started":
+            text.append("⚙  ", style="bold yellow")
+            text.append(f"{event.name}", style="bold cyan")
+            text.append(f"({_short_args(event.args)})", style="dim")
+        elif event.status == "ok":
+            text.append("✓  ", style="bold green")
+            text.append(f"{event.name} → ", style="bold cyan")
+            text.append(_truncate(event.result or "", 200), style="")
+        else:  # error
+            text.append("✗  ", style="bold red")
+            text.append(f"{event.name} failed: ", style="bold red")
+            text.append(_truncate(event.result or "", 200), style="dim")
+        self.main.messages.mount(Static(text, classes="message-tool"))
+        self.main.messages.scroll_end(animate=False)
+
+    def on_chat_done(self, event: _ChatDone) -> None:
+        if self.main is not None:
+            self.main.set_streaming(False)
+        self._turn_active = False
+        if event.error:
+            self.notify(event.error, severity="error")
+        if self._current_tree is not None:
+            self._safe_save(self._current_tree)
+        if self.sidebar is not None:
+            self.sidebar.refresh_list()
+        self._refresh_status()
+
     def on_stream_token(self, event: _StreamToken) -> None:
         # Custom Textual messages dispatch to ``on_<snake_case_name>``.
         if self._streaming_bubble is None:
@@ -305,11 +576,11 @@ class CTKApp(App):
     def on_stream_done(self, event: _StreamDone) -> None:
         assert self.main is not None
         self.main.set_streaming(False)
+        self._turn_active = False
         if event.error:
             self.notify(f"Stream error: {event.error}", severity="error")
         # Persist the final assistant content into the tree and save.
         if self._streaming_bubble is not None and self._current_tree is not None:
-            # The bubble's message is the last assistant message we added.
             final_text = self._streaming_buffer
             path = self._current_tree.get_longest_path()
             if path and path[-1].role == MessageRole.ASSISTANT:
@@ -366,6 +637,108 @@ class CTKApp(App):
             self.main.set_header("new conversation")
             self.main.input.focus()
 
+    def action_fork_at_focus(self) -> None:
+        """Fork the current conversation at the focused message.
+
+        Truncates the tree to the ancestor chain of the focus target —
+        descendants and sibling branches are dropped. Same semantics as
+        the legacy ``/fork`` command, with ``Ctrl+F`` instead of slash.
+        """
+        self._fork_or_branch(preserve_tree=False)
+
+    def action_branch_at_focus(self) -> None:
+        """Branch the current conversation at the focused message.
+
+        Keeps the full tree in memory and gives the conversation a new
+        id, so saving creates a sibling rather than overwriting. Same
+        semantics as the legacy ``/branch``.
+        """
+        self._fork_or_branch(preserve_tree=True)
+
+    def _fork_or_branch(self, preserve_tree: bool) -> None:
+        if self._current_tree is None:
+            self.notify("No conversation loaded.", severity="warning")
+            return
+        target_id = self._focused_message_id()
+        if target_id is None:
+            self.notify(
+                "Focus a message first (Tab/Shift+Tab to move between messages).",
+                severity="warning",
+            )
+            return
+        target = self._current_tree.message_map.get(target_id)
+        if target is None:
+            self.notify("Focused message no longer exists.", severity="warning")
+            return
+
+        # Save the current state under the OLD id before we mutate.
+        self._safe_save(self._current_tree)
+
+        if not preserve_tree:
+            self._truncate_tree_to_message(self._current_tree, target_id)
+
+        old_id = self._current_tree.id
+        new_id = str(uuid.uuid4())
+        self._current_tree.id = new_id
+        old_title = self._current_tree.title or "(untitled)"
+        verb = "Branch" if preserve_tree else "Fork"
+        self._current_tree.title = f"{verb} of {old_title}"
+
+        # Re-render the message view so it reflects the (possibly
+        # pruned) tree under the new id.
+        if self.main is not None:
+            self.main.messages.show_conversation(self._current_tree)
+            self.main.set_header(self._header_for(self._current_tree))
+
+        self.notify(
+            f"{verb}ed at {target_id[:8]} — new id {new_id[:8]} "
+            f"(old: {old_id[:8]})"
+        )
+        if self.sidebar is not None:
+            self.sidebar.refresh_list()
+
+    def _focused_message_id(self) -> Optional[str]:
+        """Return the message_id of a currently focused MessageBubble, if any."""
+        focused = self.focused
+        if isinstance(focused, MessageBubble):
+            return focused.message_id
+        return None
+
+    @staticmethod
+    def _truncate_tree_to_message(
+        tree: ConversationTree, target_id: str
+    ) -> None:
+        """Prune ``tree`` so only ancestors of target_id (plus target) remain.
+
+        Mirrors the helper in ``ctk/chat/tui.py`` so both UIs share the
+        same fork semantics. We can't import the legacy helper directly
+        because that module pulls in heavy chat-mode dependencies the
+        Textual app doesn't need.
+        """
+        target = tree.message_map.get(target_id)
+        if target is None:
+            return
+        keep = {target.id}
+        cursor: Optional[Message] = target
+        while cursor is not None and cursor.parent_id:
+            parent = tree.message_map.get(cursor.parent_id)
+            if parent is None:
+                break
+            keep.add(parent.id)
+            cursor = parent
+
+        # Drop everything else from the message_map and from
+        # root_message_ids (the path walker keys off both).
+        tree.message_map = {
+            mid: msg for mid, msg in tree.message_map.items() if mid in keep
+        }
+        tree.root_message_ids = [
+            r for r in tree.root_message_ids if r in keep
+        ]
+        # Invalidate the cached path traversal so subsequent renders see
+        # the pruned set.
+        tree._invalidate_paths_cache()
+
     # ------------------------------------------------------------------
     # Status bar
     # ------------------------------------------------------------------
@@ -377,13 +750,15 @@ class CTKApp(App):
             text.append(
                 getattr(self.provider, "model", "?") or "?", style="bold magenta"
             )
+            if self.enable_tools:
+                text.append("  · tools", style="dim cyan")
         else:
             text.append("browse-only · chat disabled", style="dim italic")
         if self._current_tree is not None:
             text.append("   ", style="")
             text.append(self._current_tree.id[:8], style="dim")
-        if self._streaming_bubble is not None:
-            text.append("   streaming…", style="bold yellow")
+        if self._turn_active:
+            text.append("   thinking…", style="bold yellow")
         return text
 
     def _refresh_status(self) -> None:
@@ -394,6 +769,7 @@ class CTKApp(App):
 def run(
     db_path: str,
     provider: Optional[LLMProvider] = None,
+    enable_tools: bool = True,
 ) -> None:
     """Launch the Textual TUI against ``db_path``.
 
@@ -402,7 +778,7 @@ def run(
     """
     db = ConversationDB(db_path)
     try:
-        app = CTKApp(db=db, provider=provider)
+        app = CTKApp(db=db, provider=provider, enable_tools=enable_tools)
         app.run()
     finally:
         db.close()

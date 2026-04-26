@@ -24,7 +24,16 @@ def _role_label(role: MessageRole) -> Text:
 
 
 class MessageBubble(Static):
-    """A single message in the scroll view, styled by role."""
+    """A single message in the scroll view, styled by role.
+
+    Bubbles are focusable so j/k or arrow keys can move the selection
+    cursor between messages — the parent app uses the focused bubble's
+    ``message_id`` to drive fork/branch actions. Made focusable via
+    ``can_focus = True`` rather than overriding ``__init__`` flags so
+    the existing test that mounts these unchanged still works.
+    """
+
+    can_focus = True
 
     def __init__(self, msg: Message) -> None:
         klass = {
@@ -43,6 +52,11 @@ class MessageBubble(Static):
             renderable = Text(body or "")
         super().__init__(renderable, classes=klass)
         self._msg = msg
+
+    @property
+    def message_id(self) -> str:
+        """The ctk Message id this bubble represents."""
+        return self._msg.id
 
 
 class MessageView(VerticalScroll):

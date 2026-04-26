@@ -2051,9 +2051,22 @@ def cmd_sources(args):
 
 
 def cmd_chat(args):
-    """Start interactive chat with an OpenAI-compatible LLM endpoint."""
+    """Start the legacy line-mode chat REPL.
+
+    Deprecated since 2.11.0. The Textual app at ``ctk tui`` now covers
+    every feature this REPL had (tool calling, fork/branch, message
+    navigation, file context) plus a real visual UI. ``ctk chat`` is
+    scheduled for removal in 2.12.0.
+    """
     from ctk.chat.tui import ChatTUI
     from ctk.llm.factory import build_provider
+
+    print(
+        "[deprecated] `ctk chat` will be removed in 2.12.0. "
+        "Use `ctk tui --db <path>` instead — same chat, plus a sidebar "
+        "for browsing, message navigation, and visual fork/branch."
+    )
+    print()
 
     provider = build_provider(
         model=getattr(args, "model", None),
@@ -2117,7 +2130,11 @@ def cmd_tui(args):
                 provider = None
 
     try:
-        run_tui(args.db, provider=provider)
+        run_tui(
+            args.db,
+            provider=provider,
+            enable_tools=not getattr(args, "no_tools", False),
+        )
     except KeyboardInterrupt:
         pass
     return 0
@@ -3065,6 +3082,11 @@ def main():
         "--no-chat",
         action="store_true",
         help="Browse-only mode; don't probe the LLM endpoint on startup",
+    )
+    tui_parser.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="Disable tool calling (for models that don't support it)",
     )
 
     # Say command - one-shot LLM message with full tool support
