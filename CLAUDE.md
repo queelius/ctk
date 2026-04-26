@@ -38,7 +38,7 @@ make clean            # Remove build artifacts and __pycache__
 
 Top-level commands in `ctk/cli.py`: `import`, `export`, `view`, `plugins`, `auto-tag`, `chat`, `tui`, `say`, `query`, `sql`
 
-- `ctk tui` launches a Textual multi-pane app (tabbed sidebar + chat main pane). Chat is enabled by default using config (`providers.openai.{base_url,default_model}`); `--no-chat` disables. Tool calling on by default; `--no-tools` disables. Sidebar tabs: All / Starred / Pinned / Recent / Archived. Bindings: `Ctrl+F` fork at focused message (truncate), `Ctrl+B` branch at focused message (preserve full tree).
+- `ctk tui` launches a Textual multi-pane app (tabbed sidebar + chat main pane). Chat is enabled by default using config (`providers.openai.{base_url,default_model}`); `--no-chat` disables. Tool calling on by default; `--no-tools` disables. Sidebar tabs: All / Starred / Pinned / Recent / Archived. Bindings: `Ctrl+F` fork at focused message (truncate), `Ctrl+B` branch at focused message (preserve full tree), `Ctrl+G` edit system prompt, `Ctrl+O` attach file as system message, `[`/`]` switch between sibling branches at focused message.
 - `ctk chat` is the legacy line-mode REPL. Deprecated since 2.11.0; scheduled for removal in 2.12.0. Prints a deprecation banner at startup.
 
 Subcommand groups (each in its own module):

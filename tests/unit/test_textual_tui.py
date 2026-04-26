@@ -220,3 +220,105 @@ async def test_app_with_no_provider_disables_chat_path(seeded_db):
         )
         await pilot.pause()
         assert app._turn_active is False
+
+
+async def test_sibling_switch_swaps_path_tail(seeded_db):
+    """Switching siblings on a branching parent rewrites the path tail."""
+    import uuid as uuid_mod
+
+    from ctk.core.models import Message, MessageContent, MessageRole
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._open_selected()
+        await pilot.pause()
+        assert app._current_tree is not None
+        path = app._current_tree.get_longest_path()
+        # Add a sibling assistant under the same user message so the
+        # second-to-last message has 2 children.
+        user_msg = path[-2]
+        sibling = Message(
+            id=str(uuid_mod.uuid4()),
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="alternate response"),
+            parent_id=user_msg.id,
+        )
+        app._current_tree.add_message(sibling)
+        # Re-render with the path that includes the original assistant.
+        app.main.messages.show_conversation(app._current_tree)
+        await pilot.pause()
+        before_tail = app.main.messages.current_path[-1].id
+        # Switch — should pick the other sibling.
+        switched = app.main.messages.switch_sibling(user_msg.id, +1)
+        assert switched is True
+        after_tail = app.main.messages.current_path[-1].id
+        assert before_tail != after_tail
+
+
+async def test_set_system_prompt_inserts_message(seeded_db):
+    """Setting a non-empty system prompt inserts a SYSTEM root."""
+    from ctk.core.models import (ConversationMetadata, ConversationTree,
+                                 MessageRole)
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        tree = ConversationTree(metadata=ConversationMetadata())
+        app._set_system_prompt(tree, "you are a helpful assistant")
+        path = tree.get_longest_path()
+        assert len(path) == 1
+        assert path[0].role == MessageRole.SYSTEM
+        assert "helpful assistant" in path[0].content.get_text()
+
+
+async def test_set_system_prompt_clear_removes_message(seeded_db):
+    """Setting an empty system prompt removes the existing one."""
+    from ctk.core.models import (ConversationMetadata, ConversationTree,
+                                 MessageRole)
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        tree = ConversationTree(metadata=ConversationMetadata())
+        app._set_system_prompt(tree, "first prompt")
+        assert any(m.role == MessageRole.SYSTEM for m in tree.message_map.values())
+        app._set_system_prompt(tree, "")
+        assert not any(
+            m.role == MessageRole.SYSTEM for m in tree.message_map.values()
+        )
+
+
+async def test_attach_file_appends_system_message(seeded_db, tmp_path):
+    """Attach-file injects a SYSTEM message containing the file body."""
+    from ctk.core.models import MessageRole
+    from ctk.tui.app import CTKApp
+
+    file = tmp_path / "ctx.txt"
+    file.write_text("hello from file")
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._open_selected()
+        await pilot.pause()
+        assert app._current_tree is not None
+        before_count = len(app._current_tree.message_map)
+        app._on_file_attached(str(file))
+        await pilot.pause()
+        after_count = len(app._current_tree.message_map)
+        assert after_count == before_count + 1
+        # The new message is a SYSTEM role with the file body inside.
+        sys_msgs = [
+            m for m in app._current_tree.message_map.values()
+            if m.role == MessageRole.SYSTEM
+        ]
+        assert sys_msgs
+        assert any("hello from file" in m.content.get_text() for m in sys_msgs)

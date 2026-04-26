@@ -42,6 +42,7 @@ from ctk.llm.base import LLMProvider
 from ctk.llm.base import Message as LLMMessage
 from ctk.llm.base import MessageRole as LLMMessageRole
 from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble
+from ctk.tui.modals import FilePathModal, SystemPromptModal
 from ctk.tui.sidebar import ConversationList
 
 
@@ -151,6 +152,10 @@ class CTKApp(App):
         Binding("ctrl+n", "new_conversation", "new chat"),
         Binding("ctrl+f", "fork_at_focus", "fork (truncate)"),
         Binding("ctrl+b", "branch_at_focus", "branch (preserve)"),
+        Binding("left_square_bracket", "prev_sibling", "prev branch", show=False),
+        Binding("right_square_bracket", "next_sibling", "next branch", show=False),
+        Binding("ctrl+g", "edit_system_prompt", "system prompt"),
+        Binding("ctrl+o", "attach_file", "attach file"),
     ]
 
     def __init__(
@@ -636,6 +641,187 @@ class CTKApp(App):
             self.main.messages.show_empty("New conversation — type a message to begin.")
             self.main.set_header("new conversation")
             self.main.input.focus()
+
+    def action_edit_system_prompt(self) -> None:
+        """Edit (or create) the conversation's system prompt via a modal."""
+        if self._current_tree is None:
+            # Lazily create a tree so the user can set a prompt before
+            # sending the first message.
+            self._current_tree = ConversationTree(
+                id=str(uuid.uuid4()),
+                title="(new conversation)",
+                metadata=ConversationMetadata(
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                    model=getattr(self.provider, "model", None)
+                    if self.provider
+                    else None,
+                ),
+            )
+        existing = self._existing_system_prompt(self._current_tree)
+        self.push_screen(
+            SystemPromptModal(initial=existing or ""),
+            self._on_system_prompt_saved,
+        )
+
+    def _existing_system_prompt(
+        self, tree: ConversationTree
+    ) -> Optional[str]:
+        """Return the text of the first SYSTEM message in the path, if any."""
+        for msg in tree.get_longest_path():
+            if msg.role == MessageRole.SYSTEM:
+                if hasattr(msg.content, "get_text"):
+                    return msg.content.get_text()
+                return str(msg.content)
+        return None
+
+    def _on_system_prompt_saved(self, new_text: Optional[str]) -> None:
+        if new_text is None:
+            return  # cancelled
+        if self._current_tree is None:
+            return
+        self._set_system_prompt(self._current_tree, new_text)
+        self._safe_save(self._current_tree)
+        if self.main is not None:
+            self.main.messages.show_conversation(self._current_tree)
+            self.main.set_header(self._header_for(self._current_tree))
+        self.notify("System prompt saved.")
+
+    def _set_system_prompt(self, tree: ConversationTree, text: str) -> None:
+        """Insert / update / clear the leading SYSTEM message.
+
+        Empty text removes the SYSTEM message entirely. A non-empty
+        value either updates the existing one or inserts a new SYSTEM
+        message at the root and re-parents the existing root onto it.
+        """
+        # Find an existing SYSTEM message at the top of the tree.
+        existing: Optional[Message] = None
+        for root_id in tree.root_message_ids:
+            msg = tree.message_map.get(root_id)
+            if msg is not None and msg.role == MessageRole.SYSTEM:
+                existing = msg
+                break
+
+        if not text.strip():
+            # Caller asked to clear. Remove the SYSTEM root and re-link
+            # any of its children up so they become roots.
+            if existing is not None:
+                children = tree.get_children(existing.id)
+                tree.message_map.pop(existing.id, None)
+                if existing.id in tree.root_message_ids:
+                    tree.root_message_ids.remove(existing.id)
+                for child in children:
+                    child.parent_id = None
+                    if child.id not in tree.root_message_ids:
+                        tree.root_message_ids.append(child.id)
+                tree._invalidate_paths_cache()
+            return
+
+        if existing is not None:
+            existing.content = MessageContent(text=text)
+            tree._invalidate_paths_cache()
+            return
+
+        # Insert a new SYSTEM message as the new root, with the old roots
+        # re-parented onto it.
+        sys_msg = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.SYSTEM,
+            content=MessageContent(text=text),
+            parent_id=None,
+            timestamp=datetime.now(),
+        )
+        tree.message_map[sys_msg.id] = sys_msg
+        old_roots = list(tree.root_message_ids)
+        tree.root_message_ids = [sys_msg.id]
+        for old_root_id in old_roots:
+            old_root = tree.message_map.get(old_root_id)
+            if old_root is not None:
+                old_root.parent_id = sys_msg.id
+        tree._invalidate_paths_cache()
+
+    def action_attach_file(self) -> None:
+        """Prompt for a file path and inject its contents as a SYSTEM message."""
+        self.push_screen(
+            FilePathModal(prompt="Attach file (path will be read as text):"),
+            self._on_file_attached,
+        )
+
+    def _on_file_attached(self, path_str: Optional[str]) -> None:
+        if not path_str:
+            return
+        import os
+
+        path = os.path.expanduser(path_str)
+        if not os.path.isfile(path):
+            self.notify(f"File not found: {path}", severity="error")
+            return
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except OSError as exc:
+            self.notify(f"Could not read {path}: {exc}", severity="error")
+            return
+
+        if self._current_tree is None:
+            self._current_tree = ConversationTree(
+                id=str(uuid.uuid4()),
+                title=f"chat with {os.path.basename(path)}",
+                metadata=ConversationMetadata(
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                    model=getattr(self.provider, "model", None)
+                    if self.provider
+                    else None,
+                ),
+            )
+
+        # Append the file as a SYSTEM message at the END of the current
+        # path (NOT at the root) so it acts as in-line context for the
+        # next user message rather than a global preamble.
+        parent_id = None
+        path_msgs = self._current_tree.get_longest_path()
+        if path_msgs:
+            parent_id = path_msgs[-1].id
+        attach_msg = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.SYSTEM,
+            content=MessageContent(
+                text=f"[Attached file: {path}]\n\n{content}\n\n[End of file: {path}]"
+            ),
+            parent_id=parent_id,
+            timestamp=datetime.now(),
+        )
+        self._current_tree.add_message(attach_msg)
+
+        if self.main is not None:
+            self.main.messages.append_message(attach_msg)
+            self.main.set_header(self._header_for(self._current_tree))
+        self.notify(
+            f"Attached {os.path.basename(path)} "
+            f"({len(content)} chars, {len(content.splitlines())} lines)."
+        )
+
+    def action_prev_sibling(self) -> None:
+        """Switch to the previous sibling under the focused message."""
+        self._switch_sibling(direction=-1)
+
+    def action_next_sibling(self) -> None:
+        """Switch to the next sibling under the focused message."""
+        self._switch_sibling(direction=+1)
+
+    def _switch_sibling(self, direction: int) -> None:
+        if self.main is None:
+            return
+        target_id = self._focused_message_id()
+        if target_id is None:
+            self.notify(
+                "Focus a message first (Tab/Shift+Tab between messages).",
+                severity="warning",
+            )
+            return
+        if not self.main.messages.switch_sibling(target_id, direction):
+            self.notify("No siblings to switch to here.", severity="information")
 
     def action_fork_at_focus(self) -> None:
         """Fork the current conversation at the focused message.

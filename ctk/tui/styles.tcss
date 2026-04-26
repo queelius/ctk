@@ -97,6 +97,12 @@ Screen {
     color: $text-muted;
 }
 
+.branch-indicator {
+    height: 1;
+    margin: 0 0 1 2;
+    color: $text-muted;
+}
+
 .message-role {
     color: $accent;
     text-style: bold;
