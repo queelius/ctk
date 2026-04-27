@@ -160,14 +160,15 @@ class InlineImage(Vertical):
 
     # Default size for the inline image area.
     #
-    # Without an explicit height the AutoImage child collapses to 1
-    # cell row (Textual's default for ``height: auto`` when the child
-    # widget reports no natural height — textual-image only exposes a
-    # Measurement for width). We pick 24 rows as a comfortable inline
-    # preview: tall enough for a square image to be recognisable, not
-    # so tall that it dominates the message view. Width fills whatever
-    # the parent allows; textual-image preserves aspect ratio inside
-    # the box.
+    # textual-image's BaseImage maps CSS to its ImageSize as follows:
+    # an integer or ``1fr`` becomes a literal cell count (NO aspect
+    # preservation — both dimensions are honoured exactly), but the
+    # special value ``auto`` lets ImageSize compute that dimension
+    # from the source's pixel aspect ratio and the terminal's cell
+    # aspect. So we set ``height: 24`` to fix the visual size and
+    # leave ``width: auto`` so square / wide / tall sources all
+    # render with correct proportions, capped at the container width
+    # to avoid horizontal overflow.
     DEFAULT_CSS = """
     InlineImage {
         height: auto;
@@ -175,7 +176,8 @@ class InlineImage(Vertical):
     }
     InlineImage .image-content {
         height: 24;
-        width: 1fr;
+        width: auto;
+        max-width: 100%;
     }
     InlineImage .image-caption {
         color: $text-muted;
