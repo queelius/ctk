@@ -252,13 +252,13 @@ class HelpModal(ModalScreen[None]):
         with Vertical():
             yield Label("CTK · Help", classes="title")
             with VerticalScroll():
-                yield Static(self._render(), markup=True)
+                yield Static(self._build_help_markup(), markup=True)
             yield Label("Esc / q / Ctrl+H to close", classes="hint")
 
     def action_close(self) -> None:
         self.dismiss(None)
 
-    def _render(self) -> str:
+    def _build_help_markup(self) -> str:
         # Imported lazily so this modal stays import-cheap.
         from ctk.core.tools_registry import iter_providers
         from ctk.tui.slash import commands as slash_commands
