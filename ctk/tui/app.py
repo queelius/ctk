@@ -215,6 +215,16 @@ class CTKApp(App):
         self.sidebar.focus_table()
         self._refresh_status()
 
+    def on_unmount(self) -> None:
+        # Clean up temp files written for base64-embedded images.
+        # Lazy-import keeps text-only sessions from paying the cost.
+        try:
+            from ctk.tui.images import cleanup_temp_files
+
+            cleanup_temp_files()
+        except ImportError:
+            pass
+
     # ------------------------------------------------------------------
     # Sidebar selection -> main pane
     # ------------------------------------------------------------------

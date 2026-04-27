@@ -192,6 +192,31 @@ class MessageView(VerticalScroll):
         bubble = MessageBubble(msg)
         self.mount(role_line)
         self.mount(bubble)
+        # Mount any image attachments below the bubble. Lazy-import so
+        # the image stack stays out of the codepath for text-only
+        # conversations (which is most of them) and so missing
+        # textual-image at install time degrades to a graceful warning
+        # rather than an import error.
+        images = getattr(msg.content, "images", None)
+        if images:
+            try:
+                from ctk.tui.images import build_image_widgets
+
+                for widget in build_image_widgets(images):
+                    self.mount(widget)
+            except ImportError:
+                # textual-image not installed; show a minimal fallback
+                # so the user at least knows attachments existed.
+                for img in images:
+                    label = (
+                        img.caption
+                        or img.url
+                        or img.path
+                        or f"(embedded {img.mime_type or 'image'})"
+                    )
+                    self.mount(
+                        Static(f"[image] {label}", classes="message-system")
+                    )
         # Show a branch indicator under any message with siblings beyond
         # the one currently picked. We render it AFTER the bubble whose
         # *child* in the path has siblings — i.e., this is the parent of
