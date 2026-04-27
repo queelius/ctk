@@ -2,7 +2,7 @@
 Conversation Toolkit - A robust system for managing tree-based conversations
 """
 
-__version__ = "2.13.2"
+__version__ = "2.13.3"
 __author__ = "Alex Towell"
 
 # Fluent API

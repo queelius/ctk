@@ -1675,26 +1675,25 @@ def cmd_sources(args):
     return 0
 
 
-def _launch_default_tui(args, parser) -> int:
-    """Resolve a DB path and launch the TUI for the no-subcommand case.
+def _resolve_tui_db_path(args, parser=None):
+    """Return a usable db_path for the TUI, or an int exit code on failure.
 
     Resolution order: ``--db`` flag, then ``database.default_path`` in
-    ``~/.ctk/config.json``. Bails with a helpful error (and the help
-    text) if neither yields a path, rather than silently opening an
-    empty DB.
+    ``~/.ctk/config.json``. ConversationDB expects a directory and
+    stores the SQLite file at ``<dir>/conversations.db``; older configs
+    sometimes named the SQLite file directly, so we tolerate both
+    shapes. Shared between ``ctk`` (no subcommand) and ``ctk tui`` so
+    both fall back to the configured default identically.
     """
     import os
     from ctk.core.config import get_config
 
-    db_path = args.db
+    db_path = getattr(args, "db", None)
     if not db_path:
         cfg = get_config()
         db_path = cfg.config.get("database", {}).get("default_path")
         if db_path:
             db_path = os.path.expanduser(db_path)
-            # ConversationDB expects a directory and stores the SQLite
-            # file at <dir>/conversations.db. Older configs sometimes
-            # named the SQLite file directly; tolerate both shapes.
             if os.path.isfile(db_path) and db_path.endswith(".db"):
                 db_path = os.path.dirname(db_path) or "."
             if not os.path.exists(db_path):
@@ -1712,12 +1711,17 @@ def _launch_default_tui(args, parser) -> int:
             "  • set `database.default_path` in ~/.ctk/config.json, or\n"
             "  • use `ctk import …` to create one from an export.\n"
         )
-        parser.print_help()
+        if parser is not None:
+            parser.print_help()
         return 1
+    return db_path
 
-    # Forward to cmd_tui which handles provider construction + launch.
-    # Make a shim namespace so cmd_tui doesn't see top-level flags it
-    # doesn't expect.
+
+def _launch_default_tui(args, parser) -> int:
+    """Resolve a DB path and launch the TUI for the no-subcommand case."""
+    db_path = _resolve_tui_db_path(args, parser=parser)
+    if isinstance(db_path, int):
+        return db_path
     import argparse as _ap
 
     forwarded = _ap.Namespace(
@@ -1735,10 +1739,15 @@ def cmd_tui(args):
 
     Chat is enabled by default using whatever provider is configured in
     ``~/.ctk/config.json`` (or the environment). Pass ``--no-chat`` for
-    browse-only, which skips the connectivity probe entirely.
+    browse-only, which skips the connectivity probe entirely. Falls back
+    to the configured default DB path when ``--db`` is omitted.
     """
     from ctk.llm.factory import build_provider
     from ctk.tui.app import run as run_tui
+
+    db_path = _resolve_tui_db_path(args)
+    if isinstance(db_path, int):
+        return db_path
 
     provider = None
     if not getattr(args, "no_chat", False):
@@ -1760,7 +1769,7 @@ def cmd_tui(args):
 
     try:
         run_tui(
-            args.db,
+            db_path,
             provider=provider,
             enable_tools=not getattr(args, "no_tools", False),
         )
