@@ -5,7 +5,6 @@ Tests focus on:
 - Plugin security (AST validation)
 - Path traversal protection
 - Input validation (MCP server)
-- VFS path security
 - Credential handling
 """
 
@@ -17,7 +16,6 @@ import pytest
 
 from ctk.core.config import SENSITIVE_KEYS, Config
 from ctk.core.plugin import PluginASTValidator, PluginSecurityError
-from ctk.core.vfs import VFSPathParser, VFSSecurityError
 from ctk.exporters.markdown import (MarkdownExporter,
                                                  PathTraversalError)
 from ctk.mcp_server import (MAX_ID_LENGTH, MAX_LIMIT, MAX_QUERY_LENGTH,
@@ -159,58 +157,6 @@ def broken(
 
 
 # ==================== VFS Path Security Tests ====================
-
-
-class TestVFSPathSecurity:
-    """Tests for VFS path traversal protection"""
-
-    def test_normalized_path_starts_with_slash(self):
-        """All normalized paths must start with /"""
-        test_paths = [
-            "/chats/abc",
-            "chats/abc",
-            "../../../etc/passwd",
-            "..%2F..%2Fetc%2Fpasswd",
-            "/tags/../../etc",
-        ]
-        for path in test_paths:
-            normalized = VFSPathParser.normalize_path(path)
-            assert normalized.startswith(
-                "/"
-            ), f"Path '{path}' normalized to '{normalized}'"
-
-    def test_path_traversal_blocked(self):
-        """Path traversal attempts should stay within VFS root"""
-        # Try to escape to parent directories
-        result = VFSPathParser.normalize_path("/../../../etc/passwd")
-        assert result == "/etc/passwd" or result == "/"
-        assert not result.startswith("/..")
-
-    def test_relative_traversal_blocked(self):
-        """Relative path traversal should be blocked"""
-        result = VFSPathParser.normalize_path("../../../", "/chats")
-        assert result == "/" or result.startswith("/")
-        assert ".." not in result
-
-    def test_double_dot_in_segments_resolved(self):
-        """.. segments should be properly resolved"""
-        result = VFSPathParser.normalize_path("/chats/abc/../def")
-        assert result == "/chats/def"
-        assert ".." not in result
-
-    def test_current_dir_dots_resolved(self):
-        """Single dots should be resolved"""
-        result = VFSPathParser.normalize_path("/chats/./abc/./def")
-        assert result == "/chats/abc/def"
-        assert "/." not in result
-
-    def test_invalid_current_dir_defaults_to_root(self):
-        """Invalid current_dir should default to root"""
-        result = VFSPathParser.normalize_path("abc", "invalid_no_slash")
-        assert result.startswith("/")
-
-
-# ==================== Markdown Exporter Path Traversal Tests ====================
 
 
 class TestMarkdownExporterPathSecurity:

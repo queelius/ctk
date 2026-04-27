@@ -332,6 +332,18 @@ class CTKApp(App):
     # ------------------------------------------------------------------
 
     def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
+        # First chance: a slash command. ``slash.dispatch`` returns
+        # (handled, note); when handled is True we never call the LLM.
+        # Slash commands work even with no provider configured, so
+        # /help and /mcp are reachable in browse-only mode.
+        from ctk.tui.slash import dispatch as slash_dispatch
+
+        handled, note = slash_dispatch(self, event.text)
+        if handled:
+            if note is not None:
+                self._render_system_note(note)
+            return
+
         if self.provider is None:
             self.notify(
                 "Chat disabled: no reachable LLM endpoint. "
@@ -357,6 +369,21 @@ class CTKApp(App):
             # Fast path: stream tokens straight into a single bubble.
             self._start_streaming_bubble(user_msg.id)
             self._stream_worker(self._llm_history_for(self._current_tree))
+
+    def _render_system_note(self, text: str) -> None:
+        """Mount a slash-command result inline as a system-style note.
+
+        The slash dispatcher returns plain text; we display it in the
+        message view rather than as a Textual notification so users
+        can scroll back to past command output (useful for /mcp,
+        /help, /sql results).
+        """
+        if self.main is None:
+            return
+        self.main.messages.mount(
+            Static(Text(text), classes="message-system")
+        )
+        self.main.messages.scroll_end(animate=False)
 
     def _start_streaming_bubble(self, parent_id: str) -> None:
         """Set up an empty assistant bubble for the streaming worker to fill."""
@@ -559,18 +586,36 @@ class CTKApp(App):
         except Exception as exc:  # pragma: no cover
             self.post_message(_ChatDone(error=str(exc)))
 
+    # Tool names belonging to the ctk.network virtual MCP. Routed to
+    # ctk.core.network_tools.execute_network_tool instead of the legacy
+    # cli.execute_ask_tool dispatcher. Kept as a class-level set so the
+    # check is O(1) and the list is greppable.
+    _NETWORK_TOOL_NAMES = frozenset(
+        {"find_similar_conversations", "list_neighbors"}
+    )
+
     def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
         """Run a CTK tool, returning its result as a string.
 
-        Currently delegates to ``ctk.cli.execute_ask_tool`` which holds
-        the canonical dispatch logic. Kept as a single seam so a future
-        refactor can swap the executor (e.g., MCP-based) without
+        Routes by tool-name to the right provider:
+
+        * ``ctk.network`` tools → ``network_tools.execute_network_tool``
+        * ``ctk.builtin`` tools → ``cli.execute_ask_tool`` (legacy
+          dispatcher; will move into a dedicated builtin_tools module
+          in a follow-up)
+
+        Kept as a single seam so a future refactor (real MCP server
+        registration, plugin tools, etc.) can route here without
         changing the worker.
         """
+        if name in self._NETWORK_TOOL_NAMES:
+            from ctk.core.network_tools import execute_network_tool
+
+            return execute_network_tool(self.db, name, args)
+
         from ctk.cli import execute_ask_tool
 
         # ``use_rich`` would print to stdout, which the TUI swallows.
-        # The tool registry returns strings either way.
         return execute_ask_tool(self.db, name, args, use_rich=False)
 
     # ----- UI thread handlers for chat-with-tools messages -------------
@@ -1100,6 +1145,26 @@ class CTKApp(App):
             self._status.update(self._status_text())
 
 
+def _register_builtin_providers() -> None:
+    """Import modules that register virtual MCP providers on import.
+
+    Today: ``ctk.network`` provider via ``ctk.core.network_tools``.
+    The ``ctk.builtin`` provider is registered when ``tools_registry``
+    itself is imported (it's the default), so no work is needed there.
+
+    Kept as an explicit function (not just an import side-effect at
+    module top of app.py) so the order is obvious: providers are
+    registered before the TUI mounts and before the chat worker
+    queries the registry. New providers added here.
+    """
+    try:
+        import ctk.core.network_tools  # noqa: F401  (import for side effect)
+    except Exception as exc:  # pragma: no cover
+        # A failing provider import shouldn't prevent the TUI from
+        # opening; the user just loses access to those tools.
+        logger.warning("Could not register ctk.network provider: %s", exc)
+
+
 def _detect_image_protocol_eagerly() -> None:
     """Force textual-image's terminal-protocol detection to run NOW.
 
@@ -1135,6 +1200,7 @@ def run(
     ``ctk.tui`` doesn't eagerly open the DB.
     """
     _detect_image_protocol_eagerly()
+    _register_builtin_providers()
     db = ConversationDB(db_path)
     try:
         app = CTKApp(db=db, provider=provider, enable_tools=enable_tools)

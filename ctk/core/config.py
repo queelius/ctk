@@ -36,7 +36,9 @@ class Config:
                 "timeout": 30,
             },
         },
-        "database": {"default_path": "~/.ctk/conversations.db"},
+        # Database "path" is a directory; ConversationDB stores
+        # ``conversations.db`` (and ``media/``) inside it.
+        "database": {"default_path": "~/.ctk"},
         "tagging": {
             "auto_tag": True,
             "default_provider": "openai",
