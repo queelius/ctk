@@ -13,9 +13,9 @@ from typing import Optional
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, TextArea
+from textual.widgets import Button, Input, Label, Static, TextArea
 
 
 class SystemPromptModal(ModalScreen[Optional[str]]):
@@ -133,3 +133,172 @@ class FilePathModal(ModalScreen[Optional[str]]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class ConfirmModal(ModalScreen[bool]):
+    """Yes/No confirmation modal for destructive operations.
+
+    Returns ``True`` if the user confirms, ``False`` (or ``None`` →
+    ``False`` via the dismiss default) on cancel. Callers should always
+    branch on the truthiness of the result.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "cancel"),
+        Binding("y", "confirm", "yes", show=False),
+        Binding("n", "cancel", "no", show=False),
+        Binding("enter", "confirm", "confirm", show=False),
+    ]
+
+    DEFAULT_CSS = """
+    ConfirmModal {
+        align: center middle;
+    }
+    ConfirmModal > Vertical {
+        background: $panel;
+        border: round $error;
+        padding: 1 2;
+        width: 60;
+        height: auto;
+    }
+    ConfirmModal Label.title {
+        color: $error;
+        text-style: bold;
+        padding: 0 0 1 0;
+    }
+    ConfirmModal Label.detail {
+        padding: 0 0 1 0;
+    }
+    ConfirmModal Label.hint {
+        color: $text-muted;
+        padding: 1 0 0 0;
+    }
+    """
+
+    def __init__(self, title: str, detail: str = "") -> None:
+        super().__init__()
+        self._title = title
+        self._detail = detail
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(self._title, classes="title")
+            if self._detail:
+                yield Label(self._detail, classes="detail")
+            yield Label("[y]es / [n]o / Esc to cancel", classes="hint")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
+class HelpModal(ModalScreen[None]):
+    """Three-column help screen: bindings, slash commands, MCP tools.
+
+    Built dynamically from the live registries so it can never drift
+    out of sync with what's actually wired up. Includes a one-line
+    callout about CTK's fork/branch terminology being inverted from
+    git's, since that's the most common surprise.
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "close"),
+        Binding("q", "close", "close"),
+        Binding("ctrl+h", "close", "close"),
+    ]
+
+    DEFAULT_CSS = """
+    HelpModal {
+        align: center middle;
+    }
+    HelpModal > Vertical {
+        background: $panel;
+        border: round $accent;
+        padding: 1 2;
+        width: 90%;
+        height: 90%;
+    }
+    HelpModal Label.title {
+        color: $accent;
+        text-style: bold;
+        padding: 0 0 1 0;
+    }
+    HelpModal VerticalScroll {
+        height: 1fr;
+    }
+    HelpModal .section {
+        color: $accent;
+        text-style: bold;
+        padding: 1 0 0 0;
+    }
+    HelpModal .callout {
+        color: $warning;
+        text-style: italic;
+        padding: 1 0 1 0;
+    }
+    HelpModal .hint {
+        color: $text-muted;
+        padding: 1 0 0 0;
+    }
+    """
+
+    def __init__(self, bindings: list) -> None:
+        super().__init__()
+        self._bindings = bindings
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label("CTK · Help", classes="title")
+            with VerticalScroll():
+                yield Static(self._render(), markup=True)
+            yield Label("Esc / q / Ctrl+H to close", classes="hint")
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    def _render(self) -> str:
+        # Imported lazily so this modal stays import-cheap.
+        from ctk.core.tools_registry import iter_providers
+        from ctk.tui.slash import commands as slash_commands
+
+        out: list[str] = []
+
+        out.append("[bold]Key bindings[/bold]")
+        for binding in self._bindings:
+            key = getattr(binding, "key", "?")
+            description = getattr(binding, "description", "") or getattr(binding, "action", "")
+            show = getattr(binding, "show", True)
+            if not show:
+                continue
+            out.append(f"  [cyan]{key:<10}[/cyan] {description}")
+        out.append("")
+
+        out.append("[bold]Slash commands[/bold]  (type in the chat input)")
+        for cmd in slash_commands().values():
+            out.append(f"  [cyan]{cmd.usage:<28}[/cyan] {cmd.summary}")
+        out.append("")
+
+        out.append("[bold]MCP tool providers[/bold]  (callable by the LLM)")
+        for provider in iter_providers():
+            status = "ready" if provider.available else "unavailable"
+            out.append(
+                f"  [cyan]{provider.name:<16}[/cyan] [{status}] "
+                f"{len(provider.tools)} tool"
+                f"{'s' if len(provider.tools) != 1 else ''}"
+            )
+            for tool in provider.tools:
+                summary = (tool.get("description") or "").strip().splitlines()[0]
+                if len(summary) > 70:
+                    summary = summary[:67] + "…"
+                out.append(f"      • [dim]{tool['name']}[/dim]  {summary}")
+        out.append("")
+
+        out.append("[yellow italic]Note:[/yellow italic] CTK's [cyan]fork[/cyan] and "
+                   "[cyan]branch[/cyan] are inverted relative to git. In CTK:")
+        out.append("  • [cyan]fork[/cyan]   = snip to focused message (drop later messages + sibling branches)")
+        out.append("  • [cyan]branch[/cyan] = duplicate the entire tree under a new id")
+        out.append("Both produce a new conversation; only [cyan]branch[/cyan] preserves the full tree.")
+
+        return "\n".join(out)

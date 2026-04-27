@@ -2,6 +2,7 @@
 Core data models for conversation representation
 """
 
+import copy as _copy
 import hashlib
 import json
 import uuid
@@ -639,6 +640,154 @@ class ConversationTree:
             if len(children) > 1:
                 branch_count += 1
         return branch_count
+
+    # ------------------------------------------------------------------
+    # Tree primitives
+    #
+    # Six operations form the algebra: delete (DB-level, lives on
+    # ConversationDB), delete_subtree, prune_to, copy, copy_subtree,
+    # graft. Every other "fork / branch / detach / promote / snapshot"
+    # operation is a composition of these.
+    # ------------------------------------------------------------------
+
+    def descendants_of(self, node_id: str) -> List[str]:
+        """Return every descendant message id of ``node_id`` (excluding it).
+
+        Iterative BFS so deep chains don't blow the stack.
+        """
+        if node_id not in self.message_map:
+            return []
+        out: List[str] = []
+        frontier: List[str] = [node_id]
+        while frontier:
+            current = frontier.pop()
+            for child in self.get_children(current):
+                out.append(child.id)
+                frontier.append(child.id)
+        return out
+
+    def ancestors_of(self, node_id: str) -> List[str]:
+        """Return every ancestor message id of ``node_id`` (excluding it).
+
+        Walks parent pointers from ``node_id`` toward the root.
+        """
+        out: List[str] = []
+        cursor = self.message_map.get(node_id)
+        while cursor is not None and cursor.parent_id:
+            parent = self.message_map.get(cursor.parent_id)
+            if parent is None:
+                break
+            out.append(parent.id)
+            cursor = parent
+        return out
+
+    def delete_subtree(self, node_id: str) -> int:
+        """Drop ``node_id`` and every descendant. In-place mutation.
+
+        Returns the number of messages removed. Raises ``KeyError`` if
+        ``node_id`` doesn't exist (callers should guard).
+        """
+        if node_id not in self.message_map:
+            raise KeyError(node_id)
+        to_drop = {node_id, *self.descendants_of(node_id)}
+        for mid in to_drop:
+            self.message_map.pop(mid, None)
+        self.root_message_ids = [
+            r for r in self.root_message_ids if r not in to_drop
+        ]
+        self._invalidate_paths_cache()
+        self.metadata.updated_at = datetime.now()
+        return len(to_drop)
+
+    def prune_to(self, node_id: str) -> int:
+        """Keep only the ancestor chain of ``node_id`` (inclusive).
+
+        Drops sibling branches and any descendants of ``node_id``.
+        In-place mutation. Returns the number of messages removed.
+        Raises ``KeyError`` if ``node_id`` doesn't exist.
+        """
+        if node_id not in self.message_map:
+            raise KeyError(node_id)
+        keep = {node_id, *self.ancestors_of(node_id)}
+        before = len(self.message_map)
+        self.message_map = {
+            mid: msg for mid, msg in self.message_map.items() if mid in keep
+        }
+        self.root_message_ids = [r for r in self.root_message_ids if r in keep]
+        self._invalidate_paths_cache()
+        self.metadata.updated_at = datetime.now()
+        return before - len(self.message_map)
+
+    def copy(self, *, new_id: bool = True) -> "ConversationTree":
+        """Return an independent deep copy of this tree.
+
+        With ``new_id=True`` (default) the copy gets a fresh conversation
+        id, so saving it produces a sibling rather than overwriting the
+        source. Message ids are preserved; the DB layer namespaces them
+        per-conversation, so that's safe.
+        """
+        clone = ConversationTree(
+            id=str(uuid.uuid4()) if new_id else self.id,
+            title=self.title,
+            metadata=_copy.deepcopy(self.metadata),
+            message_map={mid: _copy.deepcopy(m) for mid, m in self.message_map.items()},
+            root_message_ids=list(self.root_message_ids),
+        )
+        return clone
+
+    def copy_subtree(self, node_id: str) -> "ConversationTree":
+        """Return a new conversation rooted at a deep copy of ``node_id``.
+
+        The original tree is untouched. The new tree's root is the
+        copied node (with ``parent_id`` cleared); its descendants come
+        along. Message ids are preserved.
+
+        Raises ``KeyError`` if ``node_id`` doesn't exist.
+        """
+        if node_id not in self.message_map:
+            raise KeyError(node_id)
+        keep = {node_id, *self.descendants_of(node_id)}
+        new_messages: Dict[str, Message] = {}
+        for mid in keep:
+            cloned = _copy.deepcopy(self.message_map[mid])
+            if mid == node_id:
+                cloned.parent_id = None
+            new_messages[mid] = cloned
+        clone = ConversationTree(
+            id=str(uuid.uuid4()),
+            title=self.title,
+            metadata=_copy.deepcopy(self.metadata),
+            message_map=new_messages,
+            root_message_ids=[node_id],
+        )
+        return clone
+
+    def graft(self, parent_id: str, other: "ConversationTree") -> int:
+        """Attach a copy of ``other`` under ``parent_id`` in this tree.
+
+        The grafted messages get fresh ids (so they can't collide with
+        anything in the target tree), with parent pointers remapped to
+        match. ``other`` is untouched. Returns the number of messages
+        added. Raises ``KeyError`` if ``parent_id`` is not a node in
+        this tree.
+        """
+        if parent_id not in self.message_map:
+            raise KeyError(parent_id)
+        # Old-id → new-id mapping for every message in ``other``.
+        id_map: Dict[str, str] = {
+            old: str(uuid.uuid4()) for old in other.message_map
+        }
+        for old_id, msg in other.message_map.items():
+            cloned = _copy.deepcopy(msg)
+            cloned.id = id_map[old_id]
+            if old_id in other.root_message_ids or msg.parent_id is None:
+                cloned.parent_id = parent_id
+            else:
+                cloned.parent_id = id_map.get(msg.parent_id, parent_id)
+            self.message_map[cloned.id] = cloned
+        self._invalidate_paths_cache()
+        self.metadata.updated_at = datetime.now()
+        return len(id_map)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""

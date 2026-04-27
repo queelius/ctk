@@ -43,7 +43,7 @@ from ctk.llm.base import LLMProvider
 from ctk.llm.base import Message as LLMMessage
 from ctk.llm.base import MessageRole as LLMMessageRole
 from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble
-from ctk.tui.modals import FilePathModal, SystemPromptModal
+from ctk.tui.modals import ConfirmModal, FilePathModal, SystemPromptModal
 from ctk.tui.sidebar import ConversationList
 
 logger = logging.getLogger(__name__)
@@ -181,6 +181,10 @@ class CTKApp(App):
         Binding("ctrl+n", "new_conversation", "new chat"),
         Binding("ctrl+f", "fork_at_focus", "fork (truncate)"),
         Binding("ctrl+b", "branch_at_focus", "branch (preserve)"),
+        Binding("ctrl+d", "delete_subtree_at_focus", "delete subtree"),
+        Binding("ctrl+e", "extract_subtree_at_focus", "extract subtree"),
+        Binding("ctrl+p", "promote_path_at_focus", "promote path"),
+        Binding("ctrl+h", "show_help", "help"),
         Binding("left_square_bracket", "prev_sibling", "prev branch", show=False),
         Binding("right_square_bracket", "next_sibling", "next branch", show=False),
         Binding("ctrl+g", "edit_system_prompt", "system prompt"),
@@ -1079,40 +1083,136 @@ class CTKApp(App):
             return focused.message_id
         return None
 
+    # ------------------------------------------------------------------
+    # Tree primitive actions (delete subtree, extract, promote, help)
+    #
+    # These are thin shells over ConversationTree primitives plus a
+    # confirmation modal for destructive ops. The composition pattern
+    # (e.g. detach = extract + delete_subtree) lives in the slash
+    # commands so it can be shared without doubling up the modals.
+    # ------------------------------------------------------------------
+
+    def _require_focused_subtree_target(self) -> Optional[str]:
+        """Return the focused message id, or notify + return None."""
+        if self._current_tree is None:
+            self.notify("No conversation loaded.", severity="warning")
+            return None
+        target_id = self._focused_message_id()
+        if target_id is None:
+            self.notify(
+                "Focus a message first (Tab/Shift+Tab to move between messages).",
+                severity="warning",
+            )
+            return None
+        if target_id not in self._current_tree.message_map:
+            self.notify("Focused message no longer exists.", severity="warning")
+            return None
+        return target_id
+
+    def action_delete_subtree_at_focus(self) -> None:
+        """Delete the focused message and all its descendants (with confirm)."""
+        target_id = self._require_focused_subtree_target()
+        if target_id is None:
+            return
+        tree = self._current_tree
+        assert tree is not None  # _require_focused guarantees this
+        count = 1 + len(tree.descendants_of(target_id))
+
+        def _on_confirm(confirmed: Optional[bool]) -> None:
+            if not confirmed:
+                return
+            tree.delete_subtree(target_id)
+            self._safe_save(tree)
+            if self.main is not None:
+                self.main.messages.show_conversation(tree)
+            self.notify(f"Deleted {count} message{'s' if count != 1 else ''}.")
+
+        self.push_screen(
+            ConfirmModal(
+                title="Delete subtree?",
+                detail=(
+                    f"Drop {count} message{'s' if count != 1 else ''} "
+                    f"rooted at {target_id[:8]}. This cannot be undone."
+                ),
+            ),
+            _on_confirm,
+        )
+
+    def action_extract_subtree_at_focus(self) -> None:
+        """Copy the focused subtree out as a new conversation (non-destructive)."""
+        target_id = self._require_focused_subtree_target()
+        if target_id is None:
+            return
+        tree = self._current_tree
+        assert tree is not None
+        new_tree = tree.copy_subtree(target_id)
+        new_tree.title = f"Extract of {tree.title or '(untitled)'}"
+        self._safe_save(new_tree)
+        self.notify(
+            f"Extracted {len(new_tree.message_map)} message"
+            f"{'s' if len(new_tree.message_map) != 1 else ''} → "
+            f"new conversation {new_tree.id[:8]}"
+        )
+        if self.sidebar is not None:
+            self.sidebar.refresh_list()
+
+    def action_promote_path_at_focus(self) -> None:
+        """Make the focused message's path the only path (drops siblings)."""
+        target_id = self._require_focused_subtree_target()
+        if target_id is None:
+            return
+        tree = self._current_tree
+        assert tree is not None
+        # Count siblings + descendants we'd drop, so the user sees the cost.
+        keep = {target_id, *tree.ancestors_of(target_id)}
+        drop_count = sum(1 for mid in tree.message_map if mid not in keep)
+        if drop_count == 0:
+            self.notify("Already the only path — nothing to promote.")
+            return
+
+        def _on_confirm(confirmed: Optional[bool]) -> None:
+            if not confirmed:
+                return
+            tree.prune_to(target_id)
+            self._safe_save(tree)
+            if self.main is not None:
+                self.main.messages.show_conversation(tree)
+            self.notify(
+                f"Promoted path; dropped {drop_count} message"
+                f"{'s' if drop_count != 1 else ''} on other branches."
+            )
+
+        self.push_screen(
+            ConfirmModal(
+                title="Promote this path?",
+                detail=(
+                    f"Keeps the chain to {target_id[:8]} and drops "
+                    f"{drop_count} message{'s' if drop_count != 1 else ''} "
+                    f"on sibling branches. Cannot be undone."
+                ),
+            ),
+            _on_confirm,
+        )
+
+    def action_show_help(self) -> None:
+        """Open the help modal (bindings + slash commands + MCP providers)."""
+        from ctk.tui.modals import HelpModal
+
+        self.push_screen(HelpModal(self.BINDINGS))
+
     @staticmethod
     def _truncate_tree_to_message(
         tree: ConversationTree, target_id: str
     ) -> None:
         """Prune ``tree`` so only ancestors of target_id (plus target) remain.
 
-        Mirrors the helper in ``ctk/chat/tui.py`` so both UIs share the
-        same fork semantics. We can't import the legacy helper directly
-        because that module pulls in heavy chat-mode dependencies the
-        Textual app doesn't need.
+        Thin wrapper around ``ConversationTree.prune_to`` — kept as a
+        method to preserve the existing call sites that quietly no-op
+        when ``target_id`` isn't in the tree (the tree primitive raises
+        ``KeyError`` instead).
         """
-        target = tree.message_map.get(target_id)
-        if target is None:
-            return
-        keep = {target.id}
-        cursor: Optional[Message] = target
-        while cursor is not None and cursor.parent_id:
-            parent = tree.message_map.get(cursor.parent_id)
-            if parent is None:
-                break
-            keep.add(parent.id)
-            cursor = parent
-
-        # Drop everything else from the message_map and from
-        # root_message_ids (the path walker keys off both).
-        tree.message_map = {
-            mid: msg for mid, msg in tree.message_map.items() if mid in keep
-        }
-        tree.root_message_ids = [
-            r for r in tree.root_message_ids if r in keep
-        ]
-        # Invalidate the cached path traversal so subsequent renders see
-        # the pruned set.
-        tree._invalidate_paths_cache()
+        if target_id in tree.message_map:
+            tree.prune_to(target_id)
 
     # ------------------------------------------------------------------
     # Status bar

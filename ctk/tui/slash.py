@@ -355,6 +355,177 @@ def _fork_or_branch_at_tail(app: "CTKApp", preserve_tree: bool) -> Optional[str]
     return f"{verb}ed at tail — new id {new_id[:8]} (old: {old_id[:8]})"
 
 
+@register("clone", summary="Duplicate the current conversation as a sibling", usage="/clone")
+def cmd_clone(app: "CTKApp", args: str) -> Optional[str]:
+    """Save a copy of the current conversation under a new id."""
+    if app._current_tree is None:
+        return "No conversation loaded."
+    new_tree = app._current_tree.copy()
+    new_tree.title = f"Copy of {app._current_tree.title or '(untitled)'}"
+    app._safe_save(new_tree)
+    if app.sidebar is not None:
+        app.sidebar.refresh_list()
+    return f"Cloned to new conversation {new_tree.id[:8]}."
+
+
+@register("snapshot", summary="Save a dated snapshot of the current conversation", usage="/snapshot")
+def cmd_snapshot(app: "CTKApp", args: str) -> Optional[str]:
+    """Like /clone but prefixes the title with today's date."""
+    from datetime import date
+
+    if app._current_tree is None:
+        return "No conversation loaded."
+    new_tree = app._current_tree.copy()
+    new_tree.title = (
+        f"[{date.today().isoformat()}] {app._current_tree.title or '(untitled)'}"
+    )
+    app._safe_save(new_tree)
+    if app.sidebar is not None:
+        app.sidebar.refresh_list()
+    return f"Snapshot saved as {new_tree.id[:8]}."
+
+
+@register("delete", summary="Delete the current conversation entirely (confirm)", usage="/delete")
+def cmd_delete(app: "CTKApp", args: str) -> Optional[str]:
+    """Delete the loaded conversation. Requires --force to skip confirm."""
+    from ctk.tui.modals import ConfirmModal
+
+    if app._current_tree is None:
+        return "No conversation loaded."
+    target = app._current_tree
+    title = target.title or "(untitled)"
+    msg_count = len(target.message_map)
+
+    def _on_confirm(confirmed: Optional[bool]) -> None:
+        if not confirmed:
+            return
+        app.db.delete_conversation(target.id)
+        app._current_tree = None
+        if app.main is not None:
+            app.main.messages.clear()
+            app.main.set_header("(no conversation)")
+        if app.sidebar is not None:
+            app.sidebar.refresh_list()
+        app.notify(f"Deleted conversation '{title}'.")
+
+    app.push_screen(
+        ConfirmModal(
+            title=f"Delete conversation '{title}'?",
+            detail=(
+                f"Removes {msg_count} message{'s' if msg_count != 1 else ''} "
+                "and all branches. Cannot be undone."
+            ),
+        ),
+        _on_confirm,
+    )
+    return None  # Modal posts its own notification on completion.
+
+
+@register("delete-subtree", summary="Delete focused message + descendants (confirm)", usage="/delete-subtree")
+def cmd_delete_subtree(app: "CTKApp", args: str) -> Optional[str]:
+    app.action_delete_subtree_at_focus()
+    return None
+
+
+@register("extract", summary="Copy focused subtree as a new conversation", usage="/extract")
+def cmd_extract(app: "CTKApp", args: str) -> Optional[str]:
+    app.action_extract_subtree_at_focus()
+    return None
+
+
+@register("detach", summary="Move focused subtree out as a new conversation (confirm)", usage="/detach")
+def cmd_detach(app: "CTKApp", args: str) -> Optional[str]:
+    """detach = extract + delete_subtree on the source.
+
+    The composition is here rather than as a primitive so the modal +
+    save dance only happens once.
+    """
+    from ctk.tui.modals import ConfirmModal
+
+    if app._current_tree is None:
+        return "No conversation loaded."
+    target_id = app._focused_message_id()
+    if target_id is None:
+        return "Focus a message first (Tab/Shift+Tab to move between messages)."
+    if target_id not in app._current_tree.message_map:
+        return "Focused message no longer exists."
+    tree = app._current_tree
+    count = 1 + len(tree.descendants_of(target_id))
+
+    def _on_confirm(confirmed: Optional[bool]) -> None:
+        if not confirmed:
+            return
+        new_tree = tree.copy_subtree(target_id)
+        new_tree.title = f"Detached from {tree.title or '(untitled)'}"
+        tree.delete_subtree(target_id)
+        app._safe_save(new_tree)
+        app._safe_save(tree)
+        if app.main is not None:
+            app.main.messages.show_conversation(tree)
+        if app.sidebar is not None:
+            app.sidebar.refresh_list()
+        app.notify(
+            f"Detached {count} message{'s' if count != 1 else ''} "
+            f"→ new conversation {new_tree.id[:8]}"
+        )
+
+    app.push_screen(
+        ConfirmModal(
+            title="Detach subtree?",
+            detail=(
+                f"Moves {count} message{'s' if count != 1 else ''} from "
+                f"{target_id[:8]} into a new conversation, removing them "
+                "from the source. Cannot be undone."
+            ),
+        ),
+        _on_confirm,
+    )
+    return None
+
+
+@register("promote", summary="Make focused message's path the only path (confirm)", usage="/promote")
+def cmd_promote(app: "CTKApp", args: str) -> Optional[str]:
+    app.action_promote_path_at_focus()
+    return None
+
+
+@register("graft", summary="Attach another conversation under focused message", usage="/graft <conv-id-prefix>")
+def cmd_graft(app: "CTKApp", args: str) -> Optional[str]:
+    """Attach a copy of another conversation under the focused message.
+
+    The donor is identified by its conversation id (or a unique prefix).
+    All messages get fresh ids in the target tree, so there's no risk
+    of collision.
+    """
+    if app._current_tree is None:
+        return "No conversation loaded."
+    target_id = app._focused_message_id()
+    if target_id is None:
+        return "Focus a message first (Tab/Shift+Tab to move between messages)."
+    if target_id not in app._current_tree.message_map:
+        return "Focused message no longer exists."
+    arg = args.strip()
+    if not arg:
+        return "Usage: /graft <conv-id-or-prefix>"
+    resolved = app.db.resolve_identifier(arg)
+    if resolved is None:
+        return f"Could not resolve '{arg}' to a conversation."
+    donor_id, _ = resolved
+    if donor_id == app._current_tree.id:
+        return "Cannot graft a conversation into itself."
+    donor = app.db.load_conversation(donor_id)
+    if donor is None:
+        return f"Could not load donor conversation {donor_id[:8]}."
+    added = app._current_tree.graft(target_id, donor)
+    app._safe_save(app._current_tree)
+    if app.main is not None:
+        app.main.messages.show_conversation(app._current_tree)
+    return (
+        f"Grafted {added} message{'s' if added != 1 else ''} "
+        f"from {donor_id[:8]} under {target_id[:8]}."
+    )
+
+
 @register("clear", summary="Reset to a new empty conversation", usage="/clear")
 def cmd_clear(app: "CTKApp", args: str) -> Optional[str]:
     app.action_new_conversation()
