@@ -1100,6 +1100,30 @@ class CTKApp(App):
             self._status.update(self._status_text())
 
 
+def _detect_image_protocol_eagerly() -> None:
+    """Force textual-image's terminal-protocol detection to run NOW.
+
+    textual-image probes the terminal for Sixel and Kitty TGP support
+    by sending an OSC escape sequence and waiting briefly for a reply.
+    The detection runs at *import time* of ``textual_image.renderable``.
+    Once the Textual app starts, its input thread captures stdin and
+    the OSC reply gets stolen — so any later import locks in the
+    halfcell fallback even on terminals that fully support TGP/Sixel.
+
+    Calling this from ``run()`` (before ``app.run()``) ensures the
+    detection happens while we still own stdin. Failures are swallowed
+    so users without textual-image installed still get the rest of
+    the TUI; image rendering just degrades to caption-only.
+    """
+    try:
+        import textual_image.renderable  # noqa: F401  (import for side effect)
+    except Exception:
+        # Not installed, or terminal probe blew up. Either way the
+        # message view's lazy import will hit the same exception path
+        # and degrade gracefully.
+        pass
+
+
 def run(
     db_path: str,
     provider: Optional[LLMProvider] = None,
@@ -1110,6 +1134,7 @@ def run(
     This is a thin wrapper kept out of ``__init__`` so importing
     ``ctk.tui`` doesn't eagerly open the DB.
     """
+    _detect_image_protocol_eagerly()
     db = ConversationDB(db_path)
     try:
         app = CTKApp(db=db, provider=provider, enable_tools=enable_tools)

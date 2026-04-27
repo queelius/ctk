@@ -158,10 +158,24 @@ class InlineImage(Vertical):
       - AutoImage raises during construction
     """
 
+    # Default size for the inline image area.
+    #
+    # Without an explicit height the AutoImage child collapses to 1
+    # cell row (Textual's default for ``height: auto`` when the child
+    # widget reports no natural height — textual-image only exposes a
+    # Measurement for width). We pick 24 rows as a comfortable inline
+    # preview: tall enough for a square image to be recognisable, not
+    # so tall that it dominates the message view. Width fills whatever
+    # the parent allows; textual-image preserves aspect ratio inside
+    # the box.
     DEFAULT_CSS = """
     InlineImage {
         height: auto;
         margin: 0 0 1 2;
+    }
+    InlineImage .image-content {
+        height: 24;
+        width: 1fr;
     }
     InlineImage .image-caption {
         color: $text-muted;
