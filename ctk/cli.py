@@ -2061,12 +2061,19 @@ def cmd_chat(args):
     from ctk.chat.tui import ChatTUI
     from ctk.llm.factory import build_provider
 
-    print(
-        "[deprecated] `ctk chat` will be removed in 2.12.0. "
-        "Use `ctk tui --db <path>` instead — same chat, plus a sidebar "
-        "for browsing, message navigation, and visual fork/branch."
-    )
-    print()
+    # Print deprecation only on interactive terminals so we don't
+    # corrupt output for users piping ctk chat into a parser.
+    # Goes to stderr so even on a tty the banner can be silenced
+    # by redirecting 2>/dev/null.
+    if sys.stdin.isatty() and sys.stderr.isatty():
+        print(
+            "[deprecated] `ctk chat` will be removed in 2.12.0. "
+            "Use `ctk tui --db <path>` instead — same chat, plus a "
+            "sidebar for browsing, message navigation, and visual "
+            "fork/branch.",
+            file=sys.stderr,
+        )
+        print(file=sys.stderr)
 
     provider = build_provider(
         model=getattr(args, "model", None),

@@ -277,7 +277,44 @@ async def test_set_system_prompt_inserts_message(seeded_db):
 
 
 async def test_set_system_prompt_clear_removes_message(seeded_db):
-    """Setting an empty system prompt removes the existing one."""
+    """Setting an empty system prompt removes the existing one — but only
+    when there are children to re-parent. A SYSTEM-only tree is left alone.
+    """
+    import uuid as uuid_mod
+
+    from ctk.core.models import (ConversationMetadata, ConversationTree,
+                                 Message, MessageContent, MessageRole)
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+
+        # Tree with a SYSTEM root + a USER child. Clearing should drop
+        # the SYSTEM and re-parent USER to root.
+        tree = ConversationTree(metadata=ConversationMetadata())
+        app._set_system_prompt(tree, "first prompt")
+        sys_msg = next(
+            m for m in tree.message_map.values() if m.role == MessageRole.SYSTEM
+        )
+        child = Message(
+            id=str(uuid_mod.uuid4()),
+            role=MessageRole.USER,
+            content=MessageContent(text="hello"),
+            parent_id=sys_msg.id,
+        )
+        tree.add_message(child)
+
+        app._set_system_prompt(tree, "")
+        assert not any(
+            m.role == MessageRole.SYSTEM for m in tree.message_map.values()
+        )
+        assert child.id in tree.root_message_ids
+
+
+async def test_set_system_prompt_clear_with_no_children_is_noop(seeded_db):
+    """Clearing a SYSTEM-only tree must leave the tree intact (regression)."""
     from ctk.core.models import (ConversationMetadata, ConversationTree,
                                  MessageRole)
     from ctk.tui.app import CTKApp
@@ -287,10 +324,13 @@ async def test_set_system_prompt_clear_removes_message(seeded_db):
     async with app.run_test() as pilot:
         await pilot.pause()
         tree = ConversationTree(metadata=ConversationMetadata())
-        app._set_system_prompt(tree, "first prompt")
-        assert any(m.role == MessageRole.SYSTEM for m in tree.message_map.values())
+        app._set_system_prompt(tree, "lonely prompt")
+        assert tree.root_message_ids  # non-empty before
         app._set_system_prompt(tree, "")
-        assert not any(
+        # Tree still has the SYSTEM message and a non-empty root list
+        # — otherwise get_longest_path() would return [].
+        assert tree.root_message_ids
+        assert any(
             m.role == MessageRole.SYSTEM for m in tree.message_map.values()
         )
 
@@ -311,14 +351,62 @@ async def test_attach_file_appends_system_message(seeded_db, tmp_path):
         await pilot.pause()
         assert app._current_tree is not None
         before_count = len(app._current_tree.message_map)
-        app._on_file_attached(str(file))
+        # Pass the conversation id we want the file attached to (the
+        # callback signature changed to capture target tree at modal
+        # open time, preventing sidebar-switch races).
+        app._on_file_attached(app._current_tree.id, str(file))
         await pilot.pause()
         after_count = len(app._current_tree.message_map)
         assert after_count == before_count + 1
-        # The new message is a SYSTEM role with the file body inside.
         sys_msgs = [
             m for m in app._current_tree.message_map.values()
             if m.role == MessageRole.SYSTEM
         ]
         assert sys_msgs
         assert any("hello from file" in m.content.get_text() for m in sys_msgs)
+
+
+async def test_modal_callback_targets_original_tree_after_sidebar_switch(
+    seeded_db,
+):
+    """Regression: modal callbacks must apply to the tree that was
+    open when the modal launched, not whichever tree happens to be
+    current when the user closes the modal.
+    """
+    from ctk.core.models import MessageRole
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Open conversation A.
+        app._open_selected()
+        await pilot.pause()
+        assert app._current_tree is not None
+        target_id = app._current_tree.id
+
+        # Simulate the user switching to conversation B mid-modal by
+        # manually replacing _current_tree with the OTHER seeded conv.
+        app.sidebar._table.move_cursor(row=1)
+        await pilot.pause()
+        app._open_selected()
+        await pilot.pause()
+        other_id = app._current_tree.id
+        assert other_id != target_id
+
+        # Fire the callback with the original target_id — it should
+        # mutate conversation A (loaded from DB), NOT conversation B.
+        app._on_system_prompt_saved(target_id, "A's new prompt")
+        await pilot.pause()
+
+        a_tree = db.load_conversation(target_id)
+        b_tree = db.load_conversation(other_id)
+        a_has_sys = any(
+            m.role == MessageRole.SYSTEM for m in a_tree.message_map.values()
+        )
+        b_has_sys = any(
+            m.role == MessageRole.SYSTEM for m in b_tree.message_map.values()
+        )
+        assert a_has_sys, "system prompt should land on the original tree"
+        assert not b_has_sys, "the other tree must not be touched"

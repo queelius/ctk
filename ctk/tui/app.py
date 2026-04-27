@@ -18,6 +18,7 @@ Design notes:
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -44,6 +45,8 @@ from ctk.llm.base import MessageRole as LLMMessageRole
 from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble
 from ctk.tui.modals import FilePathModal, SystemPromptModal
 from ctk.tui.sidebar import ConversationList
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -167,12 +170,18 @@ class CTKApp(App):
         super().__init__()
         self.db = db
         self.provider = provider
-        # Tool calling lights up only if the provider supports it AND the
-        # caller hasn't explicitly disabled it (e.g., for models that
-        # advertise tools but choke on real calls).
-        self.enable_tools = enable_tools and (
+        # Distinguish three states the status bar cares about:
+        #   - tools_supported: provider.supports_tool_calling() is True
+        #   - tools_requested: caller didn't pass --no-tools
+        #   - enable_tools: both of the above
+        # The split lets the status bar say "tools disabled" when the
+        # user explicitly turned them off, vs. just hiding the badge
+        # when the provider doesn't support them anyway.
+        self._tools_supported = (
             provider is not None and provider.supports_tool_calling()
         )
+        self._tools_requested = enable_tools
+        self.enable_tools = self._tools_supported and self._tools_requested
         self.sidebar: Optional[ConversationList] = None
         self.main: Optional[MainPane] = None
         self._search_input: Optional[Input] = None
@@ -422,6 +431,14 @@ class CTKApp(App):
         passed through so the assistant message we ultimately store has
         a correct parent_id even though tree mutation happens on the UI
         thread (in the message handlers).
+
+        Snapshot semantics: ``history`` is captured once at worker
+        start. If the user opens Ctrl+G to edit the system prompt or
+        Ctrl+O to attach a file mid-turn, those changes are persisted
+        to the tree but do NOT influence the in-flight LLM call. They
+        take effect on the next user message. This is intentional —
+        re-loading the tree per loop iteration would let the modal
+        race with the model and produce incoherent histories.
         """
         from ctk.core.tools import get_ask_tools  # lazy: tests don't need it
 
@@ -512,10 +529,17 @@ class CTKApp(App):
     # ----- UI thread handlers for chat-with-tools messages -------------
 
     def on_chat_assistant_text(self, event: _ChatAssistantText) -> None:
-        """Mount an assistant text bubble for a non-streaming turn."""
+        """Mount an assistant text bubble for a non-streaming turn.
+
+        Persistence is intentionally NOT done here — ``on_chat_done``
+        owns the single save call so a final-turn message doesn't get
+        written twice (once here on ``event.final``, once again in
+        ``on_chat_done``). Whether this turn is final affects nothing
+        in this handler today; kept on the message type for callers
+        who may need it later.
+        """
         if self.main is None:
             return
-        # Append to the in-memory tree so subsequent saves carry the text.
         if self._current_tree is not None:
             parent_id = None
             path = self._current_tree.get_longest_path()
@@ -533,11 +557,6 @@ class CTKApp(App):
                 Static(Text("bot", style="bold green"), classes="message-role")
             )
             self.main.messages.append_message(assistant_msg)
-        if event.final:
-            # No more tool calls — same cleanup as on_stream_done would do.
-            self._safe_save(
-                self._current_tree
-            ) if self._current_tree else None
 
     def on_chat_tool_call(self, event: _ChatToolCall) -> None:
         """Render a tool call panel inline in the message stream."""
@@ -643,7 +662,13 @@ class CTKApp(App):
             self.main.input.focus()
 
     def action_edit_system_prompt(self) -> None:
-        """Edit (or create) the conversation's system prompt via a modal."""
+        """Edit (or create) the conversation's system prompt via a modal.
+
+        Captures the conversation id at modal-open time and re-resolves
+        the tree at callback time. This prevents a race where the user
+        switches conversations in the sidebar while the modal is open
+        and the new prompt lands on the wrong tree.
+        """
         if self._current_tree is None:
             # Lazily create a tree so the user can set a prompt before
             # sending the first message.
@@ -658,10 +683,11 @@ class CTKApp(App):
                     else None,
                 ),
             )
+        target_id = self._current_tree.id
         existing = self._existing_system_prompt(self._current_tree)
         self.push_screen(
             SystemPromptModal(initial=existing or ""),
-            self._on_system_prompt_saved,
+            lambda result: self._on_system_prompt_saved(target_id, result),
         )
 
     def _existing_system_prompt(
@@ -675,16 +701,47 @@ class CTKApp(App):
                 return str(msg.content)
         return None
 
-    def _on_system_prompt_saved(self, new_text: Optional[str]) -> None:
+    def _resolve_tree(self, tree_id: str) -> Optional[ConversationTree]:
+        """Find the tree that matches ``tree_id`` at callback time.
+
+        The user may have switched conversations between modal-open and
+        modal-close. Prefer the in-memory ``_current_tree`` if its id
+        still matches; otherwise reload from the DB. Returns None if
+        the tree no longer exists.
+        """
+        if (
+            self._current_tree is not None
+            and self._current_tree.id == tree_id
+        ):
+            return self._current_tree
+        try:
+            return self.db.load_conversation(tree_id)
+        except Exception:
+            return None
+
+    def _on_system_prompt_saved(
+        self, tree_id: str, new_text: Optional[str]
+    ) -> None:
         if new_text is None:
             return  # cancelled
-        if self._current_tree is None:
+        target = self._resolve_tree(tree_id)
+        if target is None:
+            self.notify(
+                "Conversation no longer available; system prompt not saved.",
+                severity="warning",
+            )
             return
-        self._set_system_prompt(self._current_tree, new_text)
-        self._safe_save(self._current_tree)
-        if self.main is not None:
-            self.main.messages.show_conversation(self._current_tree)
-            self.main.set_header(self._header_for(self._current_tree))
+        self._set_system_prompt(target, new_text)
+        self._safe_save(target)
+        # Only refresh the visible pane if the user is still looking at
+        # the conversation we modified.
+        if (
+            self.main is not None
+            and self._current_tree is not None
+            and self._current_tree.id == tree_id
+        ):
+            self.main.messages.show_conversation(target)
+            self.main.set_header(self._header_for(target))
         self.notify("System prompt saved.")
 
     def _set_system_prompt(self, tree: ConversationTree, text: str) -> None:
@@ -707,6 +764,15 @@ class CTKApp(App):
             # any of its children up so they become roots.
             if existing is not None:
                 children = tree.get_children(existing.id)
+                if not children:
+                    # Edge case: SYSTEM is the only message. Removing it
+                    # would leave root_message_ids empty and break every
+                    # subsequent path lookup. Bail out without mutating.
+                    logger.debug(
+                        "Skipping SYSTEM clear: it is the only message "
+                        "in the tree (would leave the tree empty)."
+                    )
+                    return
                 tree.message_map.pop(existing.id, None)
                 if existing.id in tree.root_message_ids:
                     tree.root_message_ids.remove(existing.id)
@@ -741,13 +807,24 @@ class CTKApp(App):
         tree._invalidate_paths_cache()
 
     def action_attach_file(self) -> None:
-        """Prompt for a file path and inject its contents as a SYSTEM message."""
+        """Prompt for a file path and inject its contents as a SYSTEM message.
+
+        Captures the conversation id at modal-open time so a sidebar
+        switch during the modal doesn't attach the file to the wrong
+        tree. If no tree is loaded, defers tree creation until the
+        callback so the title can include the basename.
+        """
+        target_id = (
+            self._current_tree.id if self._current_tree is not None else None
+        )
         self.push_screen(
             FilePathModal(prompt="Attach file (path will be read as text):"),
-            self._on_file_attached,
+            lambda result: self._on_file_attached(target_id, result),
         )
 
-    def _on_file_attached(self, path_str: Optional[str]) -> None:
+    def _on_file_attached(
+        self, target_id: Optional[str], path_str: Optional[str]
+    ) -> None:
         if not path_str:
             return
         import os
@@ -763,8 +840,10 @@ class CTKApp(App):
             self.notify(f"Could not read {path}: {exc}", severity="error")
             return
 
-        if self._current_tree is None:
-            self._current_tree = ConversationTree(
+        # Resolve the target conversation. None target_id means we
+        # opened the modal with no tree loaded; create one now.
+        if target_id is None:
+            target = ConversationTree(
                 id=str(uuid.uuid4()),
                 title=f"chat with {os.path.basename(path)}",
                 metadata=ConversationMetadata(
@@ -775,12 +854,24 @@ class CTKApp(App):
                     else None,
                 ),
             )
+            # If user is still looking at "no tree", adopt the new one.
+            if self._current_tree is None:
+                self._current_tree = target
+        else:
+            target = self._resolve_tree(target_id)
+            if target is None:
+                self.notify(
+                    f"Conversation no longer available; {os.path.basename(path)} "
+                    "not attached.",
+                    severity="warning",
+                )
+                return
 
         # Append the file as a SYSTEM message at the END of the current
         # path (NOT at the root) so it acts as in-line context for the
         # next user message rather than a global preamble.
         parent_id = None
-        path_msgs = self._current_tree.get_longest_path()
+        path_msgs = target.get_longest_path()
         if path_msgs:
             parent_id = path_msgs[-1].id
         attach_msg = Message(
@@ -792,9 +883,15 @@ class CTKApp(App):
             parent_id=parent_id,
             timestamp=datetime.now(),
         )
-        self._current_tree.add_message(attach_msg)
+        target.add_message(attach_msg)
+        self._safe_save(target)
 
-        if self.main is not None:
+        # Only update the visible pane if the user is still on this tree.
+        if (
+            self.main is not None
+            and self._current_tree is not None
+            and self._current_tree.id == target.id
+        ):
             self.main.messages.append_message(attach_msg)
             self.main.set_header(self._header_for(self._current_tree))
         self.notify(
@@ -938,6 +1035,10 @@ class CTKApp(App):
             )
             if self.enable_tools:
                 text.append("  · tools", style="dim cyan")
+            elif self._tools_supported and not self._tools_requested:
+                # Tools work here but the user said --no-tools; surface
+                # that explicitly so a missing badge isn't ambiguous.
+                text.append("  · tools off", style="dim italic")
         else:
             text.append("browse-only · chat disabled", style="dim italic")
         if self._current_tree is not None:
