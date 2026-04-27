@@ -28,6 +28,8 @@ make clean            # Remove build artifacts and __pycache__
 
 **ConversationTree** (`ctk/core/models.py`) is the central data structure. All conversations are trees; linear chats are single-path trees, branching conversations (e.g., ChatGPT regenerations) preserve all paths. Key methods: `get_all_paths()`, `get_longest_path()`, `add_message()`.
 
+**Tree primitives** (since 2.13.0): every "fork / branch / detach / promote / snapshot" UI op decomposes into one of six primitives. Five live on the tree itself: `delete_subtree(n)`, `prune_to(n)`, `copy()`, `copy_subtree(n)`, `graft(n, other)`. The sixth is DB-level `delete_conversation(id)`. Tests in `tests/unit/test_tree_primitives.py`. Add a new tree operation by composing these, not by reaching into `message_map` directly. Reasoning helpers `descendants_of(n)` and `ancestors_of(n)` are public for the same reason.
+
 **Database** is a two-layer design:
 - `ctk/core/db_models.py`: SQLAlchemy ORM models (`ConversationModel`, `MessageModel`, `TagModel`, `EmbeddingModel`, `SimilarityModel`).
 - `ctk/core/database.py`: `ConversationDB`, the high-level wrapper (save, load, search, list). FTS5 full-text search with LIKE fallback. The "db_path" is a directory; the SQLite file lives at `<dir>/conversations.db` and an associated `media/` directory holds image attachments.
@@ -63,14 +65,15 @@ The previous per-conversation, per-library, per-view, chat REPL, and ad-hoc netw
 **Main pane** (`ctk/tui/main_pane.py`): scrollable message bubbles, multi-line chat input at the bottom. Bubbles are focusable (`Tab` / `Shift+Tab` between them). Branch indicators with `[` / `]` to switch siblings.
 
 **Bindings**:
-- `q` quit; `Ctrl+R` refresh; `Ctrl+N` new conversation
+- `q` quit; `Ctrl+R` refresh; `Ctrl+N` new conversation; `Ctrl+H` help modal
 - `Ctrl+F` fork at focused message (truncate); `Ctrl+B` branch (preserve full tree)
+- `Ctrl+D` delete subtree at focus; `Ctrl+E` extract subtree at focus; `Ctrl+P` promote focused path
 - `Ctrl+S` toggle star; `Ctrl+G` system prompt modal; `Ctrl+O` attach file modal
 - `[` / `]` previous/next sibling at focused message
 
-**Slash commands** (`ctk/tui/slash.py`): typed in the chat input. Routed to dispatcher before the LLM. `/help` lists them all. Includes `/mcp`, `/model`, `/system`, `/title`, `/star`, `/pin`, `/archive`, `/tag`, `/untag`, `/export`, `/attach`, `/fork`, `/branch`, `/clear`, `/sql`, `/quit`.
+**Slash commands** (`ctk/tui/slash.py`): typed in the chat input. Routed to dispatcher before the LLM. `/help` lists them all. Includes `/mcp`, `/model`, `/system`, `/title`, `/star`, `/pin`, `/archive`, `/tag`, `/untag`, `/export`, `/attach`, `/fork`, `/branch`, `/clone`, `/snapshot`, `/delete`, `/delete-subtree`, `/extract`, `/detach`, `/promote`, `/graft`, `/clear`, `/sql`, `/quit`.
 
-**Modals** (`ctk/tui/modals.py`): `SystemPromptModal` (TextArea), `FilePathModal` (Input). Both capture the target conversation id at modal-open and re-resolve at callback time so a sidebar switch mid-modal can't apply the change to the wrong tree.
+**Modals** (`ctk/tui/modals.py`): `SystemPromptModal` (TextArea), `FilePathModal` (Input), `ConfirmModal` (y/n for destructive ops), `HelpModal` (bindings + slash + MCP). Both stateful modals capture the target conversation id at modal-open and re-resolve at callback time so a sidebar switch mid-modal can't apply the change to the wrong tree.
 
 **Inline images** (`ctk/tui/images.py`): conversations imported with image attachments render below the message bubble via `textual-image`'s `AutoImage` (auto-detects Sixel / Kitty TGP / Halfcell). Handles three source types: existing local `path`, base64 `data` (decoded to a tracked temp file, cleaned up at shutdown), and relative `url` (resolved against the DB's parent dir, since ChatGPT exports use paths like `media/<uuid>.webp`). Protocol detection runs in `run()` before Textual takes over stdin (otherwise the OSC reply is stolen).
 
