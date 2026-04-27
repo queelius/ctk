@@ -35,6 +35,54 @@ class TestCLICommandBehaviors:
         launcher.assert_called_once()
         assert result == 0
 
+    def test_cmd_tui_falls_back_to_configured_db(self):
+        """`ctk tui` without --db must use database.default_path (regression
+        for the 2.13.3 NoneType.startswith crash). We patch the config
+        loader and verify ``run_tui`` is called with the resolved path
+        rather than ``None``."""
+        from ctk.cli import cmd_tui
+
+        args = MagicMock()
+        args.db = None
+        args.no_chat = True  # Skip provider construction
+        args.no_tools = True
+        args.model = None
+        args.base_url = None
+
+        with patch("ctk.core.config.get_config") as mock_get_config, patch(
+            "ctk.tui.app.run"
+        ) as mock_run:
+            mock_get_config.return_value.config = {
+                "database": {"default_path": "/tmp/ctk-fallback-test-db"}
+            }
+            # Pretend the directory exists so the resolver doesn't bail.
+            with patch("os.path.exists", return_value=True), patch(
+                "os.path.isfile", return_value=False
+            ):
+                result = cmd_tui(args)
+        assert result == 0
+        mock_run.assert_called_once()
+        # First positional arg of run() is the resolved db_path
+        called_db = mock_run.call_args[0][0]
+        assert called_db == "/tmp/ctk-fallback-test-db"
+
+    def test_cmd_tui_with_no_db_and_no_config_returns_error(self):
+        """`ctk tui` with no --db and no configured default exits 1
+        instead of crashing in ConversationDB."""
+        from ctk.cli import cmd_tui
+
+        args = MagicMock()
+        args.db = None
+        args.no_chat = True
+        args.no_tools = True
+        args.model = None
+        args.base_url = None
+
+        with patch("ctk.core.config.get_config") as mock_get_config:
+            mock_get_config.return_value.config = {"database": {}}
+            result = cmd_tui(args)
+        assert result == 1
+
     @patch("sys.argv", ["ctk", "--help"])
     def test_main_with_help_flag_exits_successfully(self):
         """Test that help flag exits with success code"""
