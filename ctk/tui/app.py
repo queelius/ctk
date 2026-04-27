@@ -139,6 +139,32 @@ def _short_args(args: Dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _infer_media_root(db: ConversationDB) -> Optional[str]:
+    """Guess where relative image URLs should be resolved against.
+
+    ChatGPT exports place images in ``media/<uuid>.{png,webp}`` next to
+    ``conversations.json``. After importing into a sibling
+    ``conversations.db``, those relative URLs are still recorded in
+    the DB. Returning the DB's parent directory makes the typical
+    import-and-go workflow Just Work without the user setting anything.
+    """
+    import os as _os
+
+    try:
+        # ConversationDB exposes its underlying path via ``db_dir``;
+        # fall back to ``db_path`` for older instances. Either way we
+        # want the directory the DB lives in.
+        path = getattr(db, "db_dir", None) or getattr(db, "db_path", None)
+        if path is None:
+            return None
+        path = str(path)
+        if _os.path.isdir(path):
+            return path
+        return _os.path.dirname(path) or None
+    except Exception:
+        return None
+
+
 class CTKApp(App):
     """Full-screen ctk browse + chat UI."""
 
@@ -166,10 +192,16 @@ class CTKApp(App):
         db: ConversationDB,
         provider: Optional[LLMProvider] = None,
         enable_tools: bool = True,
+        media_root: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.db = db
         self.provider = provider
+        # Where to look for relative image URLs (e.g. ChatGPT exports
+        # store images at media/<uuid>.webp relative to conversations.json).
+        # If unset, infer from the DB's parent directory: imports are
+        # typically extracted next to the resulting SQLite file.
+        self.media_root = media_root or _infer_media_root(db)
         # Distinguish three states the status bar cares about:
         #   - tools_supported: provider.supports_tool_calling() is True
         #   - tools_requested: caller didn't pass --no-tools
@@ -214,6 +246,11 @@ class CTKApp(App):
         assert self.sidebar is not None
         self.sidebar.focus_table()
         self._refresh_status()
+        # Tell the message view how to resolve relative image URLs.
+        # Done here (post-mount) rather than in __init__ because main
+        # is constructed by compose() after __init__ completes.
+        if self.main is not None:
+            self.main.messages.set_media_root(self.media_root)
 
     def on_unmount(self) -> None:
         # Clean up temp files written for base64-embedded images.

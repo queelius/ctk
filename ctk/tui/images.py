@@ -87,24 +87,49 @@ def cleanup_temp_files() -> None:
             logger.debug("Could not unlink temp image %s: %s", path, exc)
 
 
-def resolve_image_path(media: MediaContent) -> Optional[str]:
+def resolve_image_path(
+    media: MediaContent,
+    media_root: Optional[str] = None,
+) -> Optional[str]:
     """Best-effort resolution of a MediaContent to a local file path.
 
-    Returns:
-        - ``media.path`` if it's an existing local file
-        - A freshly-written temp path if ``media.data`` (base64) is set
-        - ``None`` for remote URLs (we don't download — that's the user's
-          terminal's job if it supports it; AutoImage doesn't fetch)
-        - ``None`` if everything fails
+    Resolution order:
+      1. ``media.path`` if it points at an existing file.
+      2. ``media.data`` (base64) decoded to a temp file.
+      3. ``media.url`` if it looks like a relative file path (no
+         ``http://`` / ``https://`` scheme), resolved against
+         ``media_root`` first, then ``cwd``. ChatGPT exports use
+         relative URLs like ``media/aa88…webp`` pointing into a
+         sibling ``media/`` directory next to the export's
+         ``conversations.json``; on import we copy that path
+         verbatim, so we need to find the file at view time.
+      4. None for true remote URLs (we don't fetch on the UI thread).
+
+    Args:
+        media: The MediaContent to resolve.
+        media_root: Directory to resolve relative URLs against. Usually
+            the database's parent directory, since exports are
+            typically extracted next to the DB.
     """
     if media.path and os.path.isfile(media.path):
         return media.path
     if media.data:
         return _write_data_to_tempfile(media.data, media.mime_type)
-    # Remote URLs aren't downloaded — not worth a sync HTTP fetch on
-    # the UI thread for a feature most users will only sometimes use.
-    # Fall back to the caption widget so the user at least sees what
-    # was attached.
+    if media.url:
+        # Treat http(s) as truly remote — AutoImage doesn't fetch and
+        # we won't either, so caption-only is the right call there.
+        if media.url.startswith(("http://", "https://", "data:")):
+            return None
+        # Anything else is a (possibly relative) local file reference.
+        # Try the configured media_root first, then cwd as a fallback.
+        candidates = []
+        if media_root:
+            candidates.append(os.path.join(media_root, media.url))
+        candidates.append(media.url)
+        for candidate in candidates:
+            expanded = os.path.expanduser(candidate)
+            if os.path.isfile(expanded):
+                return expanded
     return None
 
 
@@ -145,10 +170,12 @@ class InlineImage(Vertical):
     }
     """
 
-    def __init__(self, media: MediaContent) -> None:
+    def __init__(
+        self, media: MediaContent, media_root: Optional[str] = None
+    ) -> None:
         super().__init__(classes="message-image")
         self._media = media
-        self._path = resolve_image_path(media)
+        self._path = resolve_image_path(media, media_root=media_root)
 
     def compose(self) -> ComposeResult:
         # Lazy import so this module stays cheap when no images appear.
@@ -167,11 +194,16 @@ class InlineImage(Vertical):
         yield Static(_fallback_label(self._media), classes="image-caption")
 
 
-def build_image_widgets(media_list: List[MediaContent]) -> List[Widget]:
+def build_image_widgets(
+    media_list: List[MediaContent],
+    media_root: Optional[str] = None,
+) -> List[Widget]:
     """Translate every MediaContent into an InlineImage widget.
 
-    Returning a flat list (rather than a single container) keeps the
-    message view's mount loop simple — caller just appends each widget
-    after the bubble.
+    ``media_root`` is forwarded to ``resolve_image_path`` so relative
+    URLs in ChatGPT exports resolve against the export root rather
+    than ``cwd``. Returning a flat list (rather than a single
+    container) keeps the message view's mount loop simple — caller
+    just appends each widget after the bubble.
     """
-    return [InlineImage(media) for media in media_list]
+    return [InlineImage(media, media_root=media_root) for media in media_list]

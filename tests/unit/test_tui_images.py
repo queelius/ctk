@@ -63,6 +63,42 @@ class TestResolveImagePath:
         # We don't fetch — that would block the UI thread.
         assert resolve_image_path(media) is None
 
+    def test_relative_url_resolves_against_media_root(self, tmp_path):
+        """ChatGPT exports use relative URLs like 'media/foo.webp'.
+
+        Regression for a real conversation that had its image referenced
+        as ``media/aa882211-...webp`` (the exact format ChatGPT uses).
+        Before the fix, ``resolve_image_path`` only checked
+        ``media.path`` and returned None for these.
+        """
+        from ctk.tui.images import resolve_image_path
+
+        media_dir = tmp_path / "media"
+        media_dir.mkdir()
+        img = media_dir / "aa882211.webp"
+        img.write_bytes(b"fake-webp")
+        m = MediaContent(
+            type=ContentType.IMAGE,
+            url="media/aa882211.webp",
+            mime_type="image/webp",
+        )
+        resolved = resolve_image_path(m, media_root=str(tmp_path))
+        assert resolved == str(img)
+
+    def test_relative_url_falls_back_to_cwd_when_root_missing(self, tmp_path, monkeypatch):
+        from ctk.tui.images import resolve_image_path
+
+        sub = tmp_path / "media"
+        sub.mkdir()
+        img = sub / "x.png"
+        img.write_bytes(b"fake")
+        monkeypatch.chdir(tmp_path)
+        m = MediaContent(type=ContentType.IMAGE, url="media/x.png")
+        # No media_root passed: cwd is tried as a fallback.
+        assert resolve_image_path(m) == "media/x.png" or resolve_image_path(
+            m
+        ) == str(img)
+
     def test_base64_data_writes_temp_file(self):
         from ctk.tui.images import _TEMP_PATHS, resolve_image_path
 

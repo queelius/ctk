@@ -99,6 +99,15 @@ class MessageView(VerticalScroll):
         # The conversation we're displaying and the linear path through it.
         self._tree: Optional[ConversationTree] = None
         self._path: List[Message] = []
+        # Directory used to resolve relative image URLs (e.g. the
+        # ``media/`` folder ChatGPT exports place next to
+        # ``conversations.json``). Set by the App after construction
+        # because it depends on the database path.
+        self._media_root: Optional[str] = None
+
+    def set_media_root(self, root: Optional[str]) -> None:
+        """Set the directory used to resolve relative image URLs."""
+        self._media_root = root
 
     @property
     def current_path(self) -> List[Message]:
@@ -202,7 +211,9 @@ class MessageView(VerticalScroll):
             try:
                 from ctk.tui.images import build_image_widgets
 
-                for widget in build_image_widgets(images):
+                for widget in build_image_widgets(
+                    images, media_root=self._media_root
+                ):
                     self.mount(widget)
             except ImportError:
                 # textual-image not installed; show a minimal fallback
