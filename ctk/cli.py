@@ -244,19 +244,10 @@ def cmd_export(args):
         # CLI convention: --limit 0 means "no limit"
         export_limit = None if getattr(args, "limit", None) in (None, 0) else args.limit
 
-        # Check for view-based export first
-        if hasattr(args, "view") and args.view:
-            from ctk.core.views import ViewStore
-
-            store = ViewStore(args.db)
-            evaluated = store.evaluate(args.view, db)
-            if evaluated is None:
-                print(f"Error: View '{args.view}' not found")
-                return 1
-            conversations = evaluated.conversations
-            if evaluated.missing_ids:
-                print(f"Warning: {len(evaluated.missing_ids)} conversations not found")
-        elif args.ids:
+        # The legacy ``--view`` flag (curated YAML collections) was
+        # dropped in 2.12.0 alongside the rest of the views machinery.
+        # Tags + the sidebar filter tabs cover the same use case.
+        if args.ids:
             # Export specific conversations - validate IDs
             for conv_id in args.ids:
                 try:
@@ -429,51 +420,9 @@ def cmd_query(args):
 
     db = ConversationDB(args.db)
 
-    # Handle --view flag (evaluate saved view)
-    if args.view:
-        from ctk.core.views import ViewStore
-
-        store = ViewStore(args.db)
-
-        try:
-            with db:
-                evaluated = store.evaluate(args.view, db)
-                if evaluated is None:
-                    print(f"Error: View '{args.view}' not found")
-                    return 1
-
-                # Display view results
-                items = evaluated.items
-                if not items:
-                    print(f"View '{args.view}' has no matching conversations")
-                    return 0
-
-                if args.format == "json":
-                    import json
-
-                    data = [
-                        {"id": item.item.id, "title": item.effective_title}
-                        for item in items
-                    ]
-                    print(json.dumps(data, indent=2))
-                    return 0
-
-                # Table output
-                table = Table(title=f"View: {args.view}")
-                table.add_column("#", style="dim")
-                table.add_column("ID", style="cyan")
-                table.add_column("Title", style="white")
-
-                for i, item in enumerate(items[: args.limit or 100], 1):
-                    table.add_row(str(i), item.item.id[:8], item.effective_title[:60])
-
-                console.print(table)
-                console.print(f"\n[dim]{len(items)} conversation(s) in view[/dim]")
-                return 0
-
-        except Exception as e:
-            print(f"Error evaluating view: {e}")
-            return 1
+    # Note: the legacy ``--view`` flag (curated YAML collections) was
+    # removed in 2.12.0 alongside the rest of the views machinery.
+    # Tags + filter flags below cover the same use case more flexibly.
 
     # Parse date filters
     def parse_date(date_str):
@@ -647,261 +596,6 @@ def cmd_stats(args):
         return 0
 
 
-def cmd_view(args):
-    """View management commands"""
-    from ctk.core.views import View, ViewItem, ViewQuery, ViewStore
-
-    if not args.db:
-        print("Error: Database path required")
-        return 1
-
-    store = ViewStore(args.db)
-    action = args.view_action
-
-    if not action:
-        print(
-            "Error: view subcommand required. Try: "
-            "list, create, show, add, remove, delete, check, eval"
-        )
-        return 1
-
-    if action == "list":
-        views = store.list_views_detailed()
-        if not views:
-            print("No views found. Create one with: ctk view create <name> --db <db>")
-            return 0
-
-        print(f"{'Name':<20} {'Type':<10} {'Items':<8} {'Description'}")
-        print("-" * 70)
-        for v in views:
-            desc = (v["description"] or "")[:30]
-            print(
-                f"{v['name']:<20} {v['selection_type']:<10} {v['item_count']:<8} {desc}"
-            )
-        return 0
-
-    elif action == "create":
-        if not args.name:
-            print("Error: View name required")
-            return 1
-
-        if store.exists(args.name):
-            print(f"Error: View '{args.name}' already exists")
-            return 1
-
-        # Parse query options if provided
-        query = None
-        if any([args.tags, args.source, args.model, args.starred, args.pinned]):
-            query = {
-                "tags": args.tags.split(",") if args.tags else None,
-                "source": args.source,
-                "model": args.model,
-                "starred": args.starred,
-                "pinned": args.pinned,
-            }
-
-        view = store.create_view(
-            name=args.name,
-            description=args.description,
-            items=args.ids if args.ids else None,
-            query=query,
-            author=args.author,
-        )
-
-        if args.track_changes:
-            view.track_changes = True
-
-        store.save(view)
-        print(f"Created view: {args.name}")
-        return 0
-
-    elif action == "show":
-        if not args.name:
-            print("Error: View name required")
-            return 1
-
-        view = store.load(args.name)
-        if not view:
-            print(f"Error: View '{args.name}' not found")
-            return 1
-
-        print(f"Name: {view.name}")
-        print(f"Description: {view.description or '(none)'}")
-        print(f"Type: {view.selection_type.value}")
-        print(f"Created: {view.created}")
-        print(f"Updated: {view.updated}")
-
-        if view.items:
-            print(f"\nItems ({len(view.get_items())} conversations):")
-            for item in view.items:
-                if hasattr(item, "id"):
-                    note = f" - {item.note}" if item.note else ""
-                    title = f" ({item.title})" if item.title else ""
-                    print(f"  {item.id[:8]}{title}{note}")
-                elif hasattr(item, "title"):
-                    print(f"  [Section: {item.title}]")
-
-        if view.query:
-            print(f"\nQuery:")
-            if view.query.tags:
-                print(f"  Tags: {view.query.tags}")
-            if view.query.source:
-                print(f"  Source: {view.query.source}")
-            if view.query.starred:
-                print(f"  Starred: {view.query.starred}")
-
-        return 0
-
-    elif action == "add":
-        if not args.name or not args.ids:
-            print("Error: View name and conversation IDs required")
-            return 1
-
-        if not store.exists(args.name):
-            print(f"Error: View '{args.name}' not found")
-            return 1
-
-        db = ConversationDB(args.db)
-        with db:
-            for conv_id in args.ids:
-                if store.add_to_view(
-                    args.name, conv_id, title=args.title, note=args.note, db=db
-                ):
-                    print(f"Added {conv_id[:8]} to {args.name}")
-                else:
-                    print(f"Failed to add {conv_id[:8]}")
-
-        return 0
-
-    elif action == "remove":
-        if not args.name or not args.ids:
-            print("Error: View name and conversation IDs required")
-            return 1
-
-        for conv_id in args.ids:
-            if store.remove_from_view(args.name, conv_id):
-                print(f"Removed {conv_id[:8]} from {args.name}")
-            else:
-                print(f"Not found: {conv_id[:8]}")
-
-        return 0
-
-    elif action == "delete":
-        if not args.name:
-            print("Error: View name required")
-            return 1
-
-        if store.delete(args.name):
-            print(f"Deleted view: {args.name}")
-        else:
-            print(f"View not found: {args.name}")
-
-        return 0
-
-    elif action == "check":
-        if not args.name:
-            # Check all views
-            views = store.list_views()
-            if not views:
-                print("No views to check")
-                return 0
-
-            db = ConversationDB(args.db)
-            with db:
-                for name in views:
-                    result = store.check_view(name, db)
-                    if result.get("error"):
-                        print(f"{name}: {result['error']}")
-                    elif result["issues"] > 0:
-                        print(
-                            f"{name}: {result['issues']} issues (missing: {len(result['missing_ids'])}, drift: {result['drift_count']})"
-                        )
-                    else:
-                        print(f"{name}: OK ({result['resolved_items']} items)")
-        else:
-            db = ConversationDB(args.db)
-            with db:
-                result = store.check_view(args.name, db)
-                if result.get("error"):
-                    print(f"Error: {result['error']}")
-                    return 1
-
-                print(f"View: {result['name']}")
-                print(
-                    f"Items: {result['total_items']} defined, {result['resolved_items']} resolved"
-                )
-
-                if result["missing_ids"]:
-                    print(f"\nMissing conversations ({len(result['missing_ids'])}):")
-                    for mid in result["missing_ids"]:
-                        print(f"  {mid}")
-
-                if result["drift_count"] > 0:
-                    print(f"\nContent drift detected: {result['drift_count']} items")
-
-                if result["issues"] == 0:
-                    print("\nNo issues found.")
-
-        return 0
-
-    elif action == "eval":
-        import sys
-
-        print(
-            "[DEPRECATED] 'ctk view eval' is deprecated. Use 'ctk query --view <name>' instead.",
-            file=sys.stderr,
-        )
-
-        if not args.name:
-            print("Error: View name required")
-            return 1
-
-        db = ConversationDB(args.db)
-        with db:
-            evaluated = store.evaluate(args.name, db)
-            if evaluated is None:
-                print(f"Error: View '{args.name}' not found")
-                return 1
-
-            print(f"View: {args.name}")
-            print(f"Conversations: {len(evaluated)}")
-            print()
-
-            for item in evaluated.items:
-                section_str = f" [{item.section}]" if item.section else ""
-                note_str = f" - {item.item.note}" if item.item.note else ""
-                drift_str = " [DRIFT]" if item.drift_detected else ""
-                print(
-                    f"{item.index + 1}. {item.effective_title}{section_str}{note_str}{drift_str}"
-                )
-
-        return 0
-
-    else:
-        print(
-            f"Unknown view action: {action}. Valid actions: "
-            "list, create, show, add, remove, delete, check, eval"
-        )
-        return 1
-
-
-def cmd_plugins(args):
-    """List available plugins"""
-    registry.discover_plugins()
-
-    print("Available Importers:")
-    for name in registry.list_importers():
-        importer = registry.get_importer(name)
-        print(f"  {name}: {importer.description}")
-
-    print("\nAvailable Exporters:")
-    for name in registry.list_exporters():
-        exporter = registry.get_exporter(name)
-        print(f"  {name}: {exporter.description}")
-
-    return 0
-
-
 def cmd_auto_tag(args):
     """Auto-tag conversations using LLM"""
     from ctk.llm.base import Message, MessageRole
@@ -1038,75 +732,6 @@ Tags:"""
 
         print(f"Tagged {tagged_count} conversation(s)")
         return 0
-
-
-def cmd_say(args):
-    """One-shot message to LLM with full tool support (same as TUI 'say' command)"""
-    from ctk.chat.tui import ChatTUI
-    from ctk.llm.factory import build_provider
-
-    message = " ".join(args.message)
-
-    try:
-        provider = build_provider(
-            model=getattr(args, "model", None),
-            base_url=getattr(args, "base_url", None),
-        )
-    except Exception as e:
-        print(f"Error: Failed to initialize provider: {e}")
-        return 1
-
-    if not provider.is_available():
-        print(f"Error: Cannot connect to {provider.base_url}")
-        return 1
-
-    # Create database connection if specified
-    db = None
-    if args.db:
-        try:
-            db = ConversationDB(args.db)
-        except Exception as e:
-            print(f"Warning: Could not connect to database: {e}")
-
-    # Create TUI instance (but don't run interactive loop)
-    disable_tools = getattr(args, "no_tools", False)
-    tui = ChatTUI(provider, db=db, render_markdown=True, disable_tools=disable_tools)
-
-    # One-shot: send message and get response
-    try:
-        tui.chat(message)
-        return 0
-    except Exception as e:
-        print(f"Error: {e}")
-        return 1
-
-
-def _resolve_conversation_id(db: ConversationDB, conv_id: str) -> str:
-    """
-    Resolve a conversation ID prefix to full ID.
-
-    Args:
-        db: Database instance
-        conv_id: Full or partial conversation ID
-
-    Returns:
-        Full conversation ID or "Error: ..." message
-    """
-    if len(conv_id) >= 36:
-        # Already full ID
-        return conv_id
-
-    # Try prefix matching
-    all_convs = db.list_conversations(limit=None, include_archived=True)
-    matches = [c for c in all_convs if c.id.startswith(conv_id)]
-
-    if len(matches) == 0:
-        return f"Error: No conversation found matching '{conv_id}'"
-    elif len(matches) > 1:
-        match_list = ", ".join(f"{m.id[:8]}..." for m in matches[:3])
-        return f"Error: Multiple conversations match '{conv_id}': {match_list}"
-    else:
-        return matches[0].id
 
 
 def execute_ask_tool(
@@ -2050,62 +1675,59 @@ def cmd_sources(args):
     return 0
 
 
-def cmd_chat(args):
-    """Start the legacy line-mode chat REPL.
+def _launch_default_tui(args, parser) -> int:
+    """Resolve a DB path and launch the TUI for the no-subcommand case.
 
-    Deprecated since 2.11.0. The Textual app at ``ctk tui`` now covers
-    every feature this REPL had (tool calling, fork/branch, message
-    navigation, file context) plus a real visual UI. ``ctk chat`` is
-    scheduled for removal in 2.12.0.
+    Resolution order: ``--db`` flag, then ``database.default_path`` in
+    ``~/.ctk/config.json``. Bails with a helpful error (and the help
+    text) if neither yields a path, rather than silently opening an
+    empty DB.
     """
-    from ctk.chat.tui import ChatTUI
-    from ctk.llm.factory import build_provider
+    import os
+    from ctk.core.config import get_config
 
-    # Print deprecation only on interactive terminals so we don't
-    # corrupt output for users piping ctk chat into a parser.
-    # Goes to stderr so even on a tty the banner can be silenced
-    # by redirecting 2>/dev/null.
-    if sys.stdin.isatty() and sys.stderr.isatty():
+    db_path = args.db
+    if not db_path:
+        cfg = get_config()
+        db_path = cfg.config.get("database", {}).get("default_path")
+        if db_path:
+            db_path = os.path.expanduser(db_path)
+            # ConversationDB expects a directory and stores the SQLite
+            # file at <dir>/conversations.db. Older configs sometimes
+            # named the SQLite file directly; tolerate both shapes.
+            if os.path.isfile(db_path) and db_path.endswith(".db"):
+                db_path = os.path.dirname(db_path) or "."
+            if not os.path.exists(db_path):
+                print(
+                    f"Configured database does not exist: {db_path}\n"
+                    "Either create it with `ctk db init`, import a "
+                    "conversation export with `ctk import …`, or pass "
+                    "`--db <path>` to use a different one."
+                )
+                return 1
+    if not db_path:
         print(
-            "[deprecated] `ctk chat` will be removed in 2.12.0. "
-            "Use `ctk tui --db <path>` instead — same chat, plus a "
-            "sidebar for browsing, message navigation, and visual "
-            "fork/branch.",
-            file=sys.stderr,
+            "No database configured. Either:\n"
+            "  • pass --db <path> to open one explicitly,\n"
+            "  • set `database.default_path` in ~/.ctk/config.json, or\n"
+            "  • use `ctk import …` to create one from an export.\n"
         )
-        print(file=sys.stderr)
-
-    provider = build_provider(
-        model=getattr(args, "model", None),
-        base_url=getattr(args, "base_url", None),
-    )
-
-    print(f"Using model {provider.model} at {provider.base_url}")
-    if args.db:
-        print(f"  Database: {args.db}")
-    print()
-
-    if not provider.is_available():
-        print(f"Error: Cannot connect to {provider.base_url}")
-        print("Check your endpoint/base_url and that your model is available.")
+        parser.print_help()
         return 1
 
-    db = None
-    if args.db:
-        try:
-            db = ConversationDB(args.db)
-            print("✓ Connected to database")
-        except Exception as e:
-            print(f"Warning: Could not connect to database: {e}")
-            print("Continuing without database support...")
+    # Forward to cmd_tui which handles provider construction + launch.
+    # Make a shim namespace so cmd_tui doesn't see top-level flags it
+    # doesn't expect.
+    import argparse as _ap
 
-    render_markdown = not args.no_markdown
-    disable_tools = getattr(args, "no_tools", False)
-    chat = ChatTUI(
-        provider, db=db, render_markdown=render_markdown, disable_tools=disable_tools
+    forwarded = _ap.Namespace(
+        db=db_path,
+        model=args.model,
+        base_url=args.base_url,
+        no_chat=args.no_chat,
+        no_tools=args.no_tools,
     )
-    chat.run()
-    return 0
+    return cmd_tui(forwarded)
 
 
 def cmd_tui(args):
@@ -2793,11 +2415,53 @@ def _display_sql_results(console, rows, keys, format_type, limit):
 
 
 def main():
-    """Main CLI entry point"""
+    """Main CLI entry point.
+
+    With no subcommand, ``ctk`` opens the Textual TUI on whatever
+    database is configured in ``~/.ctk/config.json`` (or overridden
+    by ``--db``). Bulk / scriptable operations remain as explicit
+    subcommands (``import``, ``export``, ``query``, ``sql``, ``db``,
+    ``auto-tag``, ``config``, ``llm``).
+    """
     parser = argparse.ArgumentParser(
-        description="Conversation Toolkit - Manage conversation trees from multiple sources"
+        description=(
+            "Conversation Toolkit. Run with no subcommand to open the TUI; "
+            "use a subcommand for bulk / scripted operations."
+        )
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+
+    # Top-level flags that apply when ``ctk`` is invoked without a
+    # subcommand (i.e., the TUI default path). Subcommands that need
+    # the same flags declare them locally so subcommand-style usage
+    # keeps working unchanged.
+    parser.add_argument(
+        "--db",
+        "-d",
+        default=None,
+        help="Database path to open in the TUI (default: from config)",
+    )
+    parser.add_argument(
+        "--model",
+        "-m",
+        default=None,
+        help="Model name for the TUI's chat (default: from config)",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible endpoint for the TUI's chat (default: from config)",
+    )
+    parser.add_argument(
+        "--no-chat",
+        action="store_true",
+        help="Open the TUI in browse-only mode (skip the LLM probe)",
+    )
+    parser.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="Disable tool calling in the TUI",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -2843,7 +2507,7 @@ def main():
     export_parser.add_argument(
         "--ids", nargs="+", help="Specific conversation IDs to export"
     )
-    export_parser.add_argument("--view", help="Export conversations from a named view")
+    # ``--view`` was removed in 2.12.0 along with the views machinery.
     export_parser.add_argument(
         "--limit",
         type=int,
@@ -2943,68 +2607,6 @@ def main():
         help="ECHO: Generate browsable HTML site in site/ subdirectory",
     )
 
-    # View command (subcommands)
-    view_parser = subparsers.add_parser(
-        "view", help="Manage curated views of conversations"
-    )
-    view_parser.add_argument("--db", "-d", required=True, help="Database path")
-    view_subparsers = view_parser.add_subparsers(dest="view_action", help="View action")
-
-    # view list
-    view_list = view_subparsers.add_parser("list", help="List all views")
-
-    # view create
-    view_create = view_subparsers.add_parser("create", help="Create a new view")
-    view_create.add_argument("name", help="View name")
-    view_create.add_argument("--description", "-D", help="View description")
-    view_create.add_argument("--author", help="Author name")
-    view_create.add_argument("--ids", nargs="+", help="Initial conversation IDs")
-    view_create.add_argument("--tags", help="Filter by tags (comma-separated)")
-    view_create.add_argument("--source", help="Filter by source")
-    view_create.add_argument("--model", help="Filter by model")
-    view_create.add_argument(
-        "--starred", action="store_true", help="Filter starred only"
-    )
-    view_create.add_argument("--pinned", action="store_true", help="Filter pinned only")
-    view_create.add_argument(
-        "--track-changes", action="store_true", help="Track content changes"
-    )
-
-    # view show
-    view_show = view_subparsers.add_parser("show", help="Show view details")
-    view_show.add_argument("name", help="View name")
-
-    # view add
-    view_add = view_subparsers.add_parser("add", help="Add conversations to a view")
-    view_add.add_argument("name", help="View name")
-    view_add.add_argument("ids", nargs="+", help="Conversation IDs to add")
-    view_add.add_argument("--title", help="Title override for added items")
-    view_add.add_argument("--note", help="Note for added items")
-
-    # view remove
-    view_remove = view_subparsers.add_parser(
-        "remove", help="Remove conversations from a view"
-    )
-    view_remove.add_argument("name", help="View name")
-    view_remove.add_argument("ids", nargs="+", help="Conversation IDs to remove")
-
-    # view delete
-    view_delete = view_subparsers.add_parser("delete", help="Delete a view")
-    view_delete.add_argument("name", help="View name")
-
-    # view check
-    view_check = view_subparsers.add_parser("check", help="Check view for issues")
-    view_check.add_argument("name", nargs="?", help="View name (or check all)")
-
-    # view eval
-    view_eval = view_subparsers.add_parser(
-        "eval", help="Evaluate and list view contents"
-    )
-    view_eval.add_argument("name", help="View name")
-
-    # Plugins command
-    plugins_parser = subparsers.add_parser("plugins", help="List available plugins")
-
     # Auto-tag command
     auto_tag_parser = subparsers.add_parser(
         "auto-tag", help="Auto-tag conversations using LLM"
@@ -3042,43 +2644,18 @@ def main():
         "--no-tags", action="store_true", help="Only conversations without tags"
     )
 
-    # Chat command
-    chat_parser = subparsers.add_parser(
-        "chat", help="Interactive chat with an OpenAI-compatible LLM endpoint"
-    )
-    chat_parser.add_argument(
-        "--model",
-        "-m",
-        default=None,
-        help="Model name (default: from config or 'gpt-3.5-turbo')",
-    )
-    chat_parser.add_argument(
-        "--base-url",
-        default=None,
-        help="OpenAI-compatible endpoint URL (default: from config or https://api.openai.com/v1)",
-    )
-    chat_parser.add_argument("--db", "-d", help="Database path to save conversations")
-    chat_parser.add_argument(
-        "--no-markdown", action="store_true", help="Disable markdown rendering"
-    )
-    chat_parser.add_argument(
-        "--no-tools",
-        action="store_true",
-        help="Disable tool calling (for models that don't support it)",
-    )
-
-    # Textual multi-pane TUI ("ctk tui")
+    # `tui` subcommand kept as an alias for muscle memory; bare `ctk`
+    # also opens the TUI via the no-subcommand path. The legacy
+    # `chat` and `say` subcommands were removed in 2.12.0 — interactive
+    # chat lives in the TUI now, with slash commands for power users.
     tui_parser = subparsers.add_parser(
-        "tui", help="Full-screen multi-pane browse/chat UI (requires --db)"
+        "tui", help="Open the full-screen TUI (alias for bare `ctk`)"
     )
     tui_parser.add_argument(
-        "--db", "-d", required=True, help="Database path to browse"
+        "--db", "-d", required=False, help="Database path to browse"
     )
     tui_parser.add_argument(
-        "--model",
-        "-m",
-        default=None,
-        help="Model name (default: from config)",
+        "--model", "-m", default=None, help="Model name (default: from config)"
     )
     tui_parser.add_argument(
         "--base-url",
@@ -3088,33 +2665,12 @@ def main():
     tui_parser.add_argument(
         "--no-chat",
         action="store_true",
-        help="Browse-only mode; don't probe the LLM endpoint on startup",
+        help="Browse-only mode; skip the LLM probe on startup",
     )
     tui_parser.add_argument(
         "--no-tools",
         action="store_true",
-        help="Disable tool calling (for models that don't support it)",
-    )
-
-    # Say command - one-shot LLM message with full tool support
-    say_parser = subparsers.add_parser(
-        "say", help="One-shot message to LLM (same as TUI say)"
-    )
-    say_parser.add_argument("message", nargs="+", help="Message to send")
-    say_parser.add_argument("--db", "-d", help="Database path (enables CTK tools)")
-    say_parser.add_argument(
-        "--model",
-        "-m",
-        default=None,
-        help="Model name (default: from config)",
-    )
-    say_parser.add_argument(
-        "--base-url",
-        default=None,
-        help="OpenAI-compatible endpoint URL (default: from config)",
-    )
-    say_parser.add_argument(
-        "--no-tools", action="store_true", help="Disable tool calling"
+        help="Disable tool calling",
     )
 
     # Query command - human-friendly search with composable flags
@@ -3140,7 +2696,7 @@ def main():
     query_parser.add_argument("--since", help="After date (YYYY-MM-DD or 7d, 1w, 1m)")
     query_parser.add_argument("--until", help="Before date")
     # View integration
-    query_parser.add_argument("--view", help="Evaluate a saved view")
+    # ``--view`` was removed in 2.12.0 along with the views machinery.
     # Output
     query_parser.add_argument(
         "--format", "-f", choices=["table", "json", "csv"], default="table"
@@ -3193,16 +2749,6 @@ def main():
 
     add_net_commands(subparsers)
 
-    # Conversation command group
-    from ctk.cli_conv import add_conv_commands
-
-    add_conv_commands(subparsers)
-
-    # Library command group
-    from ctk.cli_lib import add_lib_commands
-
-    add_lib_commands(subparsers)
-
     # LLM provider command group
     from ctk.cli_llm import add_llm_commands
 
@@ -3219,21 +2765,21 @@ def main():
         setup_logging(verbose=True)
 
     if not args.command:
-        parser.print_help()
-        return 1
+        # No subcommand: open the TUI. Resolve the database path from
+        # CLI flag → config → bail with a helpful message if neither
+        # provides one. We don't want the TUI to silently open against
+        # an empty in-memory DB.
+        return _launch_default_tui(args, parser)
 
-    # Dispatch to command handler
-    # Note: Many commands moved to groups:
-    #   ctk conv - show, tree, paths, star, pin, archive, title, delete, duplicate, tag, untag
-    #   ctk lib  - list, search, stats, tags, models, sources
+    # Dispatch to command handler. The CLI surface is intentionally
+    # small in 2.12.0: bulk / scripted operations only. Everything
+    # interactive (per-conversation ops, chat, view management,
+    # graph analytics) lives in the TUI now via bindings, slash
+    # commands, and tool calls.
     commands = {
         "import": cmd_import,
         "export": cmd_export,
-        "view": cmd_view,
-        "plugins": cmd_plugins,
         "auto-tag": cmd_auto_tag,
-        "say": cmd_say,
-        "chat": cmd_chat,
         "tui": cmd_tui,
         "sql": cmd_sql,
         "query": cmd_query,
@@ -3271,44 +2817,20 @@ def main():
 
     # Special handling for net subcommands
     if args.command == "net":
-        from ctk.cli_net import cmd_central, cmd_clusters, cmd_embeddings
-        from ctk.cli_net import cmd_export as cmd_net_export
-        from ctk.cli_net import (cmd_links, cmd_neighbors, cmd_network,
-                                 cmd_outliers, cmd_path, cmd_similar)
+        from ctk.cli_net import cmd_embeddings, cmd_links
 
         net_commands = {
             "embeddings": cmd_embeddings,
-            "similar": cmd_similar,
             "links": cmd_links,
-            "network": cmd_network,
-            "clusters": cmd_clusters,
-            "neighbors": cmd_neighbors,
-            "path": cmd_path,
-            "central": cmd_central,
-            "outliers": cmd_outliers,
-            "export": cmd_net_export,
         }
-
         if hasattr(args, "net_command") and args.net_command:
             return net_commands[args.net_command](args)
-        else:
-            print("Error: No network operation specified")
-            print(
-                "Available: embeddings, similar, links, network, clusters, neighbors, path, central, outliers, export"
-            )
-            return 1
-
-    # Special handling for conv subcommands
-    if args.command == "conv":
-        from ctk.cli_conv import dispatch_conv_command
-
-        return dispatch_conv_command(args)
-
-    # Special handling for lib subcommands
-    if args.command == "lib":
-        from ctk.cli_lib import dispatch_lib_command
-
-        return dispatch_lib_command(args)
+        print(
+            "Error: no net operation specified. Available: embeddings, links.\n"
+            "Analytical queries (similar, neighbors, clusters, ...) live as "
+            "ctk.network MCP tools — ask the model from inside `ctk` (TUI)."
+        )
+        return 1
 
     # Special handling for llm subcommands
     if args.command == "llm":

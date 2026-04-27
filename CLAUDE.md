@@ -26,148 +26,133 @@ make clean            # Remove build artifacts and __pycache__
 
 ### Data Model
 
-**ConversationTree** (`ctk/core/models.py`) — Central data structure. All conversations are trees; linear chats are single-path trees, branching conversations (e.g., ChatGPT regenerations) preserve all paths. Key methods: `get_all_paths()`, `get_longest_path()`, `add_message()`.
+**ConversationTree** (`ctk/core/models.py`) is the central data structure. All conversations are trees; linear chats are single-path trees, branching conversations (e.g., ChatGPT regenerations) preserve all paths. Key methods: `get_all_paths()`, `get_longest_path()`, `add_message()`.
 
-**Database** — Two-layer design:
-- `ctk/core/db_models.py`: SQLAlchemy ORM models (`ConversationModel`, `MessageModel`, `TagModel`, `PathModel`). Tables: `conversations`, `messages`, `tags`, `paths`, `embeddings`, `similarities`.
-- `ctk/core/database.py`: `ConversationDB` — high-level database operations (save, load, search, list). FTS5 full-text search with LIKE fallback.
-- `ctk/core/db_operations.py`: Database-level operations (merge, diff, intersect, filter, split, dedupe).
-- `ctk/core/pagination.py`: Cursor-based keyset pagination via `encode_cursor()`/`decode_cursor()`.
+**Database** is a two-layer design:
+- `ctk/core/db_models.py`: SQLAlchemy ORM models (`ConversationModel`, `MessageModel`, `TagModel`, `EmbeddingModel`, `SimilarityModel`).
+- `ctk/core/database.py`: `ConversationDB`, the high-level wrapper (save, load, search, list). FTS5 full-text search with LIKE fallback. The "db_path" is a directory; the SQLite file lives at `<dir>/conversations.db` and an associated `media/` directory holds image attachments.
+- `ctk/core/db_operations.py`: maintenance ops (merge, diff, intersect, filter, split, dedupe).
+- `ctk/core/pagination.py`: cursor-based keyset pagination via `encode_cursor()` / `decode_cursor()`.
 
-### CLI Architecture
+### CLI surface (since 2.12.0)
 
-Top-level commands in `ctk/cli.py`: `import`, `export`, `view`, `plugins`, `auto-tag`, `chat`, `tui`, `say`, `query`, `sql`
+`ctk` with no subcommand opens the Textual TUI. The full top-level command list is intentionally small:
 
-- `ctk tui` launches a Textual multi-pane app (tabbed sidebar + chat main pane). Chat is enabled by default using config (`providers.openai.{base_url,default_model}`); `--no-chat` disables. Tool calling on by default; `--no-tools` disables. Sidebar tabs: All / Starred / Pinned / Recent / Archived. Bindings: `Ctrl+F` fork at focused message (truncate), `Ctrl+B` branch at focused message (preserve full tree), `Ctrl+G` edit system prompt, `Ctrl+O` attach file as system message, `[`/`]` switch between sibling branches at focused message.
-- `ctk chat` is the legacy line-mode REPL. Deprecated since 2.11.0; scheduled for removal in 2.12.0. Prints a deprecation banner at startup.
+| Command | Purpose |
+|---|---|
+| `ctk` (no args) | Open the TUI on the configured DB |
+| `ctk tui` | Same; alias for muscle memory |
+| `ctk import` | Bulk import conversation exports |
+| `ctk export` | Bulk export to file |
+| `ctk query` | Filter/search with formatted output (table/json/csv) |
+| `ctk sql` | Read-only SQL on the DB |
+| `ctk db` | Maintenance: init, info, vacuum, backup, merge, diff, intersect, filter, split, dedupe, validate |
+| `ctk net` | Build embeddings + similarity graph (analytical queries are MCP tools, see TUI) |
+| `ctk auto-tag` | Bulk LLM-driven tagging |
+| `ctk llm` | Provider config: providers, models, test |
+| `ctk config` | Edit `~/.ctk/config.json` |
 
-Subcommand groups (each in its own module):
-- `ctk conv` (`cli_conv.py`): show, tree, paths, star, pin, archive, title, delete, duplicate, tag, untag, say, fork, reply, export, info, summarize
-- `ctk lib` (`cli_lib.py`): list, search, stats, tags, models, sources, recent, count
-- `ctk db` (`cli_db.py`): init, info, vacuum, backup, merge, diff, intersect, filter, split, dedupe, stats, validate
-- `ctk net` (`cli_net.py`): embeddings, similar, links, network, clusters, neighbors, path, central, outliers, export
-- `ctk llm` (`cli_llm.py`): provider/model management
-- `ctk config` (`cli_config.py`): configuration management
+The previous per-conversation, per-library, per-view, chat REPL, and ad-hoc network analysis subcommands all moved into the TUI as bindings, slash commands, or MCP tool calls.
 
-### Shell-First TUI (`ctk/chat/tui.py`)
+### Textual TUI (`ctk/tui/`)
 
-Two-mode system entered via `ctk chat`:
-1. **Shell mode** (default): Unix-like VFS navigation
-2. **Chat mode**: Interactive LLM conversation with streaming, entered via `chat` command
+`CTKApp` composes a tabbed sidebar and a chat main pane.
 
-**VFS** (`ctk/core/vfs.py`, `ctk/core/vfs_navigator.py`):
-- Conversations as directories under `/chats/<conv_id>/`, messages as `m1/m2/m3` subdirs
-- Virtual directories: `/starred/`, `/pinned/`, `/archived/`, `/tags/`, `/recent/`, `/source/`, `/model/`, `/views/`
-- Prefix resolution: `cd 7c8` resolves to full UUID
+**Sidebar tabs**: All / Starred / Pinned / Recent / Archived. Search overlay at `/`. Implemented in `ctk/tui/sidebar.py`.
 
-**Commands** (`ctk/core/commands/`):
-| Module | Commands |
-|--------|----------|
-| `navigation.py` | cd, ls, pwd |
-| `unix.py` | cat, head, tail, echo, grep |
-| `search.py` | find (-name, -content, -role, -type, -i, -limit, -l) |
-| `visualization.py` | tree, paths |
-| `organization.py` | star, unstar, pin, unpin, archive, unarchive, title |
-| `chat.py` | chat, complete |
-| `tree_nav.py` | Tree navigation |
-| `session.py` | Session management |
-| `settings.py` | Settings commands |
-| `database.py` | Database commands |
-| `llm.py` | LLM commands |
-| `semantic.py` | semantic (search, similar), index (build, status, clear) |
+**Main pane** (`ctk/tui/main_pane.py`): scrollable message bubbles, multi-line chat input at the bottom. Bubbles are focusable (`Tab` / `Shift+Tab` between them). Branch indicators with `[` / `]` to switch siblings.
 
-Pipe support (`ls | grep pattern | head 5`), env vars (`$CWD`, `$MODEL`, `$PROVIDER`, `$CONV_ID`), tab completion.
+**Bindings**:
+- `q` quit; `Ctrl+R` refresh; `Ctrl+N` new conversation
+- `Ctrl+F` fork at focused message (truncate); `Ctrl+B` branch (preserve full tree)
+- `Ctrl+S` toggle star; `Ctrl+G` system prompt modal; `Ctrl+O` attach file modal
+- `[` / `]` previous/next sibling at focused message
 
-**CommandResult pattern**:
-```python
-@dataclass
-class CommandResult:
-    success: bool
-    output: str = ""
-    error: str = ""
-    pipe_data: Optional[str] = None
-```
+**Slash commands** (`ctk/tui/slash.py`): typed in the chat input. Routed to dispatcher before the LLM. `/help` lists them all. Includes `/mcp`, `/model`, `/system`, `/title`, `/star`, `/pin`, `/archive`, `/tag`, `/untag`, `/export`, `/attach`, `/fork`, `/branch`, `/clear`, `/sql`, `/quit`.
+
+**Modals** (`ctk/tui/modals.py`): `SystemPromptModal` (TextArea), `FilePathModal` (Input). Both capture the target conversation id at modal-open and re-resolve at callback time so a sidebar switch mid-modal can't apply the change to the wrong tree.
+
+**Inline images** (`ctk/tui/images.py`): conversations imported with image attachments render below the message bubble via `textual-image`'s `AutoImage` (auto-detects Sixel / Kitty TGP / Halfcell). Handles three source types: existing local `path`, base64 `data` (decoded to a tracked temp file, cleaned up at shutdown), and relative `url` (resolved against the DB's parent dir, since ChatGPT exports use paths like `media/<uuid>.webp`). Protocol detection runs in `run()` before Textual takes over stdin (otherwise the OSC reply is stolen).
+
+### Tools / MCP providers (`ctk/core/tools_registry.py`)
+
+Everything the LLM can do is a tool, and every tool comes from a named provider, modeled on MCP servers:
+
+- `ctk.builtin` is search/list/get/update/star/etc. Full registry in `ctk/core/tools_registry.py`.
+- `ctk.network` is `find_similar_conversations`, `list_neighbors` (queries the persisted `SimilarityModel` table). Defined in `ctk/core/network_tools.py`.
+
+`/mcp` in the TUI lists all providers and their tools. The TUI's chat worker fetches the flat tool list via `ctk.core.tools.get_ask_tools()` which calls `tools_registry.all_tools()` across providers. Adding a new provider: define it in a module that calls `register_provider(...)`, then ensure something imports the module before the TUI starts (e.g., from `ctk/tui/app.py:_register_builtin_providers`).
+
+Tool execution is dispatched in `CTKApp._execute_tool` based on tool name: network tools route to `network_tools.execute_network_tool`, builtin tools to `cli.execute_ask_tool` (legacy dispatcher; will move to a dedicated module in a follow-up).
 
 ### Plugin System (`ctk/core/plugin.py`)
 
-Auto-discovers importers/exporters in `ctk/`. Registry pattern with `ImporterPlugin`/`ExporterPlugin` base classes.
+Auto-discovers importers/exporters via Python's normal import system (built-in plugins re-exported from each package's `__init__.py`). Registry pattern with `ImporterPlugin` / `ExporterPlugin` base classes. AST-based security validation runs only for user-installed plugins from non-trusted directories.
 
-**Importers** (`ctk/importers/`): openai, anthropic, gemini, copilot, jsonl, filesystem_coding
+**Importers** (`ctk/importers/`): openai, anthropic, gemini, copilot, jsonl, filesystem_coding.
 
-**Exporters** (`ctk/exporters/`): json, jsonl, markdown, html, hugo, csv, echo
+**Exporters** (`ctk/exporters/`): json, jsonl, markdown, html, hugo, csv, echo.
 
-**HTML Exporter Chat Features** (`ctk/exporters/html.py`): The HTML exporter produces self-contained interactive HTML files with tree-aware chat continuation. Key JS components embedded in the export:
-- **ConversationTree** JS class: mirrors Python `ConversationTree` — builds `childrenMap`/`roots` from `parent_id`, methods: `getChildren()`, `getPathToRoot()`, `getDefaultPath()`, `addMessage()`
-- **ChatClient** JS class: async SSE streaming to OpenAI-compatible endpoints (`/v1/chat/completions`), `AbortController` for cancellation
-- **Path-based rendering**: `showConversation(conv, pathLeafId)` renders selected tree path with branch indicators (`Branch N of M [prev][next]`)
-- **Chat input**: Reply buttons on assistant messages, quick continue at bottom, inline reply areas
-- **localStorage persistence**: chat branches saved under `chat_branches_${convId}`, merged on page load
-- **Settings UI**: AI Chat section with endpoint (default `localhost:11434`), model, temperature, system prompt
-- Tests: `tests/unit/test_html_chat.py` (39 tests)
+**HTML Exporter** (`ctk/exporters/html.py`) produces self-contained interactive HTML files with tree-aware chat continuation embedded in JS (`ConversationTree`, `ChatClient`, branch indicators, localStorage persistence). Tests: `tests/unit/test_html_chat.py`.
 
-**Flow**: Import: File → Format Detection → Importer → ConversationTree → Database. Export: Database → ConversationTree → Path Selection → Exporter → Output.
+### LLM Integration (`ctk/llm/`)
+
+Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrapping the official `openai` SDK. Targets any OpenAI-compatible endpoint (OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio, Ollama via `http://localhost:11434/v1`). Configure via `~/.ctk/config.json` under `providers.openai.{base_url,default_model,timeout}`; build instances via `ctk.llm.factory.build_provider()`.
 
 ### Other Key Components
 
-**Fluent Python API** (`ctk/api.py`): `CTK` class with builder pattern — `CTK("db.db").search("python").limit(10).get()`
+**Fluent Python API** (`ctk/api.py`): `CTK` class with builder pattern, e.g. `CTK("db.db").search("python").limit(10).get()`.
 
-**MCP Server** (`ctk/interfaces/mcp/`): Modular MCP server with handler modules for search, conversation, metadata, analysis, and SQL. 7 tools total: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar`, `semantic_search`, `execute_sql`. Entry point: `python -m ctk.mcp_server` (thin wrapper). Handlers in `ctk/interfaces/mcp/handlers/`.
+**MCP Server** (`ctk/interfaces/mcp/`): exposes a subset of CTK as a real MCP server for use by external clients. 7 tools: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar`, `semantic_search`, `execute_sql`. Entry point: `python -m ctk.mcp_server`.
 
-**View System** (`ctk/core/views.py`): YAML-based named collections. Selection types: `ITEMS`, `QUERY`, `SQL`, `UNION/INTERSECT/SUBTRACT`. CLI: `ctk view create/list/show/eval`.
-
-**LLM Integration** (`ctk/llm/`): Abstract `LLMProvider` with a single implementation (`OpenAIProvider`) that wraps the official `openai` SDK. Targets any OpenAI-compatible endpoint (real OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio, or Ollama via `http://localhost:11434/v1`). Configure via `~/.ctk/config.json` under `providers.openai.{base_url,default_model,timeout}`; build instances via `ctk.llm.factory.build_provider()`. Tool calling via `ctk/core/tools.py` and `ctk/core/tools_registry.py`.
+**REST API** (`ctk/interfaces/rest/api.py`): Flask-based read/write REST surface. Defaults to `127.0.0.1` because there's no auth. Used for the HTML viewer and any external integrations.
 
 **Shared Utilities**:
 - `ctk/core/formatting.py`: `format_conversations_table()` (Rich tables with emoji flags)
 - `ctk/core/db_helpers.py`: `list_conversations_helper()`, `search_conversations_helper()`
 - `ctk/core/conversation_display.py`: `show_conversation_helper()`
-- `ctk/core/tools.py` + `ctk/core/tools_registry.py`: Tool definitions and execution for LLM tool calling
-- `ctk/core/prompts.py`: `get_ctk_system_prompt()`, `get_ctk_system_prompt_no_tools()`
+- `ctk/core/tools.py` + `tools_registry.py` + `network_tools.py`: tool definitions and provider registry
+- `ctk/core/prompts.py`: `get_ctk_system_prompt()`
 - `ctk/core/utils.py`: `parse_timestamp()`, `try_parse_json()`
 - `ctk/core/input_validation.py`: `validate_conversation_id()`, `validate_file_path()`
-- `ctk/core/constants.py`: All magic numbers (timeouts, limits, widths)
+- `ctk/core/constants.py`: timeouts, limits, widths
 
 ## Critical Notes
 
 ### Gotchas
-- **`EvaluatedView` is falsy when empty** — it implements `__len__`, so always use `is None` checks, not `if not evaluated:`
-- **`EvaluatedViewItem` attributes**: use `item.item.id`, `item.effective_title`, `item.effective_description` — NOT `item.conversation_id` or `item.title_override`
-- **CLI subcommand structure**: `ctk query` (not `ctk list`/`ctk search`), `ctk conv show/star/pin` (not `ctk show`/`ctk star`), `ctk db stats/merge/diff` (not `ctk stats`), `ctk lib list/search/stats` for library-level operations
-- **`ConversationDB` context manager** is for cleanup only; session is initialized in `__init__`
-- **`ConversationDB(":memory:")`** must be special-cased to use true in-memory SQLite (not file at `:memory:/conversations.db`)
-- **`ConversationModel.updated_at`** has `onupdate=func.now()` — ORM overwrites explicit values; use raw SQL in tests to force timestamps
-- **`ConversationTree.add_message()`** overwrites `metadata.updated_at` to `datetime.now()`
-- **`ConversationMetadata`** defaults `created_at`/`updated_at` to `datetime.now()` — tests must set `None` explicitly
-- **Python 3.12 SQLite datetime**: `isoformat()` uses `T`, SQLite stores with space. Use `strftime("%Y-%m-%d %H:%M:%S")` for cursor comparisons
-- **Substring model detection in importers**: sort `model_map.items()` by key length DESC to avoid short-key matches (gpt-4 vs gpt-4-turbo)
-- Integration tests in `tests/integration/test_cli.py` use old command names — known-failing
+- **CLI no-subcommand path**: `ctk` opens the TUI, requires `database.default_path` in config (defaults to `~/.ctk`) or `--db`.
+- **`ConversationDB(":memory:")`** must be special-cased to use true in-memory SQLite (not a file at `:memory:/conversations.db`).
+- **`ConversationModel.updated_at`** has `onupdate=func.now()`. The ORM overwrites explicit values; use raw SQL in tests when you need to force timestamps.
+- **`ConversationTree.add_message()`** overwrites `metadata.updated_at` to `datetime.now()`.
+- **Python 3.12 SQLite datetime**: `isoformat()` uses `T`, SQLite stores with space. Use `strftime("%Y-%m-%d %H:%M:%S")` for cursor comparisons.
+- **Importer model detection**: sort `model_map.items()` by key length DESC to avoid short-key matches (gpt-4 vs gpt-4-turbo).
+- **`textual-image` protocol detection** runs at module import time and is broken once Textual takes over stdin. `ctk/tui/app.py:run()` calls `_detect_image_protocol_eagerly()` before mounting the app.
+- **Modal callbacks must capture conversation id at open time** (see `_on_system_prompt_saved`, `_on_file_attached`). Otherwise a sidebar switch mid-modal applies the change to the wrong tree.
 
 ### Exception Handling
-- Never use bare `except:` — always specify exception types
-- `except Exception:` acceptable only in cleanup/finally blocks with logging
-- HTTP: `requests.exceptions.RequestException`, JSON: `json.JSONDecodeError`, Files: `(IOError, OSError)`
+- Never use bare `except:`; always specify exception types.
+- `except Exception:` acceptable only in cleanup/finally blocks with logging.
+- HTTP: `requests.exceptions.RequestException`; JSON: `json.JSONDecodeError`; Files: `(IOError, OSError)`.
 
 ### Constants (`ctk/core/constants.py`)
-Import from here instead of hardcoding. Key values: `DEFAULT_TIMEOUT` (120s), `HEALTH_CHECK_TIMEOUT` (5s), `DEFAULT_SEARCH_LIMIT` (1000), `MAX_QUERY_LENGTH` (10000), `VFS_LIST_LIMIT` (1000).
+Import from here instead of hardcoding. Key values: `DEFAULT_TIMEOUT` (120s), `HEALTH_CHECK_TIMEOUT` (5s), `DEFAULT_SEARCH_LIMIT` (1000), `MAX_QUERY_LENGTH` (10000).
 
-### Natural Language Queries
-The `ctk query` and TUI `/ask` use LLM tool calling. Critical pattern — boolean filters must only be included when explicitly present:
+### Natural-Language Tool Calls
+Boolean filters in tool calls must only be included when explicitly present. Pattern:
 ```python
 starred_val = tool_args.get('starred')
 starred = to_bool(starred_val) if starred_val is not None else None
 ```
 
 ### Testing
-- Unit tests in `tests/unit/`, integration tests in `tests/integration/`
-- ~2300 unit tests pass, 1 pre-existing failure (test_taggers)
-- 9 integration test failures (pre-existing, old CLI command names)
-- Coverage threshold: 59% (enforced in pytest.ini via `--cov-fail-under=59`, config in `.coveragerc`)
-- Well-tested modules: shell parser (99%), command dispatcher (100%), VFS navigator (96%), models (96%)
-- Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key` — skip with `-m "not requires_ollama"`
+- Unit tests in `tests/unit/`, integration tests in `tests/integration/`.
+- ~1600 unit tests pass after the 2.12.0 cuts.
+- Coverage threshold: 59% (enforced in pytest.ini).
+- Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key`. Skip with `-m "not requires_ollama"`.
 
 ### Release Process
-- Version bumps: `ctk/__init__.py`, `setup.py`, `CITATION.cff`
-- Build: `rm -rf dist/ build/ *.egg-info && python -m build`
-- Publish: `twine check dist/* && twine upload dist/*`
-- Tag: `git tag -a v<version> -m "message" && git push && git push --tags`
-- PyPI package name: `conversation-tk`, entry point: `ctk=ctk.cli:main`
+- Version bumps: `ctk/__init__.py`, `setup.py`, `CITATION.cff`.
+- Build: `rm -rf dist/ build/ *.egg-info && python -m build`.
+- Publish: `twine check dist/* && twine upload dist/*`.
+- Tag: `git tag -a v<version> -m "..."` then `git push --follow-tags`.
+- PyPI package name: `conversation-tk`; entry point: `ctk=ctk.cli:main`.

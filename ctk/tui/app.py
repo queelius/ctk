@@ -139,6 +139,32 @@ def _short_args(args: Dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _infer_media_root(db: ConversationDB) -> Optional[str]:
+    """Guess where relative image URLs should be resolved against.
+
+    ChatGPT exports place images in ``media/<uuid>.{png,webp}`` next to
+    ``conversations.json``. After importing into a sibling
+    ``conversations.db``, those relative URLs are still recorded in
+    the DB. Returning the DB's parent directory makes the typical
+    import-and-go workflow Just Work without the user setting anything.
+    """
+    import os as _os
+
+    try:
+        # ConversationDB exposes its underlying path via ``db_dir``;
+        # fall back to ``db_path`` for older instances. Either way we
+        # want the directory the DB lives in.
+        path = getattr(db, "db_dir", None) or getattr(db, "db_path", None)
+        if path is None:
+            return None
+        path = str(path)
+        if _os.path.isdir(path):
+            return path
+        return _os.path.dirname(path) or None
+    except Exception:
+        return None
+
+
 class CTKApp(App):
     """Full-screen ctk browse + chat UI."""
 
@@ -166,10 +192,16 @@ class CTKApp(App):
         db: ConversationDB,
         provider: Optional[LLMProvider] = None,
         enable_tools: bool = True,
+        media_root: Optional[str] = None,
     ) -> None:
         super().__init__()
         self.db = db
         self.provider = provider
+        # Where to look for relative image URLs (e.g. ChatGPT exports
+        # store images at media/<uuid>.webp relative to conversations.json).
+        # If unset, infer from the DB's parent directory: imports are
+        # typically extracted next to the resulting SQLite file.
+        self.media_root = media_root or _infer_media_root(db)
         # Distinguish three states the status bar cares about:
         #   - tools_supported: provider.supports_tool_calling() is True
         #   - tools_requested: caller didn't pass --no-tools
@@ -214,6 +246,21 @@ class CTKApp(App):
         assert self.sidebar is not None
         self.sidebar.focus_table()
         self._refresh_status()
+        # Tell the message view how to resolve relative image URLs.
+        # Done here (post-mount) rather than in __init__ because main
+        # is constructed by compose() after __init__ completes.
+        if self.main is not None:
+            self.main.messages.set_media_root(self.media_root)
+
+    def on_unmount(self) -> None:
+        # Clean up temp files written for base64-embedded images.
+        # Lazy-import keeps text-only sessions from paying the cost.
+        try:
+            from ctk.tui.images import cleanup_temp_files
+
+            cleanup_temp_files()
+        except ImportError:
+            pass
 
     # ------------------------------------------------------------------
     # Sidebar selection -> main pane
@@ -285,6 +332,18 @@ class CTKApp(App):
     # ------------------------------------------------------------------
 
     def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
+        # First chance: a slash command. ``slash.dispatch`` returns
+        # (handled, note); when handled is True we never call the LLM.
+        # Slash commands work even with no provider configured, so
+        # /help and /mcp are reachable in browse-only mode.
+        from ctk.tui.slash import dispatch as slash_dispatch
+
+        handled, note = slash_dispatch(self, event.text)
+        if handled:
+            if note is not None:
+                self._render_system_note(note)
+            return
+
         if self.provider is None:
             self.notify(
                 "Chat disabled: no reachable LLM endpoint. "
@@ -310,6 +369,21 @@ class CTKApp(App):
             # Fast path: stream tokens straight into a single bubble.
             self._start_streaming_bubble(user_msg.id)
             self._stream_worker(self._llm_history_for(self._current_tree))
+
+    def _render_system_note(self, text: str) -> None:
+        """Mount a slash-command result inline as a system-style note.
+
+        The slash dispatcher returns plain text; we display it in the
+        message view rather than as a Textual notification so users
+        can scroll back to past command output (useful for /mcp,
+        /help, /sql results).
+        """
+        if self.main is None:
+            return
+        self.main.messages.mount(
+            Static(Text(text), classes="message-system")
+        )
+        self.main.messages.scroll_end(animate=False)
 
     def _start_streaming_bubble(self, parent_id: str) -> None:
         """Set up an empty assistant bubble for the streaming worker to fill."""
@@ -512,18 +586,36 @@ class CTKApp(App):
         except Exception as exc:  # pragma: no cover
             self.post_message(_ChatDone(error=str(exc)))
 
+    # Tool names belonging to the ctk.network virtual MCP. Routed to
+    # ctk.core.network_tools.execute_network_tool instead of the legacy
+    # cli.execute_ask_tool dispatcher. Kept as a class-level set so the
+    # check is O(1) and the list is greppable.
+    _NETWORK_TOOL_NAMES = frozenset(
+        {"find_similar_conversations", "list_neighbors"}
+    )
+
     def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
         """Run a CTK tool, returning its result as a string.
 
-        Currently delegates to ``ctk.cli.execute_ask_tool`` which holds
-        the canonical dispatch logic. Kept as a single seam so a future
-        refactor can swap the executor (e.g., MCP-based) without
+        Routes by tool-name to the right provider:
+
+        * ``ctk.network`` tools → ``network_tools.execute_network_tool``
+        * ``ctk.builtin`` tools → ``cli.execute_ask_tool`` (legacy
+          dispatcher; will move into a dedicated builtin_tools module
+          in a follow-up)
+
+        Kept as a single seam so a future refactor (real MCP server
+        registration, plugin tools, etc.) can route here without
         changing the worker.
         """
+        if name in self._NETWORK_TOOL_NAMES:
+            from ctk.core.network_tools import execute_network_tool
+
+            return execute_network_tool(self.db, name, args)
+
         from ctk.cli import execute_ask_tool
 
         # ``use_rich`` would print to stdout, which the TUI swallows.
-        # The tool registry returns strings either way.
         return execute_ask_tool(self.db, name, args, use_rich=False)
 
     # ----- UI thread handlers for chat-with-tools messages -------------
@@ -1053,6 +1145,50 @@ class CTKApp(App):
             self._status.update(self._status_text())
 
 
+def _register_builtin_providers() -> None:
+    """Import modules that register virtual MCP providers on import.
+
+    Today: ``ctk.network`` provider via ``ctk.core.network_tools``.
+    The ``ctk.builtin`` provider is registered when ``tools_registry``
+    itself is imported (it's the default), so no work is needed there.
+
+    Kept as an explicit function (not just an import side-effect at
+    module top of app.py) so the order is obvious: providers are
+    registered before the TUI mounts and before the chat worker
+    queries the registry. New providers added here.
+    """
+    try:
+        import ctk.core.network_tools  # noqa: F401  (import for side effect)
+    except Exception as exc:  # pragma: no cover
+        # A failing provider import shouldn't prevent the TUI from
+        # opening; the user just loses access to those tools.
+        logger.warning("Could not register ctk.network provider: %s", exc)
+
+
+def _detect_image_protocol_eagerly() -> None:
+    """Force textual-image's terminal-protocol detection to run NOW.
+
+    textual-image probes the terminal for Sixel and Kitty TGP support
+    by sending an OSC escape sequence and waiting briefly for a reply.
+    The detection runs at *import time* of ``textual_image.renderable``.
+    Once the Textual app starts, its input thread captures stdin and
+    the OSC reply gets stolen — so any later import locks in the
+    halfcell fallback even on terminals that fully support TGP/Sixel.
+
+    Calling this from ``run()`` (before ``app.run()``) ensures the
+    detection happens while we still own stdin. Failures are swallowed
+    so users without textual-image installed still get the rest of
+    the TUI; image rendering just degrades to caption-only.
+    """
+    try:
+        import textual_image.renderable  # noqa: F401  (import for side effect)
+    except Exception:
+        # Not installed, or terminal probe blew up. Either way the
+        # message view's lazy import will hit the same exception path
+        # and degrade gracefully.
+        pass
+
+
 def run(
     db_path: str,
     provider: Optional[LLMProvider] = None,
@@ -1063,6 +1199,8 @@ def run(
     This is a thin wrapper kept out of ``__init__`` so importing
     ``ctk.tui`` doesn't eagerly open the DB.
     """
+    _detect_image_protocol_eagerly()
+    _register_builtin_providers()
     db = ConversationDB(db_path)
     try:
         app = CTKApp(db=db, provider=provider, enable_tools=enable_tools)

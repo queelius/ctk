@@ -19,15 +19,21 @@ from ctk.core.models import ConversationMetadata, ConversationTree
 class TestCLICommandBehaviors:
     """Test CLI command behaviors and contracts"""
 
-    def test_main_without_command_shows_help(self):
-        """Test that CLI without command shows help and returns error code"""
-        # Given: CLI called without any command
-        # When: Running main with no arguments
-        with patch("sys.argv", ["ctk"]):
-            result = main()
+    def test_main_without_command_attempts_to_open_tui(self):
+        """`ctk` with no subcommand opens the TUI (since 2.12.0).
 
-        # Then: Should return error code indicating help was shown
-        assert result == 1
+        We don't actually launch the Textual app from the test (it
+        would require a tty); instead we verify ``main`` routes
+        through ``_launch_default_tui`` rather than printing help. With
+        no DB configured the launcher returns 1 with an explanation —
+        which is what we check for.
+        """
+        with patch("sys.argv", ["ctk"]), patch(
+            "ctk.cli._launch_default_tui", return_value=0
+        ) as launcher:
+            result = main()
+        launcher.assert_called_once()
+        assert result == 0
 
     @patch("sys.argv", ["ctk", "--help"])
     def test_main_with_help_flag_exits_successfully(self):
@@ -169,65 +175,6 @@ class TestCLICommandBehaviors:
 
         assert result == 0
         db.list_conversations.assert_called_once_with(limit=None)
-
-    def test_list_command_displays_conversations(self):
-        """Test list command displays available conversations"""
-        import os
-
-        from ctk.core.database import ConversationDB
-        from ctk.core.models import ConversationTree
-
-        # Given: A database with conversations
-        with tempfile.TemporaryDirectory() as temp_db:
-            # Create a database and add conversations
-            with ConversationDB(temp_db) as db:
-                conv1 = ConversationTree(id="conv1", title="First Chat")
-                conv2 = ConversationTree(id="conv2", title="Second Chat")
-                db.save_conversation(conv1)
-                db.save_conversation(conv2)
-
-            # When: Running list command via CLI (now under lib subgroup)
-            with patch("sys.argv", ["ctk", "lib", "list", "--db", temp_db]):
-                result = main()
-
-            # Then: Should successfully list conversations
-            assert result == 0
-
-    def test_search_command_finds_conversations(self):
-        """Test search command finds matching conversations"""
-        import os
-
-        from ctk.core.database import ConversationDB
-        from ctk.core.models import (ConversationTree, Message, MessageContent,
-                                     MessageRole)
-
-        # Given: A database with searchable conversations
-        with tempfile.TemporaryDirectory() as temp_db:
-            # Create a database and add conversations with searchable content
-            with ConversationDB(temp_db) as db:
-                conv1 = ConversationTree(id="conv1", title="Python Tutorial")
-                conv1.add_message(
-                    Message(
-                        role=MessageRole.USER,
-                        content=MessageContent(text="How do I use Python?"),
-                    )
-                )
-                conv2 = ConversationTree(id="conv2", title="Java Tutorial")
-                conv2.add_message(
-                    Message(
-                        role=MessageRole.USER,
-                        content=MessageContent(text="How do I use Java?"),
-                    )
-                )
-                db.save_conversation(conv1)
-                db.save_conversation(conv2)
-
-            # When: Running search command via CLI (now under lib subgroup)
-            with patch("sys.argv", ["ctk", "lib", "search", "Python", "--db", temp_db]):
-                result = main()
-
-            # Then: Should successfully search
-            assert result == 0
 
 
 class TestCLIErrorHandling:

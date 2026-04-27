@@ -500,3 +500,80 @@ PASS_THROUGH_TOOLS = {
     "get_statistics",
     "execute_shell_command",
 }
+
+
+# ---------------------------------------------------------------------------
+# Tool providers (virtual MCP servers)
+#
+# As of 2.12.0 the ctk model is "everything the LLM can do is a tool, and
+# every tool comes from a named provider." Built-in tools live under the
+# ``ctk.builtin`` provider; the network-analysis stack lives under
+# ``ctk.network`` (registered in ctk.core.network_tools). Future external
+# MCP servers register through this same interface, so /mcp inside the
+# TUI shows everything in one list.
+#
+# Providers are intentionally tiny — just a name, description, and a list
+# of tool dicts. ``available`` is reserved for the day a provider's
+# upstream is unreachable (e.g. an MCP server that's down); built-in
+# providers are always available.
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass, field
+from typing import Iterable
+
+
+@dataclass
+class ToolProvider:
+    """A named source of LLM tools, modeled like an MCP server."""
+
+    name: str
+    description: str = ""
+    tools: List[Dict[str, Any]] = field(default_factory=list)
+    available: bool = True
+
+
+# The registry is a module-global list; phase-B will append the
+# ``ctk.network`` provider here when its module is imported.
+_PROVIDERS: List[ToolProvider] = [
+    ToolProvider(
+        name="ctk.builtin",
+        description=(
+            "Built-in CTK tools for searching, fetching, and updating "
+            "conversations in the local database."
+        ),
+        tools=TOOLS_REGISTRY,
+    ),
+]
+
+
+def register_provider(provider: ToolProvider) -> None:
+    """Append a provider to the registry.
+
+    Idempotent on name: if a provider with the same name already
+    exists, replace it (so re-importing a tools module during dev
+    doesn't accumulate duplicates).
+    """
+    for i, existing in enumerate(_PROVIDERS):
+        if existing.name == provider.name:
+            _PROVIDERS[i] = provider
+            return
+    _PROVIDERS.append(provider)
+
+
+def iter_providers() -> Iterable[ToolProvider]:
+    """Iterate over all registered tool providers in display order."""
+    return list(_PROVIDERS)
+
+
+def all_tools() -> List[Dict[str, Any]]:
+    """Flat list of every tool from every available provider.
+
+    Used by callers (the TUI worker, MCP server) that want one list to
+    hand to an LLM. Unavailable providers are skipped so the model
+    isn't told about tools that will fail to execute.
+    """
+    out: List[Dict[str, Any]] = []
+    for provider in _PROVIDERS:
+        if provider.available:
+            out.extend(provider.tools)
+    return out

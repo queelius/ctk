@@ -99,6 +99,15 @@ class MessageView(VerticalScroll):
         # The conversation we're displaying and the linear path through it.
         self._tree: Optional[ConversationTree] = None
         self._path: List[Message] = []
+        # Directory used to resolve relative image URLs (e.g. the
+        # ``media/`` folder ChatGPT exports place next to
+        # ``conversations.json``). Set by the App after construction
+        # because it depends on the database path.
+        self._media_root: Optional[str] = None
+
+    def set_media_root(self, root: Optional[str]) -> None:
+        """Set the directory used to resolve relative image URLs."""
+        self._media_root = root
 
     @property
     def current_path(self) -> List[Message]:
@@ -192,6 +201,33 @@ class MessageView(VerticalScroll):
         bubble = MessageBubble(msg)
         self.mount(role_line)
         self.mount(bubble)
+        # Mount any image attachments below the bubble. Lazy-import so
+        # the image stack stays out of the codepath for text-only
+        # conversations (which is most of them) and so missing
+        # textual-image at install time degrades to a graceful warning
+        # rather than an import error.
+        images = getattr(msg.content, "images", None)
+        if images:
+            try:
+                from ctk.tui.images import build_image_widgets
+
+                for widget in build_image_widgets(
+                    images, media_root=self._media_root
+                ):
+                    self.mount(widget)
+            except ImportError:
+                # textual-image not installed; show a minimal fallback
+                # so the user at least knows attachments existed.
+                for img in images:
+                    label = (
+                        img.caption
+                        or img.url
+                        or img.path
+                        or f"(embedded {img.mime_type or 'image'})"
+                    )
+                    self.mount(
+                        Static(f"[image] {label}", classes="message-system")
+                    )
         # Show a branch indicator under any message with siblings beyond
         # the one currently picked. We render it AFTER the bubble whose
         # *child* in the path has siblings — i.e., this is the parent of
