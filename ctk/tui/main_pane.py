@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from rich.markdown import Markdown
 from rich.text import Text
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, TextArea
 
-from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
 
 
 def _role_label(role: MessageRole) -> Text:
@@ -24,7 +24,16 @@ def _role_label(role: MessageRole) -> Text:
 
 
 class MessageBubble(Static):
-    """A single message in the scroll view, styled by role."""
+    """A single message in the scroll view, styled by role.
+
+    Bubbles are focusable so j/k or arrow keys can move the selection
+    cursor between messages — the parent app uses the focused bubble's
+    ``message_id`` to drive fork/branch actions. Made focusable via
+    ``can_focus = True`` rather than overriding ``__init__`` flags so
+    the existing test that mounts these unchanged still works.
+    """
+
+    can_focus = True
 
     def __init__(self, msg: Message) -> None:
         klass = {
@@ -44,9 +53,60 @@ class MessageBubble(Static):
         super().__init__(renderable, classes=klass)
         self._msg = msg
 
+    @property
+    def message_id(self) -> str:
+        """The ctk Message id this bubble represents."""
+        return self._msg.id
+
+
+class BranchIndicator(Static):
+    """A "Branch N of M ◀ ▶" inline indicator under a branching message.
+
+    Stored on the parent message id so the app can find it again to
+    update the highlighted sibling. The actual sibling switching is
+    driven by ``MessageView.switch_sibling`` which rebuilds the path
+    and re-renders.
+    """
+
+    def __init__(self, parent_id: str, position: int, total: int) -> None:
+        super().__init__(classes="branch-indicator")
+        self.parent_id = parent_id
+        self.update(self._render_label(position, total))
+
+    @staticmethod
+    def _render_label(position: int, total: int) -> Text:
+        # NOTE: do NOT name this ``_render`` — Textual's Widget base
+        # class uses ``_render`` internally during the paint cycle and
+        # collisions silently break the widget.
+        text = Text()
+        text.append("  ⤳ branch ", style="dim italic")
+        text.append(f"{position + 1}", style="bold cyan")
+        text.append(f" of {total}  ", style="dim")
+        text.append("[ ] to switch", style="dim italic")
+        return text
+
 
 class MessageView(VerticalScroll):
-    """Scrollable message column. ``show_conversation`` replaces contents."""
+    """Scrollable message column.
+
+    Tracks the **current path** as state rather than recomputing
+    ``get_longest_path()`` each render, so sibling switching can
+    rewrite the tail of the path without losing the prefix.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # The conversation we're displaying and the linear path through it.
+        self._tree: Optional[ConversationTree] = None
+        self._path: List[Message] = []
+
+    @property
+    def current_path(self) -> List[Message]:
+        return list(self._path)
+
+    @property
+    def current_tree(self) -> Optional[ConversationTree]:
+        return self._tree
 
     def clear(self) -> None:
         for child in list(self.children):
@@ -54,27 +114,106 @@ class MessageView(VerticalScroll):
 
     def show_empty(self, hint: str = "Select a conversation from the sidebar.") -> None:
         self.clear()
+        self._tree = None
+        self._path = []
         self.mount(Static(Text(hint, style="dim italic"), classes="message-system"))
 
     def show_conversation(self, tree: ConversationTree) -> None:
-        self.clear()
-        messages = tree.get_longest_path()
-        if not messages:
-            self.show_empty("(conversation is empty)")
-            return
-        for msg in messages:
-            self._mount_message(msg)
-        self.scroll_end(animate=False)
+        self._tree = tree
+        self._path = list(tree.get_longest_path())
+        self._render_path()
 
     def append_message(self, msg: Message) -> None:
-        self._mount_message(msg)
+        """Append a single message to the displayed path AND the state."""
+        self._path.append(msg)
+        self._mount_message(msg, is_last_in_path=True)
         self.scroll_end(animate=False)
 
-    def _mount_message(self, msg: Message) -> None:
+    def switch_sibling(self, parent_id: str, direction: int) -> bool:
+        """Switch to the next/prev sibling under ``parent_id`` in the path.
+
+        Rebuilds the tail of the current path: keeps everything up to
+        and including ``parent_id``, then picks the new sibling, then
+        extends down its first-leaf greedy path.
+
+        Returns True if the path actually changed (there were siblings
+        to move to), False otherwise.
+        """
+        if self._tree is None:
+            return False
+        # Locate parent in current path.
+        parent_index = next(
+            (i for i, m in enumerate(self._path) if m.id == parent_id), None
+        )
+        if parent_index is None or parent_index + 1 >= len(self._path):
+            return False
+        siblings = self._tree.get_children(parent_id)
+        if len(siblings) < 2:
+            return False
+        current_child_id = self._path[parent_index + 1].id
+        current_pos = next(
+            (i for i, s in enumerate(siblings) if s.id == current_child_id), 0
+        )
+        new_pos = (current_pos + direction) % len(siblings)
+        if new_pos == current_pos:
+            return False
+        new_child = siblings[new_pos]
+        # Truncate after parent and rebuild greedy path from new_child.
+        self._path = self._path[: parent_index + 1] + self._extend_path(
+            new_child
+        )
+        self._render_path()
+        return True
+
+    def _extend_path(self, start: Message) -> List[Message]:
+        """Greedy descent from ``start``: pick the first child each step."""
+        assert self._tree is not None
+        path = [start]
+        cursor = start
+        while True:
+            kids = self._tree.get_children(cursor.id)
+            if not kids:
+                break
+            cursor = kids[0]
+            path.append(cursor)
+        return path
+
+    def _render_path(self) -> None:
+        self.clear()
+        if not self._path:
+            self.show_empty("(conversation is empty)")
+            return
+        for i, msg in enumerate(self._path):
+            self._mount_message(msg, is_last_in_path=(i == len(self._path) - 1))
+        self.scroll_end(animate=False)
+
+    def _mount_message(self, msg: Message, is_last_in_path: bool = False) -> None:
         role_line = Static(_role_label(msg.role), classes="message-role")
         bubble = MessageBubble(msg)
         self.mount(role_line)
         self.mount(bubble)
+        # Show a branch indicator under any message with siblings beyond
+        # the one currently picked. We render it AFTER the bubble whose
+        # *child* in the path has siblings — i.e., this is the parent of
+        # a branching point. Skip on the last message because there's no
+        # next-in-path child to indicate.
+        if is_last_in_path or self._tree is None:
+            return
+        siblings = self._tree.get_children(msg.id)
+        if len(siblings) < 2:
+            return
+        # Find which sibling is currently in the path.
+        next_in_path_id = None
+        path_ids = [m.id for m in self._path]
+        idx = path_ids.index(msg.id)
+        if idx + 1 < len(self._path):
+            next_in_path_id = self._path[idx + 1].id
+        position = next(
+            (i for i, s in enumerate(siblings) if s.id == next_in_path_id), 0
+        )
+        self.mount(
+            BranchIndicator(msg.id, position=position, total=len(siblings))
+        )
 
 
 class ChatInput(TextArea):
