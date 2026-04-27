@@ -246,7 +246,10 @@ class HelpModal(ModalScreen[None]):
 
     def __init__(self, bindings: list) -> None:
         super().__init__()
-        self._bindings = bindings
+        # Stored under a non-Textual name. Widget._bindings is the
+        # internal BindingsMap and clobbering it makes the binding
+        # chain crash on the next key press (see 2.13.2 hotfix).
+        self._app_bindings = bindings
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -266,7 +269,7 @@ class HelpModal(ModalScreen[None]):
         out: list[str] = []
 
         out.append("[bold]Key bindings[/bold]")
-        for binding in self._bindings:
+        for binding in self._app_bindings:
             key = getattr(binding, "key", "?")
             description = getattr(binding, "description", "") or getattr(binding, "action", "")
             show = getattr(binding, "show", True)
