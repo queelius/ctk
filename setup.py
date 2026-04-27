@@ -40,6 +40,7 @@ setup(
         "scikit-learn>=1.3.0",
         "numpy>=1.24.0",
         "textual>=0.50.0",
+        "textual-image>=0.6.0",
         "openai>=1.40.0",
     ],
     extras_require={
