@@ -166,13 +166,81 @@ def cmd_model(app: "CTKApp", args: str) -> str:
     if not args.strip():
         if app.provider is None:
             return "No provider configured."
-        return f"Current model: {app.provider.model}"
+        profile = getattr(app.provider, "profile_name", None) or "(unknown)"
+        return (
+            f"Current model: {app.provider.model}\n"
+            f"  profile:  {profile}\n"
+            f"  base_url: {app.provider.base_url}"
+        )
     if app.provider is None:
         return "No provider configured; cannot switch models."
     new_model = args.strip()
     app.provider.model = new_model
     app._refresh_status()
     return f"Switched model to {new_model}."
+
+
+@register(
+    "provider",
+    summary="List provider profiles or switch to one",
+    usage="/provider [name]",
+)
+def cmd_provider(app: "CTKApp", args: str) -> str:
+    """Show available named profiles or activate one of them.
+
+    Profiles live under ``providers.{name}`` in ``~/.ctk/config.json``;
+    each provides ``base_url`` / ``default_model`` / ``timeout``. The
+    active profile name is set via ``providers.default`` at startup or
+    overridden with ``--provider`` on the CLI.
+
+    No-arg form lists every profile and marks the current one with
+    ``*``. Switching rebuilds the provider so ``app.provider.model``
+    and ``base_url`` both update.
+    """
+    from ctk.llm.factory import build_provider, list_profiles
+
+    profiles = list_profiles()
+    current = getattr(app.provider, "profile_name", None) if app.provider else None
+
+    if not args.strip():
+        if not profiles:
+            return "No provider profiles defined in config."
+        lines = ["Provider profiles:"]
+        for name in profiles:
+            marker = "*" if name == current else " "
+            cfg_section = (app.db and None) or None  # placate linter
+            from ctk.core.config import get_config
+
+            pconfig = get_config().get_provider_config(name) or {}
+            base = pconfig.get("base_url") or "(default)"
+            model = pconfig.get("default_model") or "(default)"
+            lines.append(f"  {marker} {name:<14} {base}  ({model})")
+        lines.append("")
+        lines.append("Usage: /provider <name>  to switch.")
+        return "\n".join(lines)
+
+    new_name = args.strip()
+    if new_name not in profiles:
+        available = ", ".join(profiles) if profiles else "(none)"
+        return f"Unknown profile: {new_name}. Available: {available}"
+    if new_name == current:
+        return f"Already using profile '{new_name}'."
+
+    try:
+        new_provider = build_provider(profile=new_name)
+    except Exception as exc:
+        return f"Could not build provider '{new_name}': {exc}"
+
+    # Re-evaluate tool support — different endpoints support different
+    # tool-calling shapes, so what worked on profile A may not on B.
+    app.provider = new_provider
+    app._tools_supported = new_provider.supports_tool_calling()
+    app.enable_tools = app._tools_supported and app._tools_requested
+    app._refresh_status()
+    return (
+        f"Switched to provider '{new_name}' "
+        f"(model={new_provider.model}, base_url={new_provider.base_url})."
+    )
 
 
 @register("system", summary="Show or set the system prompt", usage="/system [text]")

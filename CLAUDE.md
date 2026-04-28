@@ -103,7 +103,9 @@ Auto-discovers importers/exporters via Python's normal import system (built-in p
 
 ### LLM Integration (`ctk/llm/`)
 
-Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrapping the official `openai` SDK. Targets any OpenAI-compatible endpoint (OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio, Ollama via `http://localhost:11434/v1`). Configure via `~/.ctk/config.json` under `providers.openai.{base_url,default_model,timeout}`; build instances via `ctk.llm.factory.build_provider()`.
+Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrapping the official `openai` SDK. Targets any OpenAI-compatible endpoint (OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio, Ollama via `http://localhost:11434/v1`).
+
+**Named provider profiles** (since 2.14.x): config supports multiple profiles under `providers.{name}` in `~/.ctk/config.json`, with `providers.default` choosing the active one at startup. The TUI's `/provider` slash lists profiles or switches live (`/provider muse`); `/model` shows the current model and base_url. `--provider <name>` is also a CLI flag. Backward compat: legacy configs with only `providers.openai` keep working unchanged. Build instances via `ctk.llm.factory.build_provider(profile=...)`. API keys read from `<PROFILE>_API_KEY` env var first, falling back to `OPENAI_API_KEY`, then to the config file (with a warning).
 
 ### Other Key Components
 
