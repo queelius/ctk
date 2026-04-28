@@ -1473,7 +1473,12 @@ class ConversationDB:
                 )
                 if not fts_ids:
                     # No FTS5 matches - return empty rather than falling back to LIKE
-                    # This is intentional: FTS5 should be authoritative when available
+                    # This is intentional: FTS5 should be authoritative when available.
+                    # Honor cursor-mode contract: empty PaginatedResult, not bare list.
+                    if use_cursor:
+                        return PaginatedResult(
+                            items=[], next_cursor=None, has_more=False
+                        )
                     return []
             except Exception as e:
                 logger.debug(f"FTS5 search failed, falling back to LIKE: {e}")

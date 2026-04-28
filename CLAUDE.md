@@ -62,12 +62,15 @@ The previous per-conversation, per-library, per-view, chat REPL, and ad-hoc netw
 
 **Sidebar tabs**: All / Starred / Pinned / Recent / Archived. Search overlay at `/`. Implemented in `ctk/tui/sidebar.py`.
 
+**Sidebar pagination** (since 2.14.0): cursor-based keyset pagination via `ConversationList.DEFAULT_PAGE_SIZE` (200 rows). The header shows `conversations · N loaded · more (Ctrl+L)` when more pages remain. `load_more()` appends the next page in place; switching mode/search resets the cursor and reloads. Backed by `db.list_conversations(cursor=…, page_size=…)` and `db.search_conversations(cursor=…, page_size=…)`, both of which return `PaginatedResult(items, next_cursor, has_more)` when `cursor` is not None.
+
 **Main pane** (`ctk/tui/main_pane.py`): scrollable message bubbles, multi-line chat input at the bottom. Bubbles are focusable (`Tab` / `Shift+Tab` between them). Branch indicators with `[` / `]` to switch siblings.
 
 **Bindings**:
 - `q` quit; `Ctrl+R` refresh; `Ctrl+N` new conversation; `Ctrl+H` help modal
 - `Ctrl+F` fork at focused message (truncate); `Ctrl+B` branch (preserve full tree)
 - `Ctrl+D` delete subtree at focus; `Ctrl+E` extract subtree at focus; `Ctrl+P` promote focused path
+- `Ctrl+L` load more conversations into the sidebar (when `more` indicator is showing)
 - `Ctrl+S` toggle star; `Ctrl+G` system prompt modal; `Ctrl+O` attach file modal
 - `[` / `]` previous/next sibling at focused message
 
