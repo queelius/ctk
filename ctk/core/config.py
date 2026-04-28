@@ -24,12 +24,17 @@ class Config:
 
     # Default configuration.
     #
-    # As of 2.10.0 ctk ships a single LLM provider: an OpenAI-compatible
-    # client. Set ``providers.openai.base_url`` to whatever endpoint you
-    # use (real OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM
-    # Studio, Ollama's ``/v1`` route at localhost:11434, etc.).
+    # ctk ships one LLM provider implementation (OpenAI-compatible) but
+    # supports multiple **named profiles** under ``providers``. The
+    # ``default`` field picks which profile is active at startup; the
+    # TUI's ``/provider`` slash can switch live. Each profile's
+    # ``base_url`` can point at any OpenAI-compatible endpoint: real
+    # OpenAI, Azure, OpenRouter, vLLM, llama.cpp server, LM Studio,
+    # Ollama's ``/v1`` route at localhost:11434, a remote inference
+    # rig, etc.
     DEFAULTS = {
         "providers": {
+            "default": "openai",
             "openai": {
                 "base_url": "https://api.openai.com/v1",
                 "default_model": "gpt-3.5-turbo",

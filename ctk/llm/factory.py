@@ -1,24 +1,49 @@
-"""Convenience factory for constructing the default LLM provider.
+"""Convenience factory for constructing the active LLM provider.
 
-Most ctk callers want "give me whatever provider the user has
-configured, overridden by any CLI flags they passed". This module
-centralises that construction so every call site doesn't need to know
-about config loading, environment variables, and provider selection.
+Ctk uses one provider implementation (``OpenAIProvider``) against any
+OpenAI-compatible endpoint, but supports multiple **named profiles**
+in ``~/.ctk/config.json`` so the user can switch between (e.g.) the
+real OpenAI API, a local Ollama, and a remote inference server
+without editing config every time.
 
-Since ctk only ships one provider (``OpenAIProvider`` against any
-OpenAI-compatible endpoint), the factory is a thin helper. It stays a
-factory rather than direct construction so the abstraction is preserved
-for future providers and so tests can patch a single entry point.
+Profile resolution (highest precedence first):
+
+1. Explicit ``profile=`` argument to ``build_provider``.
+2. ``providers.default`` field in the config.
+3. ``"openai"`` (the implicit default profile, always present).
+
+Within the chosen profile, individual fields (``base_url``, ``model``,
+``api_key``, ``timeout``) follow the same precedence: explicit kwarg,
+then the profile dict, then env vars, then hard-coded defaults.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ctk.core.config import get_config
 from ctk.llm.base import LLMProvider
 from ctk.llm.openai import OpenAIProvider
+
+
+def list_profiles() -> List[str]:
+    """Return all defined profile names from ``providers.*``.
+
+    Excludes the ``default`` key (it's a pointer, not a profile).
+    """
+    cfg = get_config()
+    providers = cfg.get("providers", {}) or {}
+    return sorted(name for name, value in providers.items()
+                  if name != "default" and isinstance(value, dict))
+
+
+def active_profile_name(explicit: Optional[str] = None) -> str:
+    """Resolve which profile name should be active right now."""
+    if explicit:
+        return explicit
+    cfg = get_config()
+    return cfg.get("providers.default") or "openai"
 
 
 def build_provider(
@@ -27,18 +52,20 @@ def build_provider(
     api_key: Optional[str] = None,
     timeout: Optional[float] = None,
     organization: Optional[str] = None,
+    profile: Optional[str] = None,
 ) -> LLMProvider:
-    """Build an ``LLMProvider`` from config, overridden by keyword args.
+    """Build an ``LLMProvider`` from the active profile, overridden by kwargs.
 
-    Resolution order for each field, highest precedence first:
-
-    1. Explicit argument passed to this function (usually from a CLI flag).
-    2. ``providers.openai`` section of ``~/.ctk/config.json``.
-    3. Environment variables (``OPENAI_API_KEY``, ``OPENAI_BASE_URL``).
-    4. Hard-coded defaults.
+    Args:
+        profile: Named profile to use (key under ``providers`` in config).
+            If omitted, falls back to ``providers.default`` and then to
+            ``"openai"``.
+        model / base_url / api_key / timeout / organization: Per-field
+            overrides, taking precedence over the profile's values.
     """
     cfg = get_config()
-    provider_config = cfg.get_provider_config("openai") or {}
+    name = active_profile_name(profile)
+    provider_config = cfg.get_provider_config(name) or {}
 
     resolved: Dict[str, Any] = {
         "model": model
@@ -48,12 +75,20 @@ def build_provider(
         or provider_config.get("base_url")
         or os.environ.get("OPENAI_BASE_URL")
         or "https://api.openai.com/v1",
+        # Env-var lookup keys off the profile name so e.g. profile
+        # ``muse`` reads MUSE_API_KEY. Falls back to the canonical
+        # OPENAI_API_KEY so users who only set that don't have to mirror
+        # it across profiles.
         "api_key": api_key
-        or cfg.get_api_key("openai")
+        or cfg.get_api_key(name)
         or os.environ.get("OPENAI_API_KEY"),
         "timeout": timeout or provider_config.get("timeout") or 120,
     }
     if organization or provider_config.get("organization"):
         resolved["organization"] = organization or provider_config.get("organization")
 
-    return OpenAIProvider(resolved)
+    provider = OpenAIProvider(resolved)
+    # Stamp the profile name on the instance so the TUI can display it
+    # without having to re-read config.
+    provider.profile_name = name
+    return provider

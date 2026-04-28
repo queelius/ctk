@@ -1728,6 +1728,7 @@ def _launch_default_tui(args, parser) -> int:
         db=db_path,
         model=args.model,
         base_url=args.base_url,
+        provider=getattr(args, "provider", None),
         no_chat=args.no_chat,
         no_tools=args.no_tools,
     )
@@ -1755,6 +1756,7 @@ def cmd_tui(args):
             provider = build_provider(
                 model=getattr(args, "model", None),
                 base_url=getattr(args, "base_url", None),
+                profile=getattr(args, "provider", None),
             )
         except Exception as exc:
             print(f"Chat disabled: could not build provider ({exc})")
@@ -2460,6 +2462,14 @@ def main():
         "--base-url",
         default=None,
         help="OpenAI-compatible endpoint for the TUI's chat (default: from config)",
+    )
+    parser.add_argument(
+        "--provider",
+        default=None,
+        help=(
+            "Named provider profile to use (key under `providers` in config; "
+            "default: providers.default, then 'openai')"
+        ),
     )
     parser.add_argument(
         "--no-chat",
