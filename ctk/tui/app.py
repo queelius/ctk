@@ -183,6 +183,7 @@ class CTKApp(App):
         Binding("ctrl+b", "branch_at_focus", "branch (preserve)"),
         Binding("ctrl+d", "delete_subtree_at_focus", "delete subtree"),
         Binding("ctrl+e", "extract_subtree_at_focus", "extract subtree"),
+        Binding("ctrl+l", "load_more", "load more"),
         Binding("ctrl+p", "promote_path_at_focus", "promote path"),
         Binding("ctrl+h", "show_help", "help"),
         Binding("left_square_bracket", "prev_sibling", "prev branch", show=False),
@@ -1199,6 +1200,23 @@ class CTKApp(App):
         from ctk.tui.modals import HelpModal
 
         self.push_screen(HelpModal(self.BINDINGS))
+
+    def action_load_more(self) -> None:
+        """Fetch the next page of conversations into the sidebar.
+
+        No-op (with a notification) if the sidebar already has every
+        conversation that matches the current filter.
+        """
+        if self.sidebar is None:
+            return
+        if not self.sidebar.has_more():
+            self.notify("All matching conversations are loaded.")
+            return
+        added = self.sidebar.load_more()
+        self.notify(
+            f"Loaded {added} more (now showing "
+            f"{self.sidebar.loaded_count()})."
+        )
 
     @staticmethod
     def _truncate_tree_to_message(

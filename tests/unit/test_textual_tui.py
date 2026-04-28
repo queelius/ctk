@@ -704,6 +704,115 @@ async def test_slash_clone_creates_sibling_conversation(seeded_db):
         assert len(ids) == after
 
 
+async def test_sidebar_pagination_loads_more_pages(tmp_path):
+    """Sidebar fetches one page at a time; load_more appends the next.
+
+    Seeded with N > page_size conversations so the first fetch gets page
+    1 and load_more gets page 2. Verifies the cursor-mode plumbing is
+    actually wired through the sidebar (not just the DB layer).
+    """
+    import uuid as uuid_mod
+
+    from ctk.core.database import ConversationDB
+    from ctk.core.models import (ConversationMetadata, ConversationTree,
+                                 Message, MessageContent, MessageRole)
+    from ctk.tui.app import CTKApp
+    from ctk.tui.sidebar import ConversationList
+
+    path = str(tmp_path / "paged.db")
+    db = ConversationDB(path)
+    try:
+        # Page size for tests; smaller than DEFAULT_PAGE_SIZE (200) so we
+        # don't have to seed 200+ rows just to cross the boundary.
+        ConversationList.DEFAULT_PAGE_SIZE = 5
+        for i in range(12):
+            tree = ConversationTree(
+                id=str(uuid_mod.uuid4()),
+                title=f"conversation {i:02d}",
+                metadata=ConversationMetadata(
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                ),
+            )
+            tree.add_message(Message(
+                id=str(uuid_mod.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text=f"hello {i}"),
+            ))
+            db.save_conversation(tree)
+
+        app = CTKApp(db=db, provider=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.sidebar is not None
+            # First page
+            assert app.sidebar.loaded_count() == 5
+            assert app.sidebar.has_more() is True
+            # Load more = page 2
+            added = app.sidebar.load_more()
+            assert added == 5
+            assert app.sidebar.loaded_count() == 10
+            assert app.sidebar.has_more() is True
+            # Final partial page (only 2 left)
+            added = app.sidebar.load_more()
+            assert added == 2
+            assert app.sidebar.loaded_count() == 12
+            assert app.sidebar.has_more() is False
+            # Once exhausted, load_more is a no-op (returns 0)
+            assert app.sidebar.load_more() == 0
+    finally:
+        ConversationList.DEFAULT_PAGE_SIZE = 200
+        db.close()
+
+
+async def test_sidebar_load_more_is_noop_when_exhausted(seeded_db):
+    """load_more returns 0 when there's no next cursor."""
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Only two seeded — both fit in the first page, no next cursor.
+        assert app.sidebar.has_more() is False
+        assert app.sidebar.load_more() == 0
+
+
+async def test_action_load_more_notifies_when_nothing_to_load(seeded_db):
+    """Ctrl+L on a fully-loaded sidebar shows a notification, doesn't crash."""
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    app = CTKApp(db=db, provider=None)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app.action_load_more()
+        await pilot.pause()
+        # No assertion on notify content — just that the action ran cleanly.
+
+
+async def test_search_with_no_matches_in_cursor_mode_returns_paginated_result(
+    seeded_db,
+):
+    """Regression for the latent search_conversations FTS-empty bug.
+
+    When FTS5 finds no matches AND cursor mode is requested, the DB must
+    return PaginatedResult(items=[], …), not a bare list. This was
+    crashing the sidebar's _merge_page when search produced no results.
+    """
+    _, db = seeded_db
+    result = db.search_conversations(
+        "definitely-not-in-the-corpus-zzz", cursor="", page_size=5
+    )
+    # Must be PaginatedResult-shaped, not a list.
+    assert hasattr(result, "items")
+    assert hasattr(result, "next_cursor")
+    assert hasattr(result, "has_more")
+    assert result.items == []
+    assert result.next_cursor is None
+    assert result.has_more is False
+
+
 async def test_slash_snapshot_prefixes_title_with_date(seeded_db):
     """/snapshot creates a new conversation titled with today's date prefix."""
     from datetime import date

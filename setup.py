@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="conversation-tk",
-    version="2.13.3",
+    version="2.14.0",
     author="Alex Towell",
     author_email="lex@metafunctor.com",
     description="A robust toolkit for managing tree-based conversations from multiple sources",
