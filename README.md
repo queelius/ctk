@@ -1,55 +1,38 @@
 # Conversation Toolkit (CTK)
 
-A powerful, plugin-based system for managing AI conversations from multiple providers. Import, store, search, and export your conversations in a unified tree format while preserving provider-specific details.
+A plugin-based system for managing AI conversations from multiple providers. Import, store, search, branch, and export your conversations in a unified tree format while preserving provider-specific details.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 # Setup (one-time)
 make install
-source venv/bin/activate
 
-# Import conversations
-ctk import chatgpt_export.json --db my_chats.db
-ctk import claude_export.json --db my_chats.db --format anthropic
+# Import conversations from any supported provider
+ctk import chatgpt_export.json --db my_chats
+ctk import claude_export.json   --db my_chats --format anthropic
 
-# View and search with beautiful tables
-ctk list --db my_chats.db --starred
-ctk search "python async" --db my_chats.db --limit 10
-ctk ask "show me conversations about machine learning" --db my_chats.db
+# Open the TUI on the database (primary interface)
+ctk --db my_chats
 
-# Interactive chat with LLM
-ctk chat --db my_chats.db  # Start TUI with conversation management
-
-# Export for fine-tuning
-ctk export training.jsonl --db my_chats.db --format jsonl
+# Bulk-export for fine-tuning, archiving, or sharing
+ctk export training.jsonl --db my_chats --format jsonl
 ```
 
-## 🌟 Key Features
+`ctk` with no subcommand opens the full-screen Textual TUI on the database in `~/.ctk/config.json`'s `database.default_path` (or the path passed via `--db`). Everything an interactive user does (chat, search, branch trees, organize, edit) lives in the TUI. The CLI subcommands are kept small and scriptable: import, export, query, sql, and a handful of admin operations.
 
-### Core Functionality
-- **🌳 Universal Tree Format**: All conversations stored as trees - linear chats are single-path trees, branching conversations preserve all paths
-- **🔌 Plugin Architecture**: Auto-discovers importers/exporters, easy to add new formats
-- **💾 SQLite Backend**: Fast, searchable local database with proper indexing
-- **🔒 Privacy First**: Everything local, optional secret masking for API keys/passwords
-- **🤖 Coding Agent Support**: Import from GitHub Copilot, Cursor, and other coding assistants
+## Key Features
 
-### Search & Discovery
-- **🔍 Full-Text Search**: Search across all conversations instantly with Rich table output
-- **🤖 Natural Language Queries**: Use `/ask` or `ctk ask` for LLM-powered queries
-- **🏷️ Smart Tagging**: Auto-tags by provider, model, language; manual tags; LLM auto-tagging
-- **⭐ Organization**: Star, pin, and archive conversations for easy filtering
-- **📁 Views**: Create curated, reusable collections with YAML DSL, queries, and set operations
+- **Universal Tree Format**: every conversation is a tree. Linear chats are single-path trees, branching conversations (e.g., ChatGPT regenerations) preserve all paths.
+- **Tree Primitive Algebra**: six primitives (delete, delete_subtree, prune_to, copy, copy_subtree, graft) compose into every higher-level operation: fork, branch, clone, snapshot, detach, promote.
+- **Plugin Architecture**: importers and exporters auto-discover via Python imports. Adding a new format is one file.
+- **Multiple LLM Backends**: named provider profiles for OpenAI, Azure, OpenRouter, vLLM, llama.cpp, LM Studio, Ollama, or any other OpenAI-compatible endpoint. Switch live via `/provider` in the TUI.
+- **Inline Images**: terminal image rendering via `textual-image` (Sixel, Kitty TGP, or Halfcell), automatic protocol detection.
+- **Tool Calling / MCP**: tools group under named virtual MCP providers (`ctk.builtin`, `ctk.network`). The LLM can search, list, find similar conversations, etc., directly during chat.
+- **MCP Server**: ctk also runs as a real MCP server (`python -m ctk.mcp_server`) so external clients can use the same surface.
+- **SQLite + FTS5**: local, fast, searchable. The "database" is a directory containing `conversations.db` and an associated `media/` folder for image attachments.
 
-### Interactive Features
-- **💬 Chat TUI**: Beautiful terminal UI with conversation browsing, editing, and chat
-- **🌐 MCP Integration**: Model Context Protocol support for tool calling
-- **🔄 Live Editing**: Fork conversations, navigate paths, edit trees in real-time
-- **📊 Rich Visualization**: Color-coded messages, tree views, path exploration
-
-## 📦 Installation
-
-### From Source
+## Installation
 
 ```bash
 git clone https://github.com/queelius/ctk.git
@@ -57,7 +40,7 @@ cd ctk
 make install
 ```
 
-### Manual Setup
+Or manually:
 
 ```bash
 python3 -m venv .venv
@@ -65,536 +48,365 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-## 📥 Import Examples
-
-### ChatGPT/OpenAI
-Export your ChatGPT conversations from [chat.openai.com/settings](https://chat.openai.com/settings) → Data Controls → Export
+Pip install (when published):
 
 ```bash
-# Auto-detect format
-ctk import conversations.json --db chats.db
-
-# Explicit format with tags
-ctk import chatgpt_export.json --db chats.db --format openai --tags "work,2024"
+pip install conversation-tk
 ```
 
-### Claude/Anthropic
-Export from Claude's settings
+## CLI Surface
+
+The full top-level command list is intentionally small:
+
+| Command | Purpose |
+|---|---|
+| `ctk` (no args) | Open the TUI on the configured DB |
+| `ctk tui` | Same, alias for muscle memory |
+| `ctk import` | Bulk import conversation exports |
+| `ctk export` | Bulk export to file |
+| `ctk query` | Filter / search with formatted output (table, json, csv) |
+| `ctk sql` | Read-only SQL on the DB |
+| `ctk db` | Maintenance: init, info, vacuum, backup, merge, diff, intersect, filter, split, dedupe, validate |
+| `ctk net` | Build embeddings + similarity graph (analytical queries are MCP tools, used from the TUI) |
+| `ctk auto-tag` | Bulk LLM-driven tagging |
+| `ctk llm` | Provider config: providers, models, test |
+| `ctk config` | Edit `~/.ctk/config.json` |
+
+Per-conversation, per-library, chat-REPL, and ad-hoc network analysis subcommands all moved into the TUI as bindings, slash commands, or MCP tool calls.
+
+## Importing Conversations
+
+### ChatGPT / OpenAI
+
+Export from [chatgpt.com/settings](https://chatgpt.com/settings) > Data Controls > Export.
 
 ```bash
-ctk import claude_export.json --db chats.db --format anthropic
+ctk import conversations.json --db chats
+ctk import chatgpt_export.json --db chats --format openai --tags "work,2024"
 ```
 
-### GitHub Copilot (from VS Code)
-```bash
-# Import from VS Code workspace storage
-ctk import ~/.vscode/workspaceStorage --db chats.db --format copilot
+### Claude / Anthropic
 
-# Or find Copilot data automatically
-python -c "from ctk.integrations.importers.copilot import CopilotImporter; \
-          paths = CopilotImporter.find_copilot_data(); \
-          print('\n'.join(map(str, paths)))"
+Export from Claude's settings.
+
+```bash
+ctk import claude_export.json --db chats --format anthropic
 ```
 
-### Local LLM Formats (JSONL)
-```bash
-# Import JSONL for fine-tuning datasets
-ctk import training_data.jsonl --db chats.db --format jsonl
+### GitHub Copilot
 
-# Import multiple files
+```bash
+ctk import ~/.vscode/workspaceStorage --db chats --format copilot
+```
+
+### Google Gemini
+
+```bash
+ctk import gemini_export.json --db chats --format gemini
+```
+
+### Generic JSONL (for fine-tuning datasets, local LLMs, etc.)
+
+```bash
+ctk import training_data.jsonl --db chats --format jsonl
 for file in *.jsonl; do
-    ctk import "$file" --db chats.db --format jsonl
+  ctk import "$file" --db chats --format jsonl
 done
 ```
 
-## 🔍 Search and Filter
-
-### List Conversations
-```bash
-# List all (newest first) with Rich tables
-ctk list --db chats.db
-
-# Filter by status
-ctk list --db chats.db --starred
-ctk list --db chats.db --pinned
-ctk list --db chats.db --archived
-
-# Combine filters
-ctk list --db chats.db --starred --pinned --limit 10
-
-# Output as JSON
-ctk list --db chats.db --json
-```
-
-### Search
-```bash
-# Search with Rich table output
-ctk search "machine learning" --db chats.db
-
-# Advanced filtering
-ctk search "python" --db chats.db --source ChatGPT --model GPT-4
-ctk search "async" --db chats.db --tags "code,tutorial" --limit 20
-
-# Search with date ranges
-ctk search "AI" --db chats.db --date-from 2024-01-01 --date-to 2024-12-31
-```
-
-### Natural Language Queries
-```bash
-# Ask anything in plain English using LLM
-ctk ask "show me starred conversations" --db chats.db
-ctk ask "find discussions about async python" --db chats.db
-ctk ask "conversations from last week about AI" --db chats.db --debug
-
-# The LLM interprets your query and executes the right database operations
-```
-
-### View Conversations
-```bash
-# Show specific conversation (prefix matching)
-ctk show abc123 --db chats.db
-
-# Show with path selection
-ctk show abc123 --db chats.db --path longest
-ctk show abc123 --db chats.db --path latest
-
-# View tree structure
-ctk tree abc123 --db chats.db
-
-# List all paths in branching conversation
-ctk paths abc123 --db chats.db
-```
-
-### View Statistics
-```bash
-ctk stats --db chats.db
-
-# Output:
-# Database Statistics:
-#   Total conversations: 851
-#   Total messages: 25890
-#   Starred: 23
-#   Pinned: 5
-#   Archived: 142
-# Messages by role:
-#     assistant: 12388
-#     user: 9574
-#     system: 1632
-# Conversations by source:
-#     ChatGPT: 423
-#     Claude: 287
-#     Copilot: 141
-```
-
-## 📋 Conversation Organization
-
-### Star/Unstar Conversations
-```bash
-# Star a conversation for quick access
-ctk star abc123 --db chats.db
-
-# Star multiple conversations
-ctk star abc123 def456 ghi789 --db chats.db
-
-# Unstar
-ctk star --unstar abc123 --db chats.db
-```
-
-### Pin/Unpin Conversations
-```bash
-# Pin important conversations to the top
-ctk pin abc123 --db chats.db
-
-# Unpin
-ctk pin --unpin abc123 --db chats.db
-```
-
-### Archive/Unarchive
-```bash
-# Archive old conversations
-ctk archive abc123 --db chats.db
-
-# Unarchive
-ctk archive --unarchive abc123 --db chats.db
-```
-
-### Rename Conversations
-```bash
-# Change conversation title
-ctk title abc123 "New descriptive title" --db chats.db
-```
-
-## 📁 Views: Curated Collections
-
-Views let you create named, reusable collections of conversations with queries, metadata overrides, and set operations.
-
-### Create and Manage Views
-```bash
-# Create a view
-ctk view create favorites --db chats.db --title "My Favorites"
-
-# Add conversations to view
-ctk view add favorites abc123 def456 --db chats.db
-
-# Add with custom title override
-ctk view add favorites ghi789 --db chats.db --title "Important Discussion"
-
-# List all views
-ctk view list --db chats.db
-
-# Show view contents
-ctk view eval favorites --db chats.db
-
-# Remove from view
-ctk view remove favorites abc123 --db chats.db
-```
-
-### Export with Views
-```bash
-# Export only conversations in a view
-ctk export archive.html --db chats.db --view favorites --format html
-
-# Export to markdown (one file per conversation)
-ctk export docs/ --db chats.db --view favorites --format markdown
-
-# Export to Hugo
-ctk export content/posts/ --db chats.db --view favorites --format hugo
-```
-
-### Navigate Views in Shell Mode
-```bash
-ctk chat --db chats.db
-
-# In shell mode:
-cd /views/                    # List all views
-cd /views/favorites/          # List conversations in view
-cd abc123                     # Navigate into conversation
-```
-
-## 💬 Interactive Chat TUI
-
-Launch the terminal UI for interactive conversation management and chat:
+### Filesystem-Based Coding Agents
 
 ```bash
-ctk chat --db chats.db
+# Auto-detect coding agent data (Copilot, Claude Code, Cursor, etc.)
+ctk import ~/.local/share/agent-storage --db chats --format filesystem_coding
 ```
 
-### TUI Features
-
-**Navigation & Browsing:**
-- Browse conversations with filtering (starred, pinned, archived)
-- Rich table view with emoji flags (⭐📌📦)
-- Quick search and natural language queries
-- Tree view for branching conversations
-- Path navigation in multi-branch trees
-
-**Conversation Management:**
-- Create, rename, delete conversations
-- Star, pin, archive operations
-- Auto-tagging with LLM
-- Export to various formats
-
-**Live Chat:**
-- Chat with any LLM provider (Ollama, OpenAI, Anthropic)
-- Model Context Protocol (MCP) tool support
-- Fork conversations to explore alternatives
-- Edit and regenerate messages
-- Switch between conversation paths
-
-### TUI Commands
+## Querying from the Shell
 
 ```bash
-# Navigation
-/browse              # Browse conversations table
-/show <id>           # Show conversation
-/tree <id>           # View tree structure
-/paths <id>          # List all paths
+# List conversations as a Rich table
+ctk query --db chats
 
-# Search & Query
-/search <query>      # Full-text search
-/ask <query>         # Natural language query (LLM-powered)
+# Filter and order
+ctk query --db chats --starred --limit 10
+ctk query --db chats --filter-source ChatGPT --filter-model gpt-4o
 
-# Organization
-/star <id>           # Star conversation
-/pin <id>            # Pin conversation
-/archive <id>        # Archive conversation
-/title <id> <title>  # Rename conversation
+# JSON or CSV for piping
+ctk query --db chats --format json | jq '.[].title'
+ctk query --db chats --format csv > inventory.csv
 
-# Chat Operations
-/fork                # Fork current conversation
-/regenerate          # Regenerate last message
-/edit <msg_id>       # Edit a message
-/model <name>        # Switch LLM model
-
-# Export & Tools
-/export <format>     # Export current conversation
-/tag                 # Auto-tag with LLM
-/help                # Show all commands
-/quit                # Exit TUI
+# Read-only SQL when the query language isn't enough
+ctk sql "SELECT source, COUNT(*) FROM conversations GROUP BY source" --db chats
 ```
 
-## 🗄️ Database Operations
+## The TUI
 
-### Merge Databases
 ```bash
-# Combine multiple databases
-ctk merge source1.db source2.db --output merged.db
-
-# Automatically handles duplicates by conversation ID
+ctk --db chats   # or just `ctk` if database.default_path is set
 ```
 
-### Database Diff
+The TUI has a tabbed sidebar (All / Starred / Pinned / Recent / Archived) plus a main pane with focusable message bubbles and a multi-line chat input.
+
+### Bindings
+
+| Key | Action |
+|---|---|
+| `q` | Quit |
+| `/` | Search overlay |
+| `Esc` | Cancel search / dismiss modal |
+| `Ctrl+R` | Refresh |
+| `Ctrl+N` | New conversation |
+| `Ctrl+H` | Help modal (bindings, slash commands, MCP providers) |
+| `Ctrl+S` | Toggle star |
+| `Ctrl+G` | System prompt modal |
+| `Ctrl+O` | Attach file modal |
+| `Ctrl+L` | Load more conversations into the sidebar |
+| `Tab` / `Shift+Tab` | Move focus between message bubbles |
+| `Ctrl+F` | Fork at focused message (truncate descendants and siblings) |
+| `Ctrl+B` | Branch at focused message (preserve full tree, new id) |
+| `Ctrl+D` | Delete subtree at focus (with confirm) |
+| `Ctrl+E` | Extract subtree at focus into a new conversation |
+| `Ctrl+P` | Promote focused path (drop sibling branches, with confirm) |
+| `[` / `]` | Switch to previous / next sibling at focused message |
+
+`Ctrl+H` opens a modal listing the live registry of bindings, slash commands, and MCP providers, so the canonical reference is always current.
+
+### Slash Commands
+
+Type any of these in the chat input. They route through the dispatcher before reaching the LLM.
+
+| Command | Effect |
+|---|---|
+| `/help` | List all slash commands |
+| `/mcp` | List MCP tool providers and their tools |
+| `/model [name]` | Show or switch the chat model (also displays profile + base_url) |
+| `/provider [name]` | List provider profiles or switch to one (rebuilds the active provider) |
+| `/system [text]` | Show or set the system prompt |
+| `/title <text>` | Rename the current conversation |
+| `/star`, `/pin`, `/archive` | Toggle the corresponding flag |
+| `/tag <name>...`, `/untag <name>` | Add or remove tags |
+| `/clone` | Duplicate the current conversation as a sibling |
+| `/snapshot` | Save a dated snapshot |
+| `/delete` | Delete the current conversation entirely (with confirm) |
+| `/delete-subtree` | Delete the focused subtree (with confirm) |
+| `/extract` | Copy focused subtree as a new conversation |
+| `/detach` | Move focused subtree out as a new conversation |
+| `/promote` | Make the focused message's path the only path |
+| `/graft <conv-id-or-prefix>` | Attach another conversation under the focused message |
+| `/fork`, `/branch` | Same as Ctrl+F / Ctrl+B but at the path tail |
+| `/attach <path>` | Attach a file as a system message |
+| `/export <path> [format]` | Export the current conversation |
+| `/sql <query>` | Read-only SQL query |
+| `/clear` | Reset to a new empty conversation |
+| `/quit` | Exit the TUI |
+
+## Tree Operations: The Algebra
+
+Every fork / branch / clone / snapshot / detach / promote operation in the TUI decomposes into one of six primitives. Five live on the in-memory `ConversationTree`, the sixth is DB-level.
+
+| # | Primitive | Effect |
+|---|---|---|
+| 1 | `db.delete_conversation(id)` | Remove the conversation from the database |
+| 2 | `tree.delete_subtree(n)` | Drop node `n` and all descendants |
+| 3 | `tree.prune_to(n)` | Keep only the ancestor chain of `n` |
+| 4 | `tree.copy()` | Full duplicate, new conversation id |
+| 5 | `tree.copy_subtree(n)` | New conversation rooted at `n`'s subtree |
+| 6 | `tree.graft(n, other)` | Attach a copy of `other` under `n`, fresh ids |
+
+Derived operations are compositions: fork = `copy().prune_to(n)`, detach = `copy_subtree(n)` then `delete_subtree(n)`, promote = `prune_to(leaf_of_path)`, snapshot = `copy()` plus a dated title.
+
+This algebra is the design contract: when you need a new tree-shape operation, write it as a composition rather than reaching into `message_map` directly. Tests in `tests/unit/test_tree_primitives.py` prove the primitives behave correctly under every shape (single message, deep chains, branching, missing nodes, root, leaf).
+
+## LLM Backends and Provider Profiles
+
+CTK ships one provider implementation, `OpenAIProvider`, wrapping the official `openai` SDK. It speaks the OpenAI chat-completions protocol, so any compatible endpoint works:
+
+- The real OpenAI API
+- Azure, OpenRouter
+- Local: vLLM, llama.cpp server, LM Studio, Ollama (`http://localhost:11434/v1`)
+- Custom remote inference rigs
+
+### Named Profiles
+
+Define multiple endpoints in `~/.ctk/config.json` and switch between them at startup or live in the TUI.
+
+```json
+{
+  "providers": {
+    "default": "muse",
+    "openai":  {"base_url": "https://api.openai.com/v1", "default_model": "gpt-5"},
+    "muse":    {"base_url": "http://muse.lan:8000/v1",   "default_model": "qwen3-omni"},
+    "ollama":  {"base_url": "http://localhost:11434/v1", "default_model": "llama3.1:70b"}
+  }
+}
+```
+
+In the TUI:
+
+```
+/provider              # list profiles, marks the active one with *
+/provider muse         # switch live; rebuilds the provider, refreshes status
+/model                 # shows current model + profile + base_url
+/model gpt-4o          # switch model on the active profile
+```
+
+CLI:
+
 ```bash
-# Compare two databases
-ctk diff db1.db db2.db
-
-# Shows:
-# - Conversations only in db1
-# - Conversations only in db2
-# - Conversations with different content
+ctk --provider ollama --db chats         # open the TUI on a specific profile
+ctk --provider muse --base-url http://x/v1   # ad-hoc override
+ctk llm test --provider openai           # check connectivity
 ```
 
-### Filter and Extract
+API keys read from `<PROFILE>_API_KEY` env var first (so `MUSE_API_KEY` works), falling back to `OPENAI_API_KEY`, then to the config file (with a warning).
+
+## Exporting
+
+### For Fine-Tuning (JSONL)
+
 ```bash
-# Create filtered database
-ctk filter --db all_chats.db --output work_chats.db --tags "work"
-ctk filter --db all_chats.db --output starred.db --starred
-ctk filter --db all_chats.db --output recent.db --date-from 2024-01-01
+ctk export training.jsonl --db chats --format jsonl
+ctk export selected.jsonl --db chats --format jsonl --ids conv1 conv2
+ctk export filtered.jsonl --db chats --format jsonl --filter-source ChatGPT
+ctk export sanitized.jsonl --db chats --format jsonl --sanitize
 ```
 
-## 📤 Export Examples
+The `--sanitize` flag scrubs API keys, passwords, tokens, SSH keys, database URLs, and credit-card-like numbers before writing.
 
-### Export for Fine-Tuning
+### Markdown
+
 ```bash
-# JSONL format for local LLMs
-ctk export training.jsonl --db chats.db --format jsonl
-
-# Include only assistant responses
-ctk export responses.jsonl --db chats.db --format jsonl --path-selection longest
-
-# Export with metadata
-ctk export full_export.jsonl --db chats.db --format jsonl --include-metadata
+ctk export all.md       --db chats --format markdown   # single file
+ctk export docs/        --db chats --format markdown   # one file per conversation
 ```
 
-### Export with Filtering
+### Interactive HTML
+
 ```bash
-# Export specific conversations
-ctk export selected.jsonl --db chats.db --ids conv1 conv2 conv3
-
-# Filter by source
-ctk export openai_only.json --db chats.db --filter-source "ChatGPT"
-
-# Filter by model
-ctk export gpt4_convs.json --db chats.db --filter-model "GPT-4"
-
-# Filter by tags
-ctk export work_chats.json --db chats.db --filter-tags "work,important"
+ctk export archive.html --db chats --format html
+ctk export archive.html --db chats --format html --media-dir media
 ```
 
-### Export with Sanitization
+The HTML export is a self-contained interactive app: branch navigation, search, image gallery, and tree-aware chat continuation against a local LLM endpoint (Ollama, LM Studio, etc.). Reply to any assistant message or continue at the end; new branches save to localStorage. Requires serving via HTTP for chat to work (`python -m http.server`).
+
+### Hugo (Static Site)
+
 ```bash
-# Remove secrets before sharing
-ctk export clean_export.jsonl --db chats.db --format jsonl --sanitize
-
-# This removes:
-# - API keys (OpenAI, Anthropic, AWS, etc.)
-# - Passwords and tokens
-# - SSH keys
-# - Database URLs
-# - Credit card numbers (if any)
+ctk export content/conversations/ --db chats --format hugo
+ctk export content/conversations/ --db chats --format hugo --starred
+ctk export content/conversations/ --db chats --format hugo --hugo-organize tags
 ```
 
-### Export to Markdown
+Each conversation becomes a Hugo page bundle with frontmatter and copied media files. `--hugo-organize` accepts `none`, `tags`, `source`, or `date`.
+
+### Path Selection
+
+For a tree with multiple paths (regenerations, branches), pick which one to export:
+
 ```bash
-# Single file with all conversations
-ctk export all_chats.md --db chats.db --format markdown
-
-# Per-file export (one markdown file per conversation)
-ctk export docs/ --db chats.db --format markdown
-# Creates: docs/2024-01-15_title_abc123.md, docs/2024-01-16_title_def456.md, ...
+ctk export out.jsonl --db chats --path-selection longest   # default
+ctk export out.jsonl --db chats --path-selection first
+ctk export out.jsonl --db chats --path-selection last
 ```
 
-### Export to Hugo (Static Site)
-```bash
-# Export all conversations as Hugo page bundles
-ctk export content/conversations/ --format hugo --db chats.db
+## Tree Structure
 
-# Export only starred conversations (curated for blog)
-ctk export content/conversations/ --format hugo --db chats.db --starred
+CTK stores all conversations as trees. The flexibility this enables (forking to explore alternatives, regenerations as siblings, grafting context from other conversations) is the core of the model.
 
-# Export specific conversations
-ctk export content/conversations/ --format hugo --db chats.db --ids conv1 conv2
+Linear conversation:
 
-# Mark as drafts for review
-ctk export content/conversations/ --format hugo --db chats.db --draft
-```
-
-Each conversation becomes a Hugo page bundle:
-```
-content/conversations/
-  2024-01-15-debugging-rust-abc123/
-    index.md        # Frontmatter + markdown content
-    images/         # Copied media files
-```
-
-### Export to HTML5 (Interactive App with Chat)
-```bash
-# Single self-contained HTML file (default, recommended)
-ctk export archive.html --format html --db chats.db
-
-# Separate media files for smaller HTML
-ctk export archive.html --format html --db chats.db --media-dir media
-# Creates: archive.html + media/ folder
-
-# Multi-file export (requires web server)
-ctk export archive/ --format html --db chats.db --no-embed
-```
-
-The HTML export includes **tree-aware chat continuation** — continue conversations with a local LLM directly in the exported HTML:
-- **Branch navigation**: Navigate branching conversations with prev/next indicators
-- **Chat with local LLM**: Reply to any assistant message or continue at the end (Ollama, LM Studio, or any OpenAI-compatible endpoint)
-- **Streaming responses**: Token-by-token SSE streaming with stop button
-- **Persistent branches**: New chat branches saved to localStorage
-- **Configurable**: Settings for endpoint, model, temperature, and system prompt
-
-> **Note:** Chat requires serving the HTML via HTTP (e.g., `python -m http.server`) and a running local LLM endpoint.
-
-## 🌳 Understanding the Tree Structure
-
-CTK stores all conversations as trees, which provides several benefits:
-
-### Linear Conversations → Single-Path Trees
 ```
 User: "What is Python?"
-  └── Assistant: "Python is a programming language..."
-      └── User: "How do I install it?"
-          └── Assistant: "You can install Python by..."
+  Assistant: "Python is a programming language..."
+    User: "How do I install it?"
+      Assistant: "You can install Python by..."
 ```
 
-### Branching Conversations (e.g., ChatGPT regenerations)
+Branching conversation (a regenerated assistant turn plus follow-ups on each):
+
 ```
 User: "Write a poem"
-  ├── Assistant (v1): "Roses are red..."
-  └── Assistant (v2): "In fields of gold..."  [regenerated]
-      └── User: "Make it longer"
-          └── Assistant: "In fields of gold, where sunshine..."
+  Assistant (v1): "Roses are red..."
+  Assistant (v2): "In fields of gold..."
+    User: "Make it longer"
+      Assistant: "In fields of gold, where sunshine..."
 ```
 
-### Path Selection for Export
+In the TUI, branches are visible at every node with multiple children. `[` and `]` switch siblings.
+
+## Database Operations
+
 ```bash
-# Export longest path (default)
-ctk export out.jsonl --db chats.db --path-selection longest
+# Combine databases
+ctk db merge source1 source2 --output merged
 
-# Export first path (original)
-ctk export out.jsonl --db chats.db --path-selection first
+# Compare two databases
+ctk db diff a b
 
-# Export most recent path
-ctk export out.jsonl --db chats.db --path-selection last
+# Filter into a new database
+ctk db filter all_chats --output work_only --tags "work"
+ctk db filter all_chats --output starred --starred
+
+# Maintenance
+ctk db init <dir>
+ctk db info <dir>
+ctk db vacuum <dir>
+ctk db backup <dir> --output backup-2026-04.db
+ctk db dedupe <dir>
+ctk db validate <dir>
 ```
 
-## 🔧 Advanced Usage
+## Python API
 
-### Python API
 ```python
-from ctk import ConversationDB, registry
+from ctk import ConversationDB, registry, Message, MessageContent, MessageRole
 
-# Load conversations
-with ConversationDB("chats.db") as db:
+with ConversationDB("chats") as db:
     # Search
-    results = db.search_conversations("python async")
-    
-    # Load specific conversation
+    results = db.search_conversations("python async", limit=20)
+
+    # Load a tree
     conv = db.load_conversation("conv_id_123")
-    
-    # Get all paths in a branching conversation
+
+    # Tree primitives
     paths = conv.get_all_paths()
-    
-    # Get longest path
     longest = conv.get_longest_path()
-    
-    # Add new message to existing conversation
-    from ctk import Message, MessageContent, MessageRole
-    
+
+    cloned = conv.copy()
+    extracted = conv.copy_subtree(node_id="msg-abc")
+    conv.delete_subtree("msg-xyz")
+    conv.prune_to("msg-abc")
+
+    # Add a new message
     msg = Message(
         role=MessageRole.USER,
-        content=MessageContent(text="New question")
+        content=MessageContent(text="Follow-up question"),
+        parent_id="previous-msg-id",
     )
-    conv.add_message(msg, parent_id="previous_msg_id")
+    conv.add_message(msg)
     db.save_conversation(conv)
 ```
 
-### Batch Operations
-```python
-import glob
-from ctk import ConversationDB, registry
+A fluent API is also available for query chains:
 
-# Import all exports from a directory
-with ConversationDB("all_chats.db") as db:
-    for file in glob.glob("exports/*.json"):
-        format = "openai" if "chatgpt" in file.lower() else None
-        convs = registry.import_file(file, format=format)
-        
-        for conv in convs:
-            # Add file source as tag
-            conv.metadata.tags.append(f"file:{file}")
-            db.save_conversation(conv)
-    
-    # Get statistics
-    stats = db.get_statistics()
-    print(f"Imported {stats['total_conversations']} conversations")
+```python
+from ctk import CTK
+
+results = (
+    CTK("chats")
+    .search("python")
+    .filter(source="ChatGPT")
+    .limit(10)
+    .get()
+)
 ```
 
-### Custom Sanitization Rules
+## Plugin System
+
+Importers and exporters are auto-discovered via Python imports. To add a new format, drop a file in the right directory:
+
 ```python
-from ctk.core.sanitizer import Sanitizer, SanitizationRule
-import re
-
-# Create custom sanitizer
-sanitizer = Sanitizer(enabled=True)
-
-# Add company-specific patterns
-sanitizer.add_rule(SanitizationRule(
-    name="internal_urls",
-    pattern=re.compile(r'https://internal\.company\.com/[^\s]+'),
-    replacement="[INTERNAL_URL]"
-))
-
-sanitizer.add_rule(SanitizationRule(
-    name="employee_ids",
-    pattern=re.compile(r'EMP\d{6}'),
-    replacement="[EMPLOYEE_ID]"
-))
-```
-
-## 🔌 Available Plugins
-
-### Importers
-- **openai** - ChatGPT exports (preserves full tree structure)
-- **anthropic** - Claude exports
-- **gemini** - Google Gemini/Bard
-- **copilot** - GitHub Copilot from VS Code
-- **jsonl** - Generic JSONL format for local LLMs
-- **filesystem_coding** - Auto-detect coding agent data
-- **coding_agent** - Generic coding assistant format
-
-### Exporters
-- **jsonl** - JSONL for fine-tuning (multiple formats)
-- **json** - Native CTK format, OpenAI, Anthropic, or generic JSON
-- **markdown** - Human-readable with tree visualization
-- **html** - Interactive HTML5 app with browsing, search, tree-aware chat, and media gallery
-- **hugo** - Hugo page bundles for static site generation
-- **csv** - Tabular export (conversation and message modes)
-
-### List Available Plugins
-```bash
-ctk plugins
-```
-
-## 🛠️ Creating Custom Plugins
-
-### Custom Importer
-```python
-# File: ctk/integrations/importers/my_format.py
+# ctk/importers/my_format.py
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
 
@@ -602,141 +414,98 @@ class MyFormatImporter(ImporterPlugin):
     name = "my_format"
     description = "Import from My Custom Format"
     version = "1.0.0"
-    
+
     def validate(self, data):
-        """Check if data is your format"""
         return "my_format_marker" in str(data)
-    
+
     def import_data(self, data, **kwargs):
-        """Convert data to ConversationTree objects"""
-        conversations = []
-        
-        # Parse your format
-        tree = ConversationTree(
-            id="conv_1",
-            title="Imported Conversation"
-        )
-        
-        # Add messages
-        msg = Message(
+        tree = ConversationTree(title="Imported Conversation")
+        tree.add_message(Message(
             role=MessageRole.USER,
-            content=MessageContent(text="Hello")
-        )
-        tree.add_message(msg)
-        
-        conversations.append(tree)
-        return conversations
+            content=MessageContent(text="Hello"),
+        ))
+        return [tree]
 ```
 
-The plugin is automatically discovered when placed in the integrations folder!
+The plugin is picked up the next time `ctk` runs.
 
-## 🗄️ Database Schema
+### Built-in Importers
 
-CTK uses SQLite with the following structure:
+`openai`, `anthropic`, `gemini`, `copilot`, `jsonl`, `filesystem_coding`.
 
-- **conversations** - Metadata, title, timestamps, source, model
-- **messages** - Content, role, parent/child relationships
-- **tags** - Searchable tags per conversation
-- **paths** - Cached conversation paths for fast retrieval
+### Built-in Exporters
 
-## 🔐 Privacy & Security
+`json`, `jsonl`, `markdown`, `html`, `hugo`, `csv`, `echo`.
 
-- **100% Local** - No data leaves your machine
-- **No Analytics** - No telemetry or tracking
-- **Optional Sanitization** - Remove sensitive data before sharing
-- **Configurable Rules** - Add custom patterns to mask
+## Database Schema
 
-## 🗺️ Roadmap
+The "database" is a directory:
 
-### Completed ✅
-- [x] Terminal UI with conversation management
-- [x] Rich console output with tables
-- [x] Natural language queries (ask command)
-- [x] Star/pin/archive organization
-- [x] Multiple export formats (JSONL, JSON, Markdown, HTML5, Hugo)
-- [x] MCP tool integration
-- [x] Auto-tagging with LLM
-- [x] Database merge/diff operations
-- [x] Shell-first mode with VFS navigation
-- [x] Hugo static site export
-- [x] Views system for curated collections (YAML DSL, queries, set operations)
-- [x] Per-file markdown export (directory output)
-- [x] VFS integration for views (`/views/` directory)
-- [x] Semantic search with TF-IDF embeddings (MCP + TUI)
-- [x] HTML export tree-aware chat continuation (branch navigation, local LLM streaming)
-- [x] Cursor-based keyset pagination
+```
+my_chats/
+  conversations.db       # SQLite file
+  media/                 # image attachments referenced by relative URL
+    <uuid>.webp
+    ...
+```
 
-### In Progress 🔨
-- [ ] Improved test coverage
-- [ ] Performance optimization for large databases
+Tables (via SQLAlchemy ORM in `ctk/core/db_models.py`):
 
-### Planned 📋
-- [ ] Web-based UI (complement to TUI)
-- [ ] Conversation deduplication utilities
-- [ ] Advanced analytics dashboard
+- `conversations`: metadata, title, timestamps, source, model, slug, starred / pinned / archived flags
+- `messages`: content, role, parent / child relationships, namespaced ids (`<conv-id>::<msg-id>`)
+- `tags`: searchable tags per conversation
+- `paths`: cached path traversals for fast retrieval
+- `embeddings`, `similarities`: TF-IDF vectors and pairwise similarity for `ctk net` analysis
 
-## 🧪 Development
+FTS5 full-text search across message content (with a LIKE fallback when FTS5 is unavailable).
+
+## Privacy
+
+- 100% local for storage and search. Nothing leaves your machine unless you point a provider profile at a remote endpoint.
+- No telemetry, no analytics.
+- Optional sanitization removes API keys, passwords, tokens, SSH keys, database URLs, and similar patterns before sharing or exporting (`--sanitize`).
+
+## Development
 
 ```bash
-# Run all tests
-make test
-
-# Run unit tests only
-make test-unit
-
-# Run integration tests only
-make test-integration
-
-# Run with coverage report
-make coverage
-
-# Format code (black + isort)
-make format
-
-# Lint code (flake8 + mypy)
-make lint
-
-# Clean build artifacts
-make clean
-
-# View all Makefile targets
-make help
+make install            # editable install + dev deps
+make test               # run all tests
+make test-unit          # unit tests only
+make test-integration   # integration tests only
+make coverage           # coverage report (htmlcov/, term-missing)
+make format             # black + isort
+make lint               # flake8 + mypy
+make clean              # remove build artifacts and caches
 ```
 
-## 📖 Citation
+Test count: ~1700 unit tests as of 2.14.x. The Textual TUI has a Pilot-driven harness in `tests/unit/test_textual_tui.py` covering modal lifecycles, slash commands, and tree-op actions.
 
-If you use CTK in your research or projects, please cite it:
+## Citation
 
 ```bibtex
-@software{towell_ctk_2025,
-  author       = {Towell, Alex},
-  title        = {{CTK}: Conversation Toolkit},
-  year         = 2025,
-  publisher    = {GitHub},
-  url          = {https://github.com/queelius/ctk},
-  version      = {2.7.0}
+@software{towell_ctk_2026,
+  author    = {Towell, Alex},
+  title     = {{CTK}: Conversation Toolkit},
+  year      = 2026,
+  publisher = {GitHub},
+  url       = {https://github.com/queelius/ctk},
+  version   = {2.14.0}
 }
 ```
 
-Or use the [CITATION.cff](CITATION.cff) file for automatic citation in GitHub.
+Or use [CITATION.cff](CITATION.cff) for automatic citation in GitHub.
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+## License
 
-> **Note:** Replace the DOI badge above with your actual Zenodo DOI after publishing.
+MIT. See [LICENSE](LICENSE).
 
-## 📝 License
+## Contributing
 
-MIT - See [LICENSE](LICENSE) for details
+Contributions welcome. To add a new provider import format:
 
-## 🤝 Contributing
+1. Create `ctk/importers/<name>.py` with an `ImporterPlugin` subclass.
+2. Implement `validate()` and `import_data()`.
+3. Add tests in `tests/unit/test_<name>_importer.py`.
+4. Submit a PR.
 
-Contributions welcome! To add support for a new provider:
-
-1. Create importer in `ctk/integrations/importers/provider_name.py`
-2. Implement `validate()` and `import_data()` methods
-3. Add tests in `tests/`
-4. Submit PR
-
-## 🙏 Acknowledgments
-
-Built to solve the fragmentation of AI conversations across platforms. Special thanks to all contributors!
+The same pattern applies to exporters in `ctk/exporters/`. New TUI bindings, slash commands, and tool providers also welcome (see `ctk/tui/slash.py` and `ctk/core/tools_registry.py`).

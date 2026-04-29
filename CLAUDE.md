@@ -136,6 +136,7 @@ Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrappi
 - **Importer model detection**: sort `model_map.items()` by key length DESC to avoid short-key matches (gpt-4 vs gpt-4-turbo).
 - **`textual-image` protocol detection** runs at module import time and is broken once Textual takes over stdin. `ctk/tui/app.py:run()` calls `_detect_image_protocol_eagerly()` before mounting the app.
 - **Modal callbacks must capture conversation id at open time** (see `_on_system_prompt_saved`, `_on_file_attached`). Otherwise a sidebar switch mid-modal applies the change to the wrong tree.
+- **Never name a method or attribute `_render` or `_bindings` on a Textual `Widget` / `Screen` / `ModalScreen` subclass.** Both shadow internal Textual API. `_render` shadowing crashes the render pipeline (`'str' object has no attribute 'render_strips'`); `_bindings` shadowing crashes the next key press (`'list' object has no attribute 'key_to_bindings'`). Use names like `_build_*`, `_app_*`, or anything project-specific. Same caution for `compose`, `on_*`, `action_*`, `_styles`, `_size`, `_region`, `_focused`. Three releases (2.13.1 / 2.13.2 / one near miss) burned on this.
 
 ### Exception Handling
 - Never use bare `except:`; always specify exception types.
@@ -154,9 +155,11 @@ starred = to_bool(starred_val) if starred_val is not None else None
 
 ### Testing
 - Unit tests in `tests/unit/`, integration tests in `tests/integration/`.
-- ~1600 unit tests pass after the 2.12.0 cuts.
-- Coverage threshold: 59% (enforced in pytest.ini).
+- ~1700 unit tests pass as of 2.14.x.
+- Coverage threshold: 59% (enforced in pytest.ini); actual ~54%, so single-file runs trip the threshold but full-suite runs stay under it. Don't gate work on the coverage report.
 - Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key`. Skip with `-m "not requires_ollama"`.
+
+**Textual TUI tests** (`tests/unit/test_textual_tui.py`): Pilot-driven, async, headless. Pattern: instantiate `CTKApp(db=..., provider=None)`, then `async with app.run_test() as pilot: await pilot.pause(); await pilot.press("ctrl+h"); ...`. ALWAYS add a Pilot test for any new modal. A render call inside `pause()` exercises the same pipeline that crashes on `_render`/`_bindings` shadows, so the 2.13.x family of bugs gets caught at unit-test time. For actions that key off `_focused_message_id`, patch the method directly (`app._focused_message_id = lambda: target_id`) instead of fighting Textual focus propagation in headless mode.
 
 ### Release Process
 - Version bumps: `ctk/__init__.py`, `setup.py`, `CITATION.cff`.
