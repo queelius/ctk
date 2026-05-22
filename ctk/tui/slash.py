@@ -166,7 +166,7 @@ def cmd_model(app: "CTKApp", args: str) -> str:
     if not args.strip():
         if app.provider is None:
             return "No provider configured."
-        profile = getattr(app.provider, "profile_name", None) or "(unknown)"
+        profile = app.provider.profile_name or "(unknown)"
         return (
             f"Current model: {app.provider.model}\n"
             f"  profile:  {profile}\n"
@@ -197,21 +197,18 @@ def cmd_provider(app: "CTKApp", args: str) -> str:
     ``*``. Switching rebuilds the provider so ``app.provider.model``
     and ``base_url`` both update.
     """
-    from ctk.llm.factory import build_provider, list_profiles
+    from ctk.llm.factory import build_provider, list_profile_summaries
 
-    profiles = list_profiles()
-    current = getattr(app.provider, "profile_name", None) if app.provider else None
+    summaries = list_profile_summaries()
+    profiles = [name for name, _ in summaries]
+    current = app.provider.profile_name if app.provider else None
 
     if not args.strip():
         if not profiles:
             return "No provider profiles defined in config."
         lines = ["Provider profiles:"]
-        for name in profiles:
+        for name, pconfig in summaries:
             marker = "*" if name == current else " "
-            cfg_section = (app.db and None) or None  # placate linter
-            from ctk.core.config import get_config
-
-            pconfig = get_config().get_provider_config(name) or {}
             base = pconfig.get("base_url") or "(default)"
             model = pconfig.get("default_model") or "(default)"
             lines.append(f"  {marker} {name:<14} {base}  ({model})")
@@ -231,11 +228,10 @@ def cmd_provider(app: "CTKApp", args: str) -> str:
     except Exception as exc:
         return f"Could not build provider '{new_name}': {exc}"
 
-    # Re-evaluate tool support — different endpoints support different
-    # tool-calling shapes, so what worked on profile A may not on B.
-    app.provider = new_provider
-    app._tools_supported = new_provider.supports_tool_calling()
-    app.enable_tools = app._tools_supported and app._tools_requested
+    # set_provider re-derives tool support — different endpoints support
+    # different tool-calling shapes, so what worked on profile A may not
+    # on B.
+    app.set_provider(new_provider)
     app._refresh_status()
     return (
         f"Switched to provider '{new_name}' "

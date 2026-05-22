@@ -83,6 +83,10 @@ class LLMProvider(ABC):
         """
         self.config = config
         self.model = config.get("model")
+        # Name of the ctk config profile this provider was built from
+        # (stamped by ctk.llm.factory.build_provider). None when the
+        # provider is constructed directly, e.g. in tests.
+        self.profile_name: Optional[str] = config.get("profile_name")
 
     @abstractmethod
     def chat(

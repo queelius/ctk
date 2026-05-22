@@ -20,7 +20,7 @@ then the profile dict, then env vars, then hard-coded defaults.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.config import get_config
 from ctk.llm.base import LLMProvider
@@ -36,6 +36,19 @@ def list_profiles() -> List[str]:
     providers = cfg.get("providers", {}) or {}
     return sorted(name for name, value in providers.items()
                   if name != "default" and isinstance(value, dict))
+
+
+def list_profile_summaries() -> List[Tuple[str, Dict[str, Any]]]:
+    """Return ``(name, profile_config)`` pairs for every defined profile.
+
+    Built on :func:`list_profiles`, so the ``default`` pointer key is
+    excluded and names come back sorted. Saves callers that want to
+    display each profile's ``base_url`` / ``default_model`` from
+    re-walking the config themselves.
+    """
+    cfg = get_config()
+    return [(name, cfg.get_provider_config(name) or {})
+            for name in list_profiles()]
 
 
 def active_profile_name(explicit: Optional[str] = None) -> str:
@@ -83,12 +96,11 @@ def build_provider(
         or cfg.get_api_key(name)
         or os.environ.get("OPENAI_API_KEY"),
         "timeout": timeout or provider_config.get("timeout") or 120,
+        # The profile this provider was built from; readers reach it via
+        # ``provider.profile_name`` (see LLMProvider.__init__).
+        "profile_name": name,
     }
     if organization or provider_config.get("organization"):
         resolved["organization"] = organization or provider_config.get("organization")
 
-    provider = OpenAIProvider(resolved)
-    # Stamp the profile name on the instance so the TUI can display it
-    # without having to re-read config.
-    provider.profile_name = name
-    return provider
+    return OpenAIProvider(resolved)

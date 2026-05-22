@@ -5,11 +5,11 @@ Tabs replace the line-mode VFS virtual directories from the legacy
 ``/recent/``). Selecting a tab refilters the list in place; the
 underlying DataTable still drives selection.
 
-Pagination: each tab fetches one page (``DEFAULT_PAGE_SIZE`` rows) at
-a time using cursor-based keyset pagination. The header line shows
-``conversations · loaded N · more available`` so the user knows when
-``load_more()`` will produce additional rows. The app binds Ctrl+L
-(and Page Down on the table when at the last row) to trigger it.
+Pagination: most tabs fetch one page (``DEFAULT_PAGE_SIZE`` rows) at
+a time using cursor-based keyset pagination. When more pages remain
+the header reads ``conversations · N loaded · more (Ctrl+L)``; the
+app binds Ctrl+L to ``load_more()``. The "Recent" tab is the one
+exception — a fixed 20-row snapshot that never paginates.
 
 Adding a new filter mode means: append a ``(label, mode_key)`` tuple to
 ``_TAB_DEFS`` and handle the new key in ``_fetch_page``.
@@ -161,6 +161,16 @@ class ConversationList(Vertical):
             self._table.move_cursor(row=0)
         self._update_title()
 
+    # Mode -> extra filter kwargs for ``list_conversations``. "all" (and
+    # any unknown mode) maps to no filters; "recent" is handled separately
+    # because it isn't a paginated view.
+    _MODE_FILTERS = {
+        "all": {},
+        "starred": {"starred": True},
+        "pinned": {"pinned": True},
+        "archived": {"archived": True, "include_archived": True},
+    }
+
     def _fetch_page(self, cursor: str) -> PaginatedResult:
         """Run the right cursor-mode DB query for the current mode + search."""
         ps = self.DEFAULT_PAGE_SIZE
@@ -171,30 +181,19 @@ class ConversationList(Vertical):
                 self._search, cursor=cursor, page_size=ps
             )
 
-        if self._mode == "starred":
-            return self._db.list_conversations(
-                starred=True, cursor=cursor, page_size=ps
-            )
-        if self._mode == "pinned":
-            return self._db.list_conversations(
-                pinned=True, cursor=cursor, page_size=ps
-            )
-        if self._mode == "archived":
-            return self._db.list_conversations(
-                archived=True,
-                include_archived=True,
-                cursor=cursor,
-                page_size=ps,
-            )
         if self._mode == "recent":
-            # "Recent" is the small fast tab. It deliberately does
-            # not paginate — 20 rows is the whole story.
-            return self._db.list_conversations(
-                cursor=cursor, page_size=20
+            # "Recent" is a fixed 20-row snapshot, not a paginated view:
+            # always fetch page 1 and drop has_more/next_cursor so
+            # load_more() stays a no-op on this tab.
+            page = self._db.list_conversations(cursor="", page_size=20)
+            return PaginatedResult(
+                items=page.items, next_cursor=None, has_more=False
             )
 
-        # "all" and unknown modes both fall through to the unfiltered list.
-        return self._db.list_conversations(cursor=cursor, page_size=ps)
+        filters = self._MODE_FILTERS.get(self._mode, {})
+        return self._db.list_conversations(
+            cursor=cursor, page_size=ps, **filters
+        )
 
     def _merge_page(self, page: PaginatedResult) -> int:
         """Append page items to the table; update cursor / has_more."""

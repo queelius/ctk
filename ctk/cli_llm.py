@@ -1,11 +1,15 @@
 """LLM provider commands for CTK CLI.
 
-Commands for managing and testing the single OpenAI-compatible LLM
-endpoint that ctk ships with:
+Commands for managing and testing the OpenAI-compatible LLM endpoints
+that ctk ships with — one per named profile under ``providers`` in
+``~/.ctk/config.json``:
 
-* ``ctk llm providers`` — show configured provider entries
+* ``ctk llm providers`` — show configured provider profiles
 * ``ctk llm models``    — list models advertised by the endpoint
 * ``ctk llm test``      — probe the endpoint for reachability
+
+``models`` and ``test`` accept ``--provider <name>`` to target a
+specific profile instead of the configured default.
 """
 
 from __future__ import annotations
@@ -13,20 +17,19 @@ from __future__ import annotations
 import json
 
 from ctk.core.config import get_config
-from ctk.llm.factory import build_provider
+from ctk.llm.factory import build_provider, list_profile_summaries
 
 
 def cmd_providers(args):
-    """Show configured LLM providers (one entry: openai)."""
+    """Show configured LLM provider profiles."""
     from rich.console import Console
     from rich.table import Table
 
     console = Console()
     config = get_config()
-    providers = config.get("providers", {})
 
     if args.json:
-        print(json.dumps(providers, indent=2))
+        print(json.dumps(config.get("providers", {}), indent=2))
         return 0
 
     table = Table(title="LLM Providers")
@@ -35,11 +38,14 @@ def cmd_providers(args):
     table.add_column("Default Model", style="green")
     table.add_column("API Key", style="yellow")
 
-    for name, cfg in providers.items():
+    for name, pconfig in list_profile_summaries():
         api_key = config.get_api_key(name)
         key_status = "Set" if api_key else "Not set"
         table.add_row(
-            name, cfg.get("base_url", ""), cfg.get("default_model", ""), key_status
+            name,
+            pconfig.get("base_url", ""),
+            pconfig.get("default_model", ""),
+            key_status,
         )
 
     console.print(table)
@@ -57,6 +63,7 @@ def cmd_models(args):
         provider = build_provider(
             model=getattr(args, "model", None),
             base_url=getattr(args, "base_url", None),
+            profile=getattr(args, "provider", None),
         )
         models = provider.get_models()
     except Exception as exc:
@@ -101,6 +108,7 @@ def cmd_test(args):
         provider = build_provider(
             model=getattr(args, "model", None),
             base_url=getattr(args, "base_url", None),
+            profile=getattr(args, "provider", None),
         )
     except Exception as exc:
         console.print(f"[red]FAILED[/red] - could not build provider: {exc}")
@@ -145,6 +153,9 @@ def add_llm_commands(subparsers):
     models_parser.add_argument(
         "--model", default=None, help="Override configured model (informational)"
     )
+    models_parser.add_argument(
+        "--provider", default=None, help="Named provider profile to use"
+    )
     models_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     test_parser = llm_subparsers.add_parser("test", help="Test provider connection")
@@ -153,6 +164,9 @@ def add_llm_commands(subparsers):
     )
     test_parser.add_argument(
         "--model", "-m", default=None, help="Specific model to check for"
+    )
+    test_parser.add_argument(
+        "--provider", default=None, help="Named provider profile to use"
     )
     return llm_parser
 

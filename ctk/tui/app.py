@@ -201,24 +201,14 @@ class CTKApp(App):
     ) -> None:
         super().__init__()
         self.db = db
-        self.provider = provider
         # Where to look for relative image URLs (e.g. ChatGPT exports
         # store images at media/<uuid>.webp relative to conversations.json).
         # If unset, infer from the DB's parent directory: imports are
         # typically extracted next to the resulting SQLite file.
         self.media_root = media_root or _infer_media_root(db)
-        # Distinguish three states the status bar cares about:
-        #   - tools_supported: provider.supports_tool_calling() is True
-        #   - tools_requested: caller didn't pass --no-tools
-        #   - enable_tools: both of the above
-        # The split lets the status bar say "tools disabled" when the
-        # user explicitly turned them off, vs. just hiding the badge
-        # when the provider doesn't support them anyway.
-        self._tools_supported = (
-            provider is not None and provider.supports_tool_calling()
-        )
+        # The user's --no-tools choice; persists across /provider switches.
         self._tools_requested = enable_tools
-        self.enable_tools = self._tools_supported and self._tools_requested
+        self.set_provider(provider)
         self.sidebar: Optional[ConversationList] = None
         self.main: Optional[MainPane] = None
         self._search_input: Optional[Input] = None
@@ -229,6 +219,22 @@ class CTKApp(App):
         # Set when an assistant turn (text or text+tools) is in flight,
         # so we can ignore double-submits and reflect the state in the UI.
         self._turn_active: bool = False
+
+    def set_provider(self, provider: Optional[LLMProvider]) -> None:
+        """Point the app at ``provider`` and re-derive tool-support state.
+
+        Shared by ``__init__`` and the ``/provider`` slash command so the
+        ``enable_tools = tools_supported AND tools_requested`` invariant
+        lives in exactly one place. The status bar distinguishes three
+        states: ``_tools_supported`` (the provider can call tools),
+        ``_tools_requested`` (the user didn't pass ``--no-tools``), and
+        ``enable_tools`` (both). ``_tools_requested`` must already be set.
+        """
+        self.provider = provider
+        self._tools_supported = (
+            provider is not None and provider.supports_tool_calling()
+        )
+        self.enable_tools = self._tools_supported and self._tools_requested
 
     # ------------------------------------------------------------------
     # Composition

@@ -177,14 +177,10 @@ class TestProviderProfileSlash:
         app.provider = MagicMock()
         app.provider.profile_name = "openai"
 
+        # cmd_provider resolves profiles only through ctk.llm.factory, so
+        # patching factory.get_config is the single target needed.
         with patch.object(factory, "get_config", return_value=config_with_profiles):
-            with patch("ctk.tui.slash.get_config", return_value=config_with_profiles, create=True):
-                # Inside cmd_provider get_config is imported lazily from
-                # ctk.core.config; patch that target.
-                from ctk.core import config as cfg_mod
-
-                with patch.object(cfg_mod, "get_config", return_value=config_with_profiles):
-                    handled, note = slash.dispatch(app, "/provider")
+            handled, note = slash.dispatch(app, "/provider")
         assert handled is True
         assert "Provider profiles" in note
         # Currently-active marker must point at openai.
@@ -217,13 +213,11 @@ class TestProviderProfileSlash:
         app = MagicMock()
         app.provider = MagicMock()
         app.provider.profile_name = "openai"
-        app._tools_requested = True
 
         new_provider = MagicMock()
         new_provider.model = "qwen3-omni"
         new_provider.base_url = "http://muse.lan:8000/v1"
         new_provider.profile_name = "muse"
-        new_provider.supports_tool_calling.return_value = True
 
         with patch.object(factory, "get_config", return_value=config_with_profiles):
             with patch.object(
@@ -233,14 +227,12 @@ class TestProviderProfileSlash:
 
         assert handled is True
         assert "Switched to provider 'muse'" in note
-        # Built with the right profile name
+        # Built with the right profile name.
         mock_build.assert_called_once_with(profile="muse")
-        # App now points at the new provider
-        assert app.provider is new_provider
-        # Tools state was re-evaluated
-        assert app._tools_supported is True
-        assert app.enable_tools is True
-        # Status bar refreshed
+        # The provider swap + tools-state re-derivation is delegated to
+        # CTKApp.set_provider (unit-tested separately in test_textual_tui).
+        app.set_provider.assert_called_once_with(new_provider)
+        # Status bar refreshed.
         app._refresh_status.assert_called_once()
 
     @pytest.mark.unit

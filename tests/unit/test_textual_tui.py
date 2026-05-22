@@ -704,30 +704,26 @@ async def test_slash_clone_creates_sibling_conversation(seeded_db):
         assert len(ids) == after
 
 
-async def test_sidebar_pagination_loads_more_pages(tmp_path):
+async def test_sidebar_pagination_loads_more_pages(tmp_path, monkeypatch):
     """Sidebar fetches one page at a time; load_more appends the next.
 
     Seeded with N > page_size conversations so the first fetch gets page
     1 and load_more gets page 2. Verifies the cursor-mode plumbing is
     actually wired through the sidebar (not just the DB layer).
     """
-    import uuid as uuid_mod
-
-    from ctk.core.database import ConversationDB
-    from ctk.core.models import (ConversationMetadata, ConversationTree,
-                                 Message, MessageContent, MessageRole)
     from ctk.tui.app import CTKApp
     from ctk.tui.sidebar import ConversationList
+
+    # Shrink the page size so we don't have to seed 200+ rows just to
+    # cross the pagination boundary; monkeypatch restores it afterwards.
+    monkeypatch.setattr(ConversationList, "DEFAULT_PAGE_SIZE", 5)
 
     path = str(tmp_path / "paged.db")
     db = ConversationDB(path)
     try:
-        # Page size for tests; smaller than DEFAULT_PAGE_SIZE (200) so we
-        # don't have to seed 200+ rows just to cross the boundary.
-        ConversationList.DEFAULT_PAGE_SIZE = 5
         for i in range(12):
             tree = ConversationTree(
-                id=str(uuid_mod.uuid4()),
+                id=str(uuid.uuid4()),
                 title=f"conversation {i:02d}",
                 metadata=ConversationMetadata(
                     created_at=datetime.now(),
@@ -735,7 +731,7 @@ async def test_sidebar_pagination_loads_more_pages(tmp_path):
                 ),
             )
             tree.add_message(Message(
-                id=str(uuid_mod.uuid4()),
+                id=str(uuid.uuid4()),
                 role=MessageRole.USER,
                 content=MessageContent(text=f"hello {i}"),
             ))
@@ -761,7 +757,6 @@ async def test_sidebar_pagination_loads_more_pages(tmp_path):
             # Once exhausted, load_more is a no-op (returns 0)
             assert app.sidebar.load_more() == 0
     finally:
-        ConversationList.DEFAULT_PAGE_SIZE = 200
         db.close()
 
 
@@ -778,17 +773,97 @@ async def test_sidebar_load_more_is_noop_when_exhausted(seeded_db):
         assert app.sidebar.load_more() == 0
 
 
-async def test_action_load_more_notifies_when_nothing_to_load(seeded_db):
-    """Ctrl+L on a fully-loaded sidebar shows a notification, doesn't crash."""
+async def test_action_load_more_is_noop_when_nothing_to_load(seeded_db):
+    """Ctrl+L on a fully-loaded sidebar is a safe no-op (no extra rows)."""
     from ctk.tui.app import CTKApp
 
     _, db = seeded_db
     app = CTKApp(db=db, provider=None)
     async with app.run_test() as pilot:
         await pilot.pause()
+        assert app.sidebar is not None
+        assert app.sidebar.has_more() is False
+        before = app.sidebar.loaded_count()
         app.action_load_more()
         await pilot.pause()
-        # No assertion on notify content — just that the action ran cleanly.
+        # Nothing left to fetch: loaded count is unchanged.
+        assert app.sidebar.loaded_count() == before
+
+
+async def test_sidebar_recent_tab_does_not_paginate(tmp_path, monkeypatch):
+    """The Recent tab is a fixed 20-row snapshot, never a paginated view.
+
+    Even with far more than 20 conversations and a tiny page size, the
+    Recent tab caps at 20 rows and reports has_more() is False.
+    """
+    from ctk.tui.app import CTKApp
+    from ctk.tui.sidebar import ConversationList
+
+    # A tiny page size would let any paginating tab show "more"; Recent
+    # must ignore it and stay capped at 20.
+    monkeypatch.setattr(ConversationList, "DEFAULT_PAGE_SIZE", 5)
+
+    path = str(tmp_path / "recent.db")
+    db = ConversationDB(path)
+    try:
+        for i in range(30):
+            tree = ConversationTree(
+                id=str(uuid.uuid4()),
+                title=f"conversation {i:02d}",
+                metadata=ConversationMetadata(
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                ),
+            )
+            tree.add_message(Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text=f"hello {i}"),
+            ))
+            db.save_conversation(tree)
+
+        app = CTKApp(db=db, provider=None)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.sidebar is not None
+            app.sidebar.set_mode("recent")
+            await pilot.pause()
+            assert app.sidebar.loaded_count() == 20
+            assert app.sidebar.has_more() is False
+            # load_more must not pull a 21st row.
+            assert app.sidebar.load_more() == 0
+            assert app.sidebar.loaded_count() == 20
+    finally:
+        db.close()
+
+
+async def test_set_provider_rederives_tool_state(seeded_db):
+    """set_provider recomputes _tools_supported/enable_tools in one place."""
+    from unittest.mock import MagicMock
+
+    from ctk.tui.app import CTKApp
+
+    _, db = seeded_db
+    tooled = MagicMock()
+    tooled.supports_tool_calling.return_value = True
+
+    # enable_tools=True (default): a tool-capable provider turns tools on.
+    app = CTKApp(db=db, provider=None, enable_tools=True)
+    assert app.enable_tools is False  # no provider yet
+    app.set_provider(tooled)
+    assert app._tools_supported is True
+    assert app.enable_tools is True
+    # Dropping the provider clears the derived state.
+    app.set_provider(None)
+    assert app._tools_supported is False
+    assert app.enable_tools is False
+
+    # enable_tools=False (user passed --no-tools): tools stay off even
+    # though the provider supports them.
+    app_no_tools = CTKApp(db=db, provider=None, enable_tools=False)
+    app_no_tools.set_provider(tooled)
+    assert app_no_tools._tools_supported is True
+    assert app_no_tools.enable_tools is False
 
 
 async def test_search_with_no_matches_in_cursor_mode_returns_paginated_result(

@@ -1465,6 +1465,11 @@ class ConversationDB:
         fts_ids = None
         if query_text and self._has_fts5():
             try:
+                # FTS5 yields a bounded candidate pool. In cursor mode
+                # that caps total reachable text-search results at
+                # ~limit+SEARCH_BUFFER regardless of how many pages a
+                # caller walks; paging past that ceiling would need a
+                # cursor-aware FTS query (tracked as a known limitation).
                 fts_ids = self._search_fts5(
                     query_text,
                     title_only=title_only,
