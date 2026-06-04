@@ -2448,14 +2448,11 @@ def _display_sql_results(console, rows, keys, format_type, limit):
         console.print(f"\n[dim]{len(rows)} row(s)[/dim]")
 
 
-def main():
-    """Main CLI entry point.
+def build_parser():
+    """Construct and return the top-level argparse parser.
 
-    With no subcommand, ``ctk`` opens the Textual TUI on whatever
-    database is configured in ``~/.ctk/config.json`` (or overridden
-    by ``--db``). Bulk / scriptable operations remain as explicit
-    subcommands (``import``, ``export``, ``query``, ``sql``, ``db``,
-    ``auto-tag``, ``config``, ``llm``).
+    Exposed as a standalone function so the documented command set is a
+    testable invariant (see tests/unit/test_cli_parser.py).
     """
     parser = argparse.ArgumentParser(
         prog="ctk",
@@ -2806,6 +2803,20 @@ def main():
     from ctk.cli_config import add_config_commands
 
     add_config_commands(subparsers)
+
+    return parser
+
+
+def main():
+    """Main CLI entry point.
+
+    With no subcommand, ``ctk`` opens the Textual TUI on whatever
+    database is configured in ``~/.ctk/config.json`` (or overridden
+    by ``--db``). Bulk / scriptable operations remain as explicit
+    subcommands (``import``, ``export``, ``query``, ``sql``, ``db``,
+    ``auto-tag``, ``config``, ``llm``).
+    """
+    parser = build_parser()
 
     args = parser.parse_args()
 
