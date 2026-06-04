@@ -598,7 +598,7 @@ class RestInterface(BaseInterface):
 
         Pushes limit and offset to the database so large tables are never
         fully materialised in Python. The total count is obtained via a
-        separate count query (no row fetch).
+        dedicated SQL COUNT(*) query that fetches no rows.
         """
         try:
             conversations = []
@@ -613,13 +613,8 @@ class RestInterface(BaseInterface):
                         "model": filters.get("model"),
                         "tags": filters.get("tags"),
                     }
-                    # Count total matching rows without fetching them.
-                    all_ids = db.list_conversations(
-                        limit=None,
-                        offset=0,
-                        **filter_kwargs,
-                    )
-                    total = len(all_ids)
+                    # Issue a SQL COUNT(*) without fetching any rows.
+                    total = db.count_conversations(**filter_kwargs)
                     # Fetch only the requested page via SQL-level limit/offset.
                     page = db.list_conversations(
                         limit=limit,

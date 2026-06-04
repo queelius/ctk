@@ -70,23 +70,37 @@ class FilesystemCodingImporter(ImporterPlugin):
                     pass
         return False
 
+    # Exact sentinel names that unambiguously identify a coding agent when they
+    # appear as the final path component (lowercased).  Only canonical names
+    # and their well-known dot-prefixed forms are listed; no substring logic.
+    _AGENT_NAME_MAP: Dict[str, str] = {
+        ".vscode": "copilot",
+        "copilot": "copilot",
+        ".cursor": "cursor",
+        "cursor": "cursor",
+        ".claude": "claude_code",
+        "claude": "claude_code",
+        ".codeium": "codeium",
+        "codeium": "codeium",
+    }
+
     def _detect_agent_type(self, path: Path) -> Optional[str]:
         """Detect which coding agent this directory belongs to.
 
-        Uses only the final path component (path.name) for keyword matching so
-        that a project located inside a tmpdir whose parent contains 'claude'
-        does not spuriously return 'claude_code'.
+        Uses exact set-membership on the final path component so that
+        directories whose name merely contains a keyword (e.g. 'claude-1000')
+        are not misidentified.  Only the canonical sentinel names listed in
+        ``_AGENT_NAME_MAP`` trigger name-based detection.
+
+        Falls back to presence of well-known sentinel files when the name
+        does not match.
         """
         name = path.name.lower()
 
-        if ".vscode" == name or "copilot" in name:
-            return "copilot"
-        elif ".cursor" == name or "cursor" in name:
-            return "cursor"
-        elif ".claude" == name or "claude" in name:
-            return "claude_code"
-        elif ".codeium" == name or "codeium" in name:
-            return "codeium"
+        # Exact-membership lookup; no substring matching.
+        agent = self._AGENT_NAME_MAP.get(name)
+        if agent is not None:
+            return agent
 
         # Check for specific files that indicate agent type
         if (path / "copilot.db").exists() or (

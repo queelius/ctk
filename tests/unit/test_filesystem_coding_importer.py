@@ -179,12 +179,20 @@ class TestAgentTypeDetection:
         assert importer._detect_agent_type(vscode_dir) == "copilot"
 
     @pytest.mark.unit
-    def test_detect_copilot_from_copilot_keyword(self, tmp_path):
-        """Path containing 'copilot' should detect as copilot."""
-        copilot_dir = tmp_path / "copilot_data"
+    def test_detect_copilot_from_copilot_exact_name(self, tmp_path):
+        """Directory named exactly 'copilot' should detect as copilot."""
+        copilot_dir = tmp_path / "copilot"
         copilot_dir.mkdir()
         importer = FilesystemCodingImporter()
         assert importer._detect_agent_type(copilot_dir) == "copilot"
+
+    @pytest.mark.unit
+    def test_detect_copilot_superset_name_does_not_match(self, tmp_path):
+        """A directory named 'copilot_data' (superset of sentinel) returns None."""
+        copilot_dir = tmp_path / "copilot_data"
+        copilot_dir.mkdir()
+        importer = FilesystemCodingImporter()
+        assert importer._detect_agent_type(copilot_dir) is None
 
     @pytest.mark.unit
     def test_detect_cursor_from_cursor_path(self, tmp_path):
@@ -195,12 +203,20 @@ class TestAgentTypeDetection:
         assert importer._detect_agent_type(cursor_dir) == "cursor"
 
     @pytest.mark.unit
-    def test_detect_cursor_from_cursor_keyword(self, tmp_path):
-        """Path containing 'cursor' (without dot) should detect as cursor."""
-        cursor_dir = tmp_path / "cursor_sessions"
+    def test_detect_cursor_from_cursor_exact_name(self, tmp_path):
+        """Directory named exactly 'cursor' should detect as cursor."""
+        cursor_dir = tmp_path / "cursor"
         cursor_dir.mkdir()
         importer = FilesystemCodingImporter()
         assert importer._detect_agent_type(cursor_dir) == "cursor"
+
+    @pytest.mark.unit
+    def test_detect_cursor_superset_name_does_not_match(self, tmp_path):
+        """A directory named 'cursor_sessions' (superset of sentinel) returns None."""
+        cursor_dir = tmp_path / "cursor_sessions"
+        cursor_dir.mkdir()
+        importer = FilesystemCodingImporter()
+        assert importer._detect_agent_type(cursor_dir) is None
 
     @pytest.mark.unit
     def test_detect_claude_code_from_claude_path(self, tmp_path):
@@ -211,12 +227,28 @@ class TestAgentTypeDetection:
         assert importer._detect_agent_type(claude_dir) == "claude_code"
 
     @pytest.mark.unit
-    def test_detect_claude_code_from_claude_keyword(self, tmp_path):
-        """Path containing 'claude' should detect as claude_code."""
-        claude_dir = tmp_path / "claude_sessions"
+    def test_detect_claude_code_from_claude_exact_name(self, tmp_path):
+        """Directory named exactly 'claude' should detect as claude_code."""
+        claude_dir = tmp_path / "claude"
         claude_dir.mkdir()
         importer = FilesystemCodingImporter()
         assert importer._detect_agent_type(claude_dir) == "claude_code"
+
+    @pytest.mark.unit
+    def test_detect_claude_superset_name_does_not_match(self, tmp_path):
+        """A directory named 'claude-1000' must not spuriously match claude_code."""
+        claude_dir = tmp_path / "claude-1000"
+        claude_dir.mkdir()
+        importer = FilesystemCodingImporter()
+        assert importer._detect_agent_type(claude_dir) is None
+
+    @pytest.mark.unit
+    def test_detect_claude_sessions_does_not_match(self, tmp_path):
+        """A directory named 'claude_sessions' (superset of sentinel) returns None."""
+        claude_dir = tmp_path / "claude_sessions"
+        claude_dir.mkdir()
+        importer = FilesystemCodingImporter()
+        assert importer._detect_agent_type(claude_dir) is None
 
     @pytest.mark.unit
     def test_detect_codeium_from_codeium_path(self, tmp_path):

@@ -1110,6 +1110,58 @@ class ConversationDB:
                     for conv in conversations
                 ]
 
+    def count_conversations(
+        self,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+    ) -> int:
+        """Return the number of conversations matching the given filters.
+
+        Issues a single SQL COUNT(*) query; no rows are fetched or
+        materialised in Python.
+        """
+        with self.session_scope() as session:
+            query = session.query(func.count(ConversationModel.id))
+
+            if source:
+                query = query.filter(ConversationModel.source == source)
+            if project:
+                query = query.filter(ConversationModel.project == project)
+            if model:
+                query = query.filter(ConversationModel.model == model)
+            if tag:
+                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
+            if tags:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
+                )
+
+            if not include_archived and archived is None:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+            elif archived is True:
+                query = query.filter(ConversationModel.archived_at.isnot(None))
+            elif archived is False:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+
+            if starred is True:
+                query = query.filter(ConversationModel.starred_at.isnot(None))
+            elif starred is False:
+                query = query.filter(ConversationModel.starred_at.is_(None))
+
+            if pinned is True:
+                query = query.filter(ConversationModel.pinned_at.isnot(None))
+            elif pinned is False:
+                query = query.filter(ConversationModel.pinned_at.is_(None))
+
+            return query.scalar() or 0
+
     def iter_conversations(
         self,
         limit: Optional[int] = None,
