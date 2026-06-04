@@ -90,13 +90,21 @@ class TestCLIIntegration:
         # Help should exit with code 0
         assert exc_info.value.code == 0
 
-    def test_cli_no_command(self):
-        """Test CLI with no command shows help"""
-        with patch("sys.argv", ["ctk"]):
-            result = main()
+    def test_no_command_attempts_tui(self, monkeypatch, tmp_path):
+        """Bare `ctk` routes to the TUI rather than returning an error code."""
+        called = {}
 
-        # Should return 1 (error)
-        assert result == 1
+        def fake_run(db_path, **kwargs):
+            called["tui"] = True
+
+        # The TUI entry point is `ctk.tui.app.run`, imported locally inside
+        # cmd_tui as `run_tui`. Patch the source symbol so the local import
+        # picks up the fake without needing a TTY.
+        monkeypatch.setattr("ctk.tui.app.run", fake_run)
+        db_path = str(tmp_path / "testdb")
+        with patch("sys.argv", ["ctk", "--db", db_path]):
+            main()
+        assert called.get("tui") is True
 
     def test_import_command(self, sample_jsonl_file, temp_db):
         """Test import command functionality"""
@@ -218,14 +226,11 @@ class TestCLIIntegration:
             assert result == 0
             mock_stdout.write.assert_called()
 
-    def test_plugins_command(self):
-        """Test plugins command functionality"""
-        with patch("sys.stdout") as mock_stdout:
-            with patch("sys.argv", ["ctk", "plugins"]):
-                result = main()
-
-            assert result == 0
-            mock_stdout.write.assert_called()
+    def test_query_command_runs(self, temp_db):
+        """`ctk query` exits cleanly against an empty db."""
+        with patch("sys.argv", ["ctk", "query", "--db", temp_db]):
+            result = main()
+        assert result == 0
 
     def test_invalid_command(self):
         """Test handling of invalid command"""

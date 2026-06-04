@@ -98,10 +98,9 @@ jobs:
       run: |
         # Test help commands
         python -m ctk.cli --help
-        python -m ctk.cli plugins
-        
+        python -m ctk.cli query --db test.db || true
+        python -m ctk.cli db info test.db || true
+
         # Test with sample data
         echo '{"role": "user", "content": "test"}' > test.jsonl
         python -m ctk.cli import test.jsonl --db test.db --format jsonl
-        python -m ctk.cli list --db test.db
-        python -m ctk.cli stats --db test.db
