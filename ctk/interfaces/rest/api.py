@@ -6,8 +6,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS
+try:
+    from flask import Flask, Response, jsonify, request
+    from flask_cors import CORS
+    _FLASK_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised by the rest extra in CI
+    _FLASK_AVAILABLE = False
 
 from ctk.core import registry
 from ctk.core.models import ConversationTree
@@ -25,6 +29,11 @@ class RestInterface(BaseInterface):
     def __init__(
         self, db_path: Optional[str] = None, config: Optional[Dict[str, Any]] = None
     ):
+        if not _FLASK_AVAILABLE:
+            raise ImportError(
+                "The REST interface requires Flask. Install it with: "
+                "pip install conversation-tk[rest]"
+            )
         super().__init__(db_path, config)
         self.app = Flask(__name__)
         CORS(self.app)  # Enable CORS for web frontends
@@ -497,15 +506,17 @@ class RestInterface(BaseInterface):
                             if conv:
                                 conversations.append(conv)
                     else:
-                        # Get all with filters
-                        query = db.session.query(db.ConversationModel)
-
-                        if filters:
-                            query = self.apply_filters(query, filters)
-
-                        for conv_model in query.all():
-                            conv = db._model_to_tree(conv_model)
-                            conversations.append(conv)
+                        filters = filters or {}
+                        for summary in db.list_conversations(
+                            limit=None,
+                            source=filters.get("source"),
+                            project=filters.get("project"),
+                            model=filters.get("model"),
+                            tags=filters.get("tags"),
+                        ):
+                            conv = db.load_conversation(summary.id)
+                            if conv:
+                                conversations.append(conv)
 
             # Export using registry
             exporter = registry.get_exporter(format)
@@ -592,25 +603,20 @@ class RestInterface(BaseInterface):
 
             if self.db:
                 with self.db as db:
-                    query = db.session.query(db.ConversationModel)
-
-                    if filters:
-                        query = self.apply_filters(query, filters)
-
-                    # Get total count
-                    total = query.count()
-
-                    # Apply sorting
-                    if hasattr(db.ConversationModel, sort_by):
-                        query = query.order_by(
-                            getattr(db.ConversationModel, sort_by).desc()
-                        )
-
-                    # Apply pagination
-                    query = query.limit(limit).offset(offset)
-
-                    for conv_model in query.all():
-                        conversations.append(conv_model.to_dict())
+                    filters = filters or {}
+                    all_summaries = db.list_conversations(
+                        limit=None,
+                        source=filters.get("source"),
+                        project=filters.get("project"),
+                        model=filters.get("model"),
+                        tags=filters.get("tags"),
+                    )
+                    total = len(all_summaries)
+                    page = (
+                        all_summaries[offset:offset + limit]
+                        if limit else all_summaries[offset:]
+                    )
+                    conversations = [s.to_dict() for s in page]
 
             return InterfaceResponse.success(
                 data={
@@ -673,27 +679,19 @@ class RestInterface(BaseInterface):
                 return InterfaceResponse.error("Database not initialized")
 
             with self.db as db:
-                conv_model = (
-                    db.session.query(db.ConversationModel)
-                    .filter_by(id=conversation_id)
-                    .first()
-                )
-
-                if not conv_model:
+                existing = db.load_conversation(conversation_id)
+                if not existing:
                     return InterfaceResponse.error(
                         f"Conversation {conversation_id} not found"
                     )
 
-                # Update allowed fields
+                meta_updates = {}
                 if "title" in updates:
-                    conv_model.title = updates["title"]
-                if "tags" in updates:
-                    # Handle tag updates
-                    pass
+                    meta_updates["title"] = updates["title"]
                 if "project" in updates:
-                    conv_model.project = updates["project"]
-
-                db.session.commit()
+                    meta_updates["project"] = updates["project"]
+                if meta_updates:
+                    db.update_conversation_metadata(conversation_id, **meta_updates)
 
             return InterfaceResponse.success(
                 message=f"Conversation {conversation_id} updated"
