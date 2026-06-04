@@ -734,6 +734,20 @@ Tags:"""
         return 0
 
 
+def _resolve_conversation_id(db, conv_id):
+    """Resolve a partial id or slug to a full conversation id.
+
+    Returns the full id on success, or an ``Error:``-prefixed string on
+    miss/ambiguity (the sentinel contract the ask-tool branches check with
+    ``conv_id.startswith("Error:")``). Reuses ``ConversationDB.resolve_conversation``
+    rather than re-implementing a prefix scan.
+    """
+    full = db.resolve_conversation(conv_id)
+    if full is None:
+        return f"Error: No conversation found matching '{conv_id}'"
+    return full
+
+
 def execute_ask_tool(
     db: ConversationDB,
     tool_name: str,
@@ -1458,7 +1472,7 @@ def execute_ask_tool(
         elif tool_name == "list_conversation_paths":
             conv_id_arg = tool_args.get("conversation_id", "")
             conv_id = _resolve_conversation_id(db, conv_id_arg)
-            if not conv_id:
+            if conv_id.startswith("Error:"):
                 return f"Conversation not found: {conv_id_arg}"
 
             conversation = db.load_conversation(conv_id)
@@ -1522,7 +1536,7 @@ def execute_ask_tool(
         elif tool_name == "auto_tag_conversation":
             conv_id_arg = tool_args.get("conversation_id", "")
             conv_id = _resolve_conversation_id(db, conv_id_arg)
-            if not conv_id:
+            if conv_id.startswith("Error:"):
                 return f"Conversation not found: {conv_id_arg}"
 
             conversation = db.load_conversation(conv_id)
