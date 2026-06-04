@@ -395,7 +395,7 @@ from ctk import CTK
 results = (
     CTK("chats")
     .search("python")
-    .filter(source="ChatGPT")
+    .in_source("ChatGPT")
     .limit(10)
     .get()
 )
