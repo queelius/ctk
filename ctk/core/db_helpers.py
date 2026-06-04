@@ -15,6 +15,25 @@ if TYPE_CHECKING:
     from .database import ConversationDB
 
 
+def _write_conversation_csv(items):
+    """Write conversation summaries as RFC-4180 CSV to stdout."""
+    import csv
+    import sys
+    writer = csv.writer(sys.stdout)
+    writer.writerow(["ID", "Title", "Messages", "Source", "Model", "Created", "Updated"])
+    for conv in items:
+        d = conv.to_dict() if hasattr(conv, "to_dict") else conv
+        writer.writerow([
+            d["id"],
+            d.get("title", "Untitled"),
+            d.get("message_count", 0),
+            d.get("source", ""),
+            d.get("model", ""),
+            d.get("created_at", ""),
+            d.get("updated_at", ""),
+        ])
+
+
 def list_conversations_helper(
     db: "ConversationDB",
     limit: Optional[int] = None,
@@ -227,14 +246,7 @@ def search_conversations_helper(
             }
             print(json.dumps(output, indent=2, default=str))
         elif output_format == "csv":
-            print("ID,Title,Messages,Source,Model,Created,Updated")
-            for conv in items:
-                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
-                print(
-                    f"{conv_dict['id']},{conv_dict.get('title', 'Untitled')},{conv_dict.get('message_count', 0)},"
-                    f"{conv_dict.get('source', '')},{conv_dict.get('model', '')},"
-                    f"{conv_dict.get('created_at', '')},{conv_dict.get('updated_at', '')}"
-                )
+            _write_conversation_csv(items)
         else:  # default table format
             format_conversations_table(items, show_message_count=True)
             if results.has_more and results.next_cursor:
@@ -248,14 +260,7 @@ def search_conversations_helper(
             conv_dicts = [c.to_dict() if hasattr(c, "to_dict") else c for c in results]
             print(json.dumps(conv_dicts, indent=2, default=str))
         elif output_format == "csv":
-            print("ID,Title,Messages,Source,Model,Created,Updated")
-            for conv in results:
-                conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
-                print(
-                    f"{conv_dict['id']},{conv_dict.get('title', 'Untitled')},{conv_dict.get('message_count', 0)},"
-                    f"{conv_dict.get('source', '')},{conv_dict.get('model', '')},"
-                    f"{conv_dict.get('created_at', '')},{conv_dict.get('updated_at', '')}"
-                )
+            _write_conversation_csv(results)
         else:  # default table format
             format_conversations_table(results, show_message_count=True)
 

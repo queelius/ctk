@@ -2422,9 +2422,12 @@ def _display_sql_results(console, rows, keys, format_type, limit):
         print(json.dumps(data, indent=2, default=str))
 
     elif format_type == "csv":
-        print(",".join(str(k) for k in keys))
+        import csv
+        import sys
+        writer = csv.writer(sys.stdout)
+        writer.writerow([str(k) for k in keys])
         for row in rows:
-            print(",".join(str(v) if v is not None else "" for v in row))
+            writer.writerow(["" if v is None else str(v) for v in row])
 
     else:  # table (default)
         table = Table(show_header=True, header_style="bold cyan")
