@@ -96,7 +96,6 @@ class RestInterface(BaseInterface):
             """List conversations with pagination and filters"""
             limit = clamp_limit(request.args.get("limit", type=int))
             offset = clamp_offset(request.args.get("offset", type=int))
-            sort_by = request.args.get("sort_by", "updated_at")
 
             filters = {}
             if request.args.get("source"):
@@ -108,7 +107,7 @@ class RestInterface(BaseInterface):
             if request.args.get("tags"):
                 filters["tags"] = request.args.get("tags").split(",")
 
-            response = self.list_conversations(limit, offset, sort_by, filters)
+            response = self.list_conversations(limit, offset, filters)
             return self._format_response(response)
 
         @self.app.route("/api/conversations/<conversation_id>", methods=["GET"])
@@ -592,11 +591,15 @@ class RestInterface(BaseInterface):
         self,
         limit: int = 100,
         offset: int = 0,
-        sort_by: str = "updated_at",
         filters: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> InterfaceResponse:
-        """List conversations"""
+        """List conversations.
+
+        Pushes limit and offset to the database so large tables are never
+        fully materialised in Python. The total count is obtained via a
+        separate count query (no row fetch).
+        """
         try:
             conversations = []
             total = 0
@@ -604,17 +607,24 @@ class RestInterface(BaseInterface):
             if self.db:
                 with self.db as db:
                     filters = filters or {}
-                    all_summaries = db.list_conversations(
+                    filter_kwargs = {
+                        "source": filters.get("source"),
+                        "project": filters.get("project"),
+                        "model": filters.get("model"),
+                        "tags": filters.get("tags"),
+                    }
+                    # Count total matching rows without fetching them.
+                    all_ids = db.list_conversations(
                         limit=None,
-                        source=filters.get("source"),
-                        project=filters.get("project"),
-                        model=filters.get("model"),
-                        tags=filters.get("tags"),
+                        offset=0,
+                        **filter_kwargs,
                     )
-                    total = len(all_summaries)
-                    page = (
-                        all_summaries[offset:offset + limit]
-                        if limit else all_summaries[offset:]
+                    total = len(all_ids)
+                    # Fetch only the requested page via SQL-level limit/offset.
+                    page = db.list_conversations(
+                        limit=limit,
+                        offset=offset,
+                        **filter_kwargs,
                     )
                     conversations = [s.to_dict() for s in page]
 

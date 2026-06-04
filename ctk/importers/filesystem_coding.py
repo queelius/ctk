@@ -71,16 +71,21 @@ class FilesystemCodingImporter(ImporterPlugin):
         return False
 
     def _detect_agent_type(self, path: Path) -> Optional[str]:
-        """Detect which coding agent this directory belongs to"""
-        path_str = str(path).lower()
+        """Detect which coding agent this directory belongs to.
 
-        if ".vscode" in path_str or "copilot" in path_str:
+        Uses only the final path component (path.name) for keyword matching so
+        that a project located inside a tmpdir whose parent contains 'claude'
+        does not spuriously return 'claude_code'.
+        """
+        name = path.name.lower()
+
+        if ".vscode" == name or "copilot" in name:
             return "copilot"
-        elif ".cursor" in path_str or "cursor" in path_str:
+        elif ".cursor" == name or "cursor" in name:
             return "cursor"
-        elif ".claude" in path_str or "claude" in path_str:
+        elif ".claude" == name or "claude" in name:
             return "claude_code"
-        elif ".codeium" in path_str or "codeium" in path_str:
+        elif ".codeium" == name or "codeium" in name:
             return "codeium"
 
         # Check for specific files that indicate agent type

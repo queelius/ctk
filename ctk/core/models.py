@@ -274,6 +274,33 @@ class MessageContent:
                     )
                 )
 
+        if "audio" in data:
+            for item in data["audio"]:
+                content.audio.append(
+                    MediaContent(
+                        type=ContentType.AUDIO,
+                        **{k: v for k, v in item.items() if k != "type"}
+                    )
+                )
+
+        if "video" in data:
+            for item in data["video"]:
+                content.video.append(
+                    MediaContent(
+                        type=ContentType.VIDEO,
+                        **{k: v for k, v in item.items() if k != "type"}
+                    )
+                )
+
+        if "documents" in data:
+            for item in data["documents"]:
+                content.documents.append(
+                    MediaContent(
+                        type=ContentType.DOCUMENT,
+                        **{k: v for k, v in item.items() if k != "type"}
+                    )
+                )
+
         # Load tool calls
         if "tool_calls" in data:
             for tool_data in data["tool_calls"]:
