@@ -1,7 +1,7 @@
 """MCP handlers for semantic search and network analysis operations."""
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import mcp.types as types
 import numpy as np
@@ -327,7 +327,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "find_similar": handle_find_similar,
     "semantic_search": handle_semantic_search,
 }

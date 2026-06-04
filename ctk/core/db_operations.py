@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
 
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,7 +64,7 @@ class DatabaseOperations:
         output_db: str,
         strategy: MergeStrategy = MergeStrategy.NEWEST,
         dedupe: DuplicateStrategy = DuplicateStrategy.EXACT,
-        progress_callback: Optional[callable] = None,
+        progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Merge multiple databases into one.

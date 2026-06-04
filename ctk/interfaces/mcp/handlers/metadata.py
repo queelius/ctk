@@ -1,7 +1,7 @@
 """MCP handlers for database metadata operations."""
 
 import logging
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 import mcp.types as types
 
@@ -59,6 +59,6 @@ async def handle_get_statistics(arguments: dict, db) -> list[types.TextContent]:
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "get_statistics": handle_get_statistics,
 }

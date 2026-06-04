@@ -12,7 +12,10 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from .models import PaginatedResult
 
 from sqlalchemy import and_, create_engine, func, or_, select, text
 from sqlalchemy.engine import Engine

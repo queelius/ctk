@@ -1,7 +1,7 @@
 """MCP handlers for conversation operations."""
 
 import logging
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import mcp.types as types
 
@@ -271,7 +271,7 @@ async def handle_update_conversation(arguments: dict, db) -> list[types.TextCont
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "get_conversation": handle_get_conversation,
     "update_conversation": handle_update_conversation,
 }

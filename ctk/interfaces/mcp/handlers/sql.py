@@ -1,7 +1,7 @@
 """MCP handler for read-only SQL queries."""
 
 import logging
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 import mcp.types as types
 from sqlalchemy import text
@@ -108,6 +108,6 @@ async def handle_execute_sql(arguments: dict, db) -> list[types.TextContent]:
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "execute_sql": handle_execute_sql,
 }

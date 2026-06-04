@@ -1,7 +1,7 @@
 """MCP handlers for search and list operations."""
 
 import logging
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 import mcp.types as types
 
@@ -145,6 +145,6 @@ async def handle_search_conversations(arguments: dict, db) -> list[types.TextCon
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "search_conversations": handle_search_conversations,
 }
