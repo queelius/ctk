@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+import ctk
 from ctk.core.database import ConversationDB
 from ctk.core.input_validation import (ValidationError,
                                        validate_conversation_id,
@@ -26,6 +27,11 @@ def setup_logging(verbose: bool = False):
     logging.basicConfig(
         level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+
+
+def _err(message):
+    """Print a diagnostic to stderr so stdout stays clean for piped data."""
+    print(message, file=sys.stderr)
 
 
 def cmd_import(args):
@@ -84,7 +90,7 @@ def cmd_import(args):
                 allow_file=True,
             )
         except ValidationError as e:
-            print(f"Error: Invalid input path: {e}")
+            _err(f"Error: Invalid input path: {e}")
             return 1
 
         # Handle directory imports (e.g., OpenAI export directories)
@@ -117,7 +123,7 @@ def cmd_import(args):
         if args.format:
             importer = registry.get_importer(args.format)
             if not importer:
-                print(f"Error: Unknown format: {args.format}")
+                _err(f"Error: Unknown format: {args.format}")
                 print(f"Available formats: {', '.join(registry.list_importers())}")
                 return 1
 
@@ -136,7 +142,7 @@ def cmd_import(args):
 
             importer = registry.auto_detect_importer(data_parsed)
             if not importer:
-                print("Error: Could not auto-detect format")
+                _err("Error: Could not auto-detect format")
                 return 1
             data = data_parsed
 
@@ -163,7 +169,7 @@ def cmd_import(args):
                 if hasattr(db_temp, "media_dir"):
                     import_kwargs["media_dir"] = str(db_temp.media_dir)
             except (ValueError, PermissionError, OSError) as e:
-                print(f"Error: Cannot open database: {e}")
+                _err(f"Error: Cannot open database: {e}")
                 return 1
 
         # Import with kwargs
@@ -185,7 +191,7 @@ def cmd_import(args):
             try:
                 db = ConversationDB(args.db)
             except (ValueError, Exception) as e:
-                print(f"Error: Cannot open database: {e}")
+                _err(f"Error: Cannot open database: {e}")
                 return 1
 
             with db:
@@ -202,7 +208,7 @@ def cmd_import(args):
             output_format = args.output_format or "jsonl"
             exporter = registry.get_exporter(output_format)
             if not exporter:
-                print(f"Error: Unknown export format: {output_format}")
+                _err(f"Error: Unknown export format: {output_format}")
                 return 1
 
             export_kwargs = {
@@ -229,13 +235,13 @@ def cmd_export(args):
     registry.discover_plugins()
 
     if not args.db:
-        print("Error: Database path required for export")
+        _err("Error: Database path required for export")
         return 1
 
     try:
         db = ConversationDB(args.db)
     except (ValueError, Exception) as e:
-        print(f"Error: Cannot open database: {e}")
+        _err(f"Error: Cannot open database: {e}")
         return 1
 
     with db:
@@ -253,7 +259,7 @@ def cmd_export(args):
                 try:
                     validated_id = validate_conversation_id(conv_id, allow_partial=True)
                 except ValidationError as e:
-                    print(f"Error: Invalid conversation ID '{conv_id}': {e}")
+                    _err(f"Error: Invalid conversation ID '{conv_id}': {e}")
                     return 1
 
                 conv = db.load_conversation(validated_id)
@@ -301,7 +307,7 @@ def cmd_export(args):
         format_name = args.format or "jsonl"
         exporter = registry.get_exporter(format_name)
         if not exporter:
-            print(f"Error: Unknown export format: {format_name}")
+            _err(f"Error: Unknown export format: {format_name}")
             print(f"Available formats: {', '.join(registry.list_exporters())}")
             return 1
 
@@ -309,7 +315,7 @@ def cmd_export(args):
         try:
             path_selection = validate_path_selection(args.path_selection)
         except ValidationError as e:
-            print(f"Error: Invalid path selection: {e}")
+            _err(f"Error: Invalid path selection: {e}")
             return 1
 
         export_kwargs = {
@@ -363,14 +369,14 @@ def cmd_export(args):
                 allow_file=True,
             )
         except ValidationError as e:
-            print(f"Error: Invalid output path: {e}")
+            _err(f"Error: Invalid output path: {e}")
             return 1
 
         try:
             exporter.export_to_file(conversations, str(output_path), **export_kwargs)
             print(f"Exported to {output_path}")
         except (PermissionError, OSError) as e:
-            print(f"Error: Cannot write to output file: {e}")
+            _err(f"Error: Cannot write to output file: {e}")
             return 1
 
         return 0
@@ -379,7 +385,7 @@ def cmd_export(args):
 def cmd_list(args):
     """List conversations in database"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     from .core.db_helpers import list_conversations_helper
@@ -415,7 +421,7 @@ def cmd_query(args):
     console = Console()
 
     if not args.db:
-        print("Error: Database path required (-d)")
+        _err("Error: Database path required (-d)")
         return 1
 
     db = ConversationDB(args.db)
@@ -493,7 +499,7 @@ def cmd_query(args):
 def cmd_search(args):
     """Advanced search for conversations"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     from datetime import datetime
@@ -539,7 +545,7 @@ def cmd_search(args):
 def cmd_stats(args):
     """Show enhanced database statistics"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     with ConversationDB(args.db) as db:
@@ -602,7 +608,7 @@ def cmd_auto_tag(args):
     from ctk.llm.factory import build_provider
 
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     provider = build_provider(
@@ -1558,7 +1564,7 @@ def execute_ask_tool(
 def cmd_tags(args):
     """Manage and view tags"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     with ConversationDB(args.db) as db:
@@ -1566,7 +1572,7 @@ def cmd_tags(args):
             # Add tags to a conversation
             conv = db.load_conversation(args.conversation_id)
             if not conv:
-                print(f"Error: Conversation {args.conversation_id} not found")
+                _err(f"Error: Conversation {args.conversation_id} not found")
                 return 1
 
             new_tags = args.add.split(",")
@@ -1578,7 +1584,7 @@ def cmd_tags(args):
             # Remove tags from a conversation
             conv = db.load_conversation(args.conversation_id)
             if not conv:
-                print(f"Error: Conversation {args.conversation_id} not found")
+                _err(f"Error: Conversation {args.conversation_id} not found")
                 return 1
 
             tags_to_remove = set(args.remove.split(","))
@@ -1636,7 +1642,7 @@ def cmd_tags(args):
 def cmd_models(args):
     """List all models used in conversations"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     with ConversationDB(args.db) as db:
@@ -1664,7 +1670,7 @@ def cmd_models(args):
 def cmd_sources(args):
     """List all sources of conversations"""
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     with ConversationDB(args.db) as db:
@@ -1805,7 +1811,7 @@ def cmd_show(args):
         try:
             conv_id = validate_conversation_id(args.id, allow_partial=True)
         except ValidationError as e:
-            print(f"Error: Invalid conversation ID: {e}")
+            _err(f"Error: Invalid conversation ID: {e}")
             return 1
 
         # Determine which path to show based on args and validate
@@ -1813,7 +1819,7 @@ def cmd_show(args):
         try:
             path_selection = validate_path_selection(path_selection)
         except ValidationError as e:
-            print(f"Error: Invalid path selection: {e}")
+            _err(f"Error: Invalid path selection: {e}")
             return 1
 
         # Use shared helper to load conversation
@@ -1826,7 +1832,7 @@ def cmd_show(args):
         )
 
         if not result["success"]:
-            print(f"Error: {result['error']}")
+            _err(f"Error: {result['error']}")
             return 1
 
         tree = result["conversation"]
@@ -1881,7 +1887,7 @@ def cmd_show(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -1899,10 +1905,10 @@ def cmd_delete(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -1910,7 +1916,7 @@ def cmd_delete(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Confirm deletion unless --yes flag
@@ -1931,7 +1937,7 @@ def cmd_delete(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -1951,10 +1957,10 @@ def cmd_tree_view(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -1962,14 +1968,14 @@ def cmd_tree_view(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Use navigator to build tree
         nav = ConversationTreeNavigator(tree)
 
         if not nav.root:
-            print("Error: No root message found")
+            _err("Error: No root message found")
             return 1
 
         from rich.console import Console
@@ -1988,7 +1994,7 @@ def cmd_tree_view(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         import traceback
 
         traceback.print_exc()
@@ -2011,10 +2017,10 @@ def cmd_paths(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2022,7 +2028,7 @@ def cmd_paths(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Use navigator
@@ -2041,7 +2047,7 @@ def cmd_paths(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2059,10 +2065,10 @@ def cmd_title(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2070,7 +2076,7 @@ def cmd_title(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Update title
@@ -2087,7 +2093,7 @@ def cmd_title(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2105,10 +2111,10 @@ def cmd_archive(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2116,7 +2122,7 @@ def cmd_archive(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Archive or unarchive
@@ -2127,11 +2133,11 @@ def cmd_archive(args):
             print(f"✓ {action.capitalize()}d conversation: {tree.title}")
             return 0
         else:
-            print(f"Error: Failed to {action} conversation")
+            _err(f"Error: Failed to {action} conversation")
             return 1
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2149,10 +2155,10 @@ def cmd_star(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2160,7 +2166,7 @@ def cmd_star(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Star or unstar
@@ -2171,11 +2177,11 @@ def cmd_star(args):
             print(f"✓ {action.capitalize()}red conversation: {tree.title}")
             return 0
         else:
-            print(f"Error: Failed to {action} conversation")
+            _err(f"Error: Failed to {action} conversation")
             return 1
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2193,10 +2199,10 @@ def cmd_pin(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2204,7 +2210,7 @@ def cmd_pin(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Pin or unpin
@@ -2215,11 +2221,11 @@ def cmd_pin(args):
             print(f"✓ {action.capitalize()}ned conversation: {tree.title}")
             return 0
         else:
-            print(f"Error: Failed to {action} conversation")
+            _err(f"Error: Failed to {action} conversation")
             return 1
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2237,10 +2243,10 @@ def cmd_duplicate(args):
             matches = [c for c in all_convs if c.id.startswith(args.id)]
 
             if len(matches) == 0:
-                print(f"Error: No conversation found matching '{args.id}'")
+                _err(f"Error: No conversation found matching '{args.id}'")
                 return 1
             elif len(matches) > 1:
-                print(f"Error: Multiple conversations match '{args.id}':")
+                _err(f"Error: Multiple conversations match '{args.id}':")
                 for match in matches[:5]:
                     print(f"  - {match.id[:8]}... {match.title}")
                 return 1
@@ -2248,7 +2254,7 @@ def cmd_duplicate(args):
                 tree = db.load_conversation(matches[0].id)
 
         if not tree:
-            print(f"Error: Conversation {args.id} not found")
+            _err(f"Error: Conversation {args.id} not found")
             return 1
 
         # Duplicate
@@ -2262,11 +2268,11 @@ def cmd_duplicate(args):
             print(f"  New title: {new_tree.title}")
             return 0
         else:
-            print(f"Error: Failed to duplicate conversation")
+            _err(f"Error: Failed to duplicate conversation")
             return 1
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2280,7 +2286,7 @@ def cmd_sql(args):
     console = Console()
 
     if not args.db:
-        print("Error: Database path required")
+        _err("Error: Database path required")
         return 1
 
     # Resolve database path - support both directory and file paths
@@ -2293,7 +2299,7 @@ def cmd_sql(args):
         db_file = db_path / "conversations.db"
 
     if not db_file.exists():
-        print(f"Error: Database not found: {db_file}")
+        _err(f"Error: Database not found: {db_file}")
         return 1
 
     try:
@@ -2380,7 +2386,7 @@ def cmd_sql(args):
 
         # Single query mode
         if not args.query:
-            print("Error: Query required (or use --interactive)")
+            _err("Error: Query required (or use --interactive)")
             return 1
 
         cursor.execute(args.query)
@@ -2396,7 +2402,7 @@ def cmd_sql(args):
         return 0
 
     except Exception as e:
-        print(f"Error: {e}")
+        _err(f"Error: {e}")
         return 1
 
 
@@ -2452,10 +2458,16 @@ def main():
     ``auto-tag``, ``config``, ``llm``).
     """
     parser = argparse.ArgumentParser(
+        prog="ctk",
         description=(
             "Conversation Toolkit. Run with no subcommand to open the TUI; "
             "use a subcommand for bulk / scripted operations."
-        )
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {ctk.__version__}",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
@@ -2848,7 +2860,7 @@ def main():
         if hasattr(args, "db_command") and args.db_command:
             return db_commands[args.db_command](args)
         else:
-            print("Error: No database operation specified")
+            _err("Error: No database operation specified")
             return 1
 
     # Special handling for net subcommands
