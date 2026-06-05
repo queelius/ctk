@@ -35,7 +35,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.base_url = (
             config.get("base_url") or "https://api.openai.com/v1"
         ).rstrip("/")
-        self.model = config.get("model") or "text-embedding-3-small"
+        self.model: str = str(config.get("model") or "text-embedding-3-small")
         self.timeout = config.get("timeout", 30)
 
         from openai import OpenAI

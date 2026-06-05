@@ -11,7 +11,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -225,13 +225,15 @@ class ConversationEmbedder:
         embeddings = [np.array(resp.embedding) for resp in embedding_responses]
 
         # Aggregate using specified strategy
+        # Convert numpy arrays to plain lists to satisfy EmbeddingProvider.aggregate_embeddings signature
+        embeddings_as_lists: List[List[float]] = [e.tolist() for e in embeddings]
         if self.config.aggregation == AggregationStrategy.WEIGHTED_MEAN:
             aggregated = self.provider.aggregate_embeddings(
-                embeddings, strategy=AggregationStrategy.WEIGHTED_MEAN, weights=weights
+                embeddings_as_lists, strategy=AggregationStrategy.WEIGHTED_MEAN, weights=weights
             )
         else:
             aggregated = self.provider.aggregate_embeddings(
-                embeddings, strategy=self.config.aggregation
+                embeddings_as_lists, strategy=self.config.aggregation
             )
 
         return np.array(aggregated)
@@ -830,8 +832,11 @@ class ConversationGraphBuilder:
             conversations = [c.id for c in self.similarity.db.list_conversations()]
 
         # Compute similarity matrix
+        # cast: conversations is List[str]; compute_similarity_matrix accepts List[Union[ConversationTree, str]]
         matrix = self.similarity.compute_similarity_matrix(
-            conversations, use_cache=use_cache, show_progress=show_progress
+            cast(List[Union[ConversationTree, str]], conversations),
+            use_cache=use_cache,
+            show_progress=show_progress,
         )
 
         # Build links

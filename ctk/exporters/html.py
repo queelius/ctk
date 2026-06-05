@@ -5,7 +5,7 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 import json
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
 from ctk.core.plugin import ExporterPlugin
@@ -136,10 +136,10 @@ class HTMLExporter(ExporterPlugin):
     def _prepare_data(
         self,
         conversations: List[ConversationTree],
-        db_dir: str = None,
+        db_dir: Optional[str] = None,
         embed: bool = True,
-        media_dir: str = None,
-    ):
+        media_dir: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Prepare conversation data and stats
 
         Args:
@@ -151,14 +151,15 @@ class HTMLExporter(ExporterPlugin):
         import base64
         from pathlib import Path
 
-        conv_data = []
-        stats = {
+        conv_data: List[Dict[str, Any]] = []
+        date_range: Dict[str, Any] = {"earliest": None, "latest": None}
+        stats: Dict[str, Any] = {
             "total_conversations": len(conversations),
             "total_messages": 0,
             "sources": {},
             "models": {},
             "tags": {},
-            "date_range": {"earliest": None, "latest": None},
+            "date_range": date_range,
         }
 
         for conv in conversations:
@@ -369,9 +370,9 @@ class HTMLExporter(ExporterPlugin):
         include_metadata: bool = True,
         theme: str = "auto",
         embed: bool = True,
-        db_dir: str = None,
-        media_dir: str = None,
-        **kwargs,
+        db_dir: Optional[str] = None,
+        media_dir: Optional[str] = None,
+        **kwargs: Any,
     ) -> str:
         """
         Export conversations to advanced HTML5 application

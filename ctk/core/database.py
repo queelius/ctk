@@ -137,7 +137,7 @@ class ConversationDB:
         else:
             # SQLite - use directory structure
             self.db_dir = Path(db_path)
-            self.db_path = self.db_dir / "conversations.db"
+            self.db_path = str(self.db_dir / "conversations.db")
             self.media_dir = self.db_dir / "media"
 
             # Create directory structure
@@ -1259,18 +1259,18 @@ class ConversationDB:
 
     def iter_search_results(
         self,
-        query_text: str = None,
-        limit: int = None,
+        query_text: Optional[str] = None,
+        limit: Optional[int] = None,
         title_only: bool = False,
         content_only: bool = False,
-        date_from: datetime = None,
-        date_to: datetime = None,
-        source: str = None,
-        project: str = None,
-        model: str = None,
-        tags: List[str] = None,
-        min_messages: int = None,
-        max_messages: int = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        model: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        min_messages: Optional[int] = None,
+        max_messages: Optional[int] = None,
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
@@ -1461,20 +1461,20 @@ class ConversationDB:
 
     def search_conversations(
         self,
-        query_text: str = None,
+        query_text: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
         title_only: bool = False,
         content_only: bool = False,
-        date_from: datetime = None,
-        date_to: datetime = None,
-        source: str = None,
-        project: str = None,
-        model: str = None,
-        tags: List[str] = None,
-        min_messages: int = None,
-        max_messages: int = None,
-        has_branches: bool = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        model: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        min_messages: Optional[int] = None,
+        max_messages: Optional[int] = None,
+        has_branches: Optional[bool] = None,
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,

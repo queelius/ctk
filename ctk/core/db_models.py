@@ -323,7 +323,7 @@ class EmbeddingModel(Base):
         """Get embedding as list of floats"""
         return self.embedding_json
 
-    @embedding.setter
+    @embedding.setter  # type: ignore[no-redef]  # mypy does not model hybrid_property setter
     def embedding(self, value):
         """Set embedding from list of floats or numpy array"""
         if hasattr(value, "tolist"):

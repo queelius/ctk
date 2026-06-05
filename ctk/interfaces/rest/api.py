@@ -432,7 +432,7 @@ class RestInterface(BaseInterface):
         # ============================================================
 
 
-    def _format_response(self, response: InterfaceResponse) -> Response:
+    def _format_response(self, response: InterfaceResponse) -> "tuple[Response, int]":
         """Format InterfaceResponse for Flask"""
         status_code_map = {
             ResponseStatus.SUCCESS: 200,
@@ -460,6 +460,10 @@ class RestInterface(BaseInterface):
                 conversations = registry.import_file(source, format=format)
             else:
                 # Direct data
+                if not format:
+                    return InterfaceResponse.error(
+                        "No format specified for non-file import"
+                    )
                 importer = registry.get_importer(format)
                 if not importer:
                     return InterfaceResponse.error(
@@ -524,9 +528,9 @@ class RestInterface(BaseInterface):
                     f"No exporter found for format: {format}"
                 )
 
-            exported_data = exporter.export_conversations(
-                conversations, output_file=output, **kwargs
-            )
+            exported_data = exporter.export_data(conversations, **kwargs)
+            if output:
+                exporter.export_to_file(conversations, output, **kwargs)
 
             return InterfaceResponse.success(
                 data=exported_data,
@@ -591,6 +595,7 @@ class RestInterface(BaseInterface):
         self,
         limit: int = 100,
         offset: int = 0,
+        sort_by: str = "updated_at",
         filters: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> InterfaceResponse:

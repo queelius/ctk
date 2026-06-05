@@ -955,14 +955,15 @@ class CTKApp(App):
             if self._current_tree is None:
                 self._current_tree = target
         else:
-            target = self._resolve_tree(target_id)
-            if target is None:
+            resolved = self._resolve_tree(target_id)
+            if resolved is None:
                 self.notify(
                     f"Conversation no longer available; {os.path.basename(path)} "
                     "not attached.",
                     severity="warning",
                 )
                 return
+            target = resolved
 
         # Append the file as a SYSTEM message at the END of the current
         # path (NOT at the root) so it acts as in-line context for the

@@ -43,7 +43,7 @@ class JSONLExporter(ExporterPlugin):
 
             if format_type == "messages":
                 # Standard messages format
-                conv_data = {
+                conv_data: Dict[str, Any] = {
                     "messages": self._format_messages(
                         messages, include_system, sanitizer
                     )
@@ -115,7 +115,7 @@ class JSONLExporter(ExporterPlugin):
             if not include_system and msg.role.value == "system":
                 continue
 
-            msg_data = {"role": msg.role.value}
+            msg_data: Dict[str, Any] = {"role": msg.role.value}
 
             # Check if message has structured content (images, tools, etc.)
             has_media = msg.content and msg.content.has_media()
@@ -166,7 +166,7 @@ class JSONLExporter(ExporterPlugin):
                 # Add tool calls
                 if msg.content and msg.content.tool_calls:
                     for tool in msg.content.tool_calls:
-                        tool_data = {
+                        tool_data: Dict[str, Any] = {
                             "type": "tool_call",
                             "id": tool.id,
                             "name": tool.name,

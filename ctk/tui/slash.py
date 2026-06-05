@@ -167,10 +167,11 @@ def cmd_model(app: "CTKApp", args: str) -> str:
         if app.provider is None:
             return "No provider configured."
         profile = getattr(app.provider, "profile_name", None) or "(unknown)"
+        base_url = getattr(app.provider, "base_url", "(not set)")
         return (
             f"Current model: {app.provider.model}\n"
             f"  profile:  {profile}\n"
-            f"  base_url: {app.provider.base_url}"
+            f"  base_url: {base_url}"
         )
     if app.provider is None:
         return "No provider configured; cannot switch models."
@@ -237,9 +238,10 @@ def cmd_provider(app: "CTKApp", args: str) -> str:
     app._tools_supported = new_provider.supports_tool_calling()
     app.enable_tools = app._tools_supported and app._tools_requested
     app._refresh_status()
+    new_base_url = getattr(new_provider, "base_url", "(not set)")
     return (
         f"Switched to provider '{new_name}' "
-        f"(model={new_provider.model}, base_url={new_provider.base_url})."
+        f"(model={new_provider.model}, base_url={new_base_url})."
     )
 
 

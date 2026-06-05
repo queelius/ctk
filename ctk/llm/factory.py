@@ -90,5 +90,5 @@ def build_provider(
     provider = OpenAIProvider(resolved)
     # Stamp the profile name on the instance so the TUI can display it
     # without having to re-read config.
-    provider.profile_name = name
+    provider.profile_name = name  # type: ignore[attr-defined]  # dynamic attribute not in base class
     return provider

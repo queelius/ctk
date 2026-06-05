@@ -4,10 +4,11 @@ Conversation display helpers for CLI and TUI.
 Provides formatted output for viewing conversation content.
 """
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from .database import ConversationDB
+    from .tree import TreeMessage
 
 
 def show_conversation_helper(
@@ -79,6 +80,7 @@ def show_conversation_helper(
     path_count = nav.get_path_count()
 
     # Select path
+    path: Optional[List["TreeMessage"]]
     if path_selection == "longest":
         path = nav.get_longest_path()
     elif path_selection == "latest":

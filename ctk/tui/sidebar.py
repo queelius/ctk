@@ -18,7 +18,7 @@ Adding a new filter mode means: append a ``(label, mode_key)`` tuple to
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static, Tabs, Tab
@@ -67,7 +67,7 @@ class ConversationList(Vertical):
         super().__init__(id="sidebar")
         self._db = db
         self._conversations: List = []
-        self._table = DataTable(cursor_type="row", zebra_stripes=True)
+        self._table: DataTable = DataTable(cursor_type="row", zebra_stripes=True)
         # ``Tabs`` builds tabs from positional Tab children at compose time.
         self._tabs = Tabs(
             *[Tab(label, id=tab_id) for tab_id, label in _TAB_DEFS]
@@ -167,34 +167,34 @@ class ConversationList(Vertical):
         # Search overlay overrides the tab — searching against the
         # whole DB is more useful than searching within a single tab.
         if self._search:
-            return self._db.search_conversations(
+            return cast(PaginatedResult, self._db.search_conversations(
                 self._search, cursor=cursor, page_size=ps
-            )
+            ))
 
         if self._mode == "starred":
-            return self._db.list_conversations(
+            return cast(PaginatedResult, self._db.list_conversations(
                 starred=True, cursor=cursor, page_size=ps
-            )
+            ))
         if self._mode == "pinned":
-            return self._db.list_conversations(
+            return cast(PaginatedResult, self._db.list_conversations(
                 pinned=True, cursor=cursor, page_size=ps
-            )
+            ))
         if self._mode == "archived":
-            return self._db.list_conversations(
+            return cast(PaginatedResult, self._db.list_conversations(
                 archived=True,
                 include_archived=True,
                 cursor=cursor,
                 page_size=ps,
-            )
+            ))
         if self._mode == "recent":
             # "Recent" is the small fast tab. It deliberately does
-            # not paginate — 20 rows is the whole story.
-            return self._db.list_conversations(
+            # not paginate -- 20 rows is the whole story.
+            return cast(PaginatedResult, self._db.list_conversations(
                 cursor=cursor, page_size=20
-            )
+            ))
 
         # "all" and unknown modes both fall through to the unfiltered list.
-        return self._db.list_conversations(cursor=cursor, page_size=ps)
+        return cast(PaginatedResult, self._db.list_conversations(cursor=cursor, page_size=ps))
 
     def _merge_page(self, page: PaginatedResult) -> int:
         """Append page items to the table; update cursor / has_more."""

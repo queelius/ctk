@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from rich.markdown import Markdown
 from rich.text import Text
@@ -46,6 +46,7 @@ class MessageBubble(Static):
         )
         # Render as markdown for assistant output (code fences etc.); keep
         # user/system as plain text to avoid surprise rendering.
+        renderable: Union[Markdown, Text]
         if msg.role == MessageRole.ASSISTANT:
             renderable = Markdown(body or "")
         else:
@@ -269,11 +270,11 @@ class ChatInput(TextArea):
     def __init__(self) -> None:
         super().__init__(id="input-area", language=None, show_line_numbers=False)
 
-    def _on_key(self, event) -> None:
+    async def _on_key(self, event) -> None:
         # Textual encodes modifier combos in the key string itself:
         # plain "enter" submits; "shift+enter" (or ctrl+enter) inserts a
         # newline via TextArea's default handler. The Key event has no
-        # `.shift` attribute — rely on the string key instead.
+        # `.shift` attribute -- rely on the string key instead.
         if event.key == "enter":
             text = self.text.strip()
             if text:
@@ -284,6 +285,7 @@ class ChatInput(TextArea):
                 return
         # Fall through to TextArea's default handler for everything else
         # (including shift+enter, which inserts a newline).
+        await super()._on_key(event)
 
 
 class MainPane(Vertical):

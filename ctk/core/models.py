@@ -92,7 +92,7 @@ class MediaContent:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        data = {}
+        data: Dict[str, Any] = {}
         if self.type:
             # Convert ContentType enum to string
             data["type"] = (
@@ -193,11 +193,11 @@ class MessageContent:
 
     def add_image(
         self,
-        url: str = None,
-        path: str = None,
-        data: str = None,
-        caption: str = None,
-        mime_type: str = None,
+        url: Optional[str] = None,
+        path: Optional[str] = None,
+        data: Optional[str] = None,
+        caption: Optional[str] = None,
+        mime_type: Optional[str] = None,
     ):
         """Add an image to the content"""
         img = MediaContent(
@@ -212,7 +212,7 @@ class MessageContent:
         return img
 
     def add_tool_call(
-        self, name: str, arguments: Dict[str, Any] = None, tool_id: str = None
+        self, name: str, arguments: Optional[Dict[str, Any]] = None, tool_id: Optional[str] = None
     ) -> ToolCall:
         """Add a tool call to the content"""
         tool_call = ToolCall(
@@ -231,7 +231,7 @@ class MessageContent:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        data = {}
+        data: Dict[str, Any] = {}
         # Always include text field, using get_text() to extract from parts if needed
         text_content = self.get_text()
         data["text"] = text_content  # Always include, even if empty
@@ -642,13 +642,13 @@ class ConversationTree:
             return []
         return max(paths, key=len)
 
-    def get_linear_history(self, leaf_message_id: str = None) -> List[Message]:
+    def get_linear_history(self, leaf_message_id: Optional[str] = None) -> List[Message]:
         """Get linear history from root to a specific message or longest path"""
         if not leaf_message_id:
             return self.get_longest_path()
 
         history = []
-        current_id = leaf_message_id
+        current_id: Optional[str] = leaf_message_id
 
         while current_id:
             message = self.message_map.get(current_id)

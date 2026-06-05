@@ -173,7 +173,7 @@ class Sanitizer:
         if not self.enabled:
             return data
 
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, str):
                 sanitized[key] = self.sanitize_text(value)

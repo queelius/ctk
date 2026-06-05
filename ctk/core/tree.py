@@ -60,7 +60,7 @@ class TreeMessage:
     def get_path_to_root(self) -> List["TreeMessage"]:
         """Get path from root to this message"""
         path = []
-        current = self
+        current: Optional["TreeMessage"] = self
         while current:
             path.append(current)
             current = current.parent
@@ -589,7 +589,7 @@ class ConversationTreeNavigator:
                 metadata=(
                     {"model": tree_msg.model, "user": tree_msg.user}
                     if (tree_msg.model or tree_msg.user)
-                    else None
+                    else {}
                 ),
             )
             tree.add_message(db_msg)

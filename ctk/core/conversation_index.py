@@ -212,7 +212,7 @@ class ConversationIndex:
 
     def resolve_with_info(
         self, identifier: str
-    ) -> Tuple[Optional[str], Optional[str], List[Tuple[str, str, str]]]:
+    ) -> Tuple[Optional[str], Optional[str], List[Tuple[str, Optional[str], Optional[str]]]]:
         """
         Resolve with detailed match information.
 
@@ -234,7 +234,7 @@ class ConversationIndex:
             return (identifier, entry.slug, [(identifier, entry.slug, entry.title)])
 
         # Collect all prefix matches
-        all_matches = []
+        all_matches: List[Tuple[str, Optional[str], Optional[str]]] = []
 
         # Slug prefix matches
         for slug, conv_id in self._find_slug_prefix_matches(identifier):
@@ -269,29 +269,29 @@ class ConversationIndex:
         # Use prefix indexes if possible
         if len(prefix) <= 4:
             # Check all 4-char prefixes that could match
-            candidates = set()
+            candidates4: Set[str] = set()
             for p4, ids in self._id_prefix_4.items():
                 if p4.lower().startswith(prefix_lower):
-                    candidates.update(ids)
-            return [cid for cid in candidates if cid.lower().startswith(prefix_lower)]
+                    candidates4.update(ids)
+            return [cid for cid in candidates4 if cid.lower().startswith(prefix_lower)]
 
         elif len(prefix) <= 8:
             # Use 4-char prefix to narrow down, then filter
             prefix_4 = prefix[:4].lower()
-            candidates = []
+            candidates8: List[str] = []
             for p4, ids in self._id_prefix_4.items():
                 if p4.lower() == prefix_4:
-                    candidates.extend(ids)
-            return [cid for cid in candidates if cid.lower().startswith(prefix_lower)]
+                    candidates8.extend(ids)
+            return [cid for cid in candidates8 if cid.lower().startswith(prefix_lower)]
 
         else:
             # Use 8-char prefix to narrow down
             prefix_8 = prefix[:8].lower()
-            candidates = []
+            candidates_long: List[str] = []
             for p8, ids in self._id_prefix_8.items():
                 if p8.lower() == prefix_8:
-                    candidates.extend(ids)
-            return [cid for cid in candidates if cid.lower().startswith(prefix_lower)]
+                    candidates_long.extend(ids)
+            return [cid for cid in candidates_long if cid.lower().startswith(prefix_lower)]
 
     def get_completions(
         self, prefix: str, limit: int = 20
@@ -310,7 +310,7 @@ class ConversationIndex:
             return []
 
         prefix_lower = prefix.lower()
-        results = []
+        results: List[Tuple[str, str, Optional[str]]] = []
         seen_ids = set()
 
         # Slug matches first (preferred)

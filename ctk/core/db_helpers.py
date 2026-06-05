@@ -6,7 +6,7 @@ These helpers wrap common database operations with formatting and filtering.
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from .formatting import format_conversations_table
 from .models import PaginatedResult
@@ -71,7 +71,7 @@ def list_conversations_helper(
         0 on success, 1 on error
     """
     # Build filter args
-    filter_args = {
+    filter_args: Dict[str, Any] = {
         "limit": limit,
         "source": source,
         "project": project,
@@ -195,7 +195,7 @@ def search_conversations_helper(
     tags_list = tags.split(",") if tags else None
 
     # Build search args
-    search_args = {
+    search_args: Dict[str, Any] = {
         "query_text": query,
         "limit": limit,
         "offset": offset,

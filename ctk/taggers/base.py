@@ -201,6 +201,8 @@ Return ONLY valid JSON, nothing else."""
 
         # Call API
         response = self.call_api(prompt)
+        if response is None:
+            return []
 
         # Parse response
         tags = self.parse_tags_response(response)
@@ -219,6 +221,8 @@ Return ONLY valid JSON, nothing else."""
 
         # Call API
         response = self.call_api(prompt)
+        if response is None:
+            return {}
 
         # Parse response
         return self.parse_categorization_response(response)

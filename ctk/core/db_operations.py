@@ -89,8 +89,8 @@ class DatabaseOperations:
 
         # Create output database
         output = ConversationDB(output_db)
-        seen_ids = set()
-        seen_hashes = (
+        seen_ids: Set[str] = set()
+        seen_hashes: Optional[Set[str]] = (
             set()
             if dedupe in [DuplicateStrategy.HASH, DuplicateStrategy.SMART]
             else None
@@ -117,13 +117,14 @@ class DatabaseOperations:
                                 continue
 
                             # Resolve conflict
-                            conv = self._resolve_conflict(
+                            resolved = self._resolve_conflict(
                                 conv, output, duplicate_type, strategy
                             )
-                            if conv is None:
+                            if resolved is None:
                                 continue
 
                             stats["conflicts_resolved"] += 1
+                            conv = resolved
 
                         # Save conversation
                         output.save_conversation(conv)
@@ -437,7 +438,7 @@ class DatabaseOperations:
         Returns:
             Statistics about the split
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "total_conversations": 0,
             "databases_created": 0,
             "split_by": by if not chunks else f"{chunks} chunks",
@@ -573,7 +574,7 @@ class DatabaseOperations:
         self,
         new_conv: ConversationTree,
         output_db: ConversationDB,
-        conflict_type: str,
+        conflict_type: Optional[str],
         strategy: MergeStrategy,
     ) -> Optional[ConversationTree]:
         """Resolve a merge conflict"""

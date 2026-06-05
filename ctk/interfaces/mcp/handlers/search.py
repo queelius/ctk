@@ -1,7 +1,7 @@
 """MCP handlers for search and list operations."""
 
 import logging
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List
 
 import mcp.types as types
 
@@ -82,7 +82,7 @@ async def handle_search_conversations(arguments: dict, db) -> list[types.TextCon
     cursor = validate_string(arguments.get("cursor"), "cursor", MAX_QUERY_LENGTH)
 
     # Build common kwargs
-    search_kwargs = {
+    search_kwargs: Dict[str, Any] = {
         "starred": starred,
         "pinned": pinned,
         "archived": archived,

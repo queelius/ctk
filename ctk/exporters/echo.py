@@ -80,7 +80,7 @@ class ECHOExporter(ExporterPlugin):
         conv_dir.mkdir(exist_ok=True)
 
         # Build index
-        index_data = {
+        index_data: Dict[str, Any] = {
             "format": "ctk-echo",
             "version": "1.0.0",
             "exported_at": datetime.now().isoformat(),
@@ -192,7 +192,7 @@ class ECHOExporter(ExporterPlugin):
 
         def message_to_dict(msg: Message) -> Dict[str, Any]:
             """Convert message to dict with children array."""
-            result = {
+            result: Dict[str, Any] = {
                 "id": msg.id,
                 "role": msg.role.value,
                 "content": msg.content.get_text() if msg.content else "",

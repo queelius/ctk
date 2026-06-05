@@ -220,9 +220,13 @@ async def handle_find_similar(arguments: dict, db) -> list[types.TextContent]:
 
 async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]:
     """Handle semantic_search tool call."""
-    query = validate_string(
+    query_raw = validate_string(
         arguments.get("query"), "query", MAX_QUERY_LENGTH, required=True
     )
+    # validate_string raises ValidationError if required and None, so this
+    # assertion narrows the type for mypy without hiding real failures.
+    assert query_raw is not None
+    query: str = query_raw
     top_k = (
         validate_integer(arguments.get("top_k"), "top_k", min_val=1, max_val=100) or 10
     )

@@ -40,7 +40,7 @@ class CTK:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize CTK with optional database"""
         self.db_path = db_path
-        self._db = None
+        self._db: Optional[ConversationDB] = None
         self._current_conversations: List[ConversationTree] = []
 
     @property

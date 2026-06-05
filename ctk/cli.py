@@ -9,7 +9,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import ctk
 from ctk.core.database import ConversationDB
@@ -785,8 +785,9 @@ def execute_ask_tool(
     try:
         if tool_name == "search_conversations":
             # Parse tags if provided
-            tags_list = (
-                tool_args.get("tags", "").split(",") if tool_args.get("tags") else None
+            tags_raw = tool_args.get("tags")
+            tags_list: Optional[List[str]] = (
+                str(tags_raw).split(",") if tags_raw else None
             )
 
             # Convert string booleans to actual booleans
@@ -864,10 +865,17 @@ def execute_ask_tool(
                     include_archived=False,
                 )
 
-            if debug:
-                print(f"[DEBUG] Query returned {len(results)} results", file=sys.stderr)
+            # Normalize to list so indexing works regardless of whether the DB
+            # returned a bare list or a PaginatedResult (which is iterable but not
+            # subscriptable).
+            from ctk.core.models import PaginatedResult as _PR
 
-            if not results:
+            results_list = results.items if isinstance(results, _PR) else list(results)
+
+            if debug:
+                print(f"[DEBUG] Query returned {len(results_list)} results", file=sys.stderr)
+
+            if not results_list:
                 return "No conversations found."
 
             # Format results with Rich if enabled
@@ -875,29 +883,29 @@ def execute_ask_tool(
                 from ctk.core.formatting import format_conversations_table
 
                 # Limit to 10 for display
-                display_results = results[:10]
+                display_results = results_list[:10]
                 format_conversations_table(display_results, show_message_count=False)
 
-                if len(results) > 10:
+                if len(results_list) > 10:
                     from rich.console import Console
 
                     console = Console()
                     console.print(
-                        f"[dim]... and {len(results) - 10} more results (showing first 10)[/dim]"
+                        f"[dim]... and {len(results_list) - 10} more results (showing first 10)[/dim]"
                     )
 
                 return ""  # Already printed
             else:
                 # Plain text format for JSON mode
-                result_str = f"Found {len(results)} conversation(s):\n\n"
-                for i, conv in enumerate(results[:10], 1):
-                    conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+                result_str = f"Found {len(results_list)} conversation(s):\n\n"
+                for i, conv in enumerate(results_list[:10], 1):
+                    conv_dict = conv.to_dict()
                     title = conv_dict.get("title", "Untitled")[:50]
                     result_str += f"[{i}] {conv_dict['id'][:8]} - {title}\n"
 
-                if len(results) > 10:
+                if len(results_list) > 10:
                     result_str += (
-                        f"\n... and {len(results) - 10} more (showing first 10)\n"
+                        f"\n... and {len(results_list) - 10} more (showing first 10)\n"
                     )
 
                 result_str += (
@@ -1034,7 +1042,7 @@ def execute_ask_tool(
             if conv_id.startswith("Error:"):
                 return conv_id
 
-            db.unstar_conversation(conv_id)
+            db.star_conversation(conv_id, star=False)
             return f"Unstarred conversation {conv_id[:8]}..."
 
         elif tool_name == "pin_conversation":
@@ -1058,7 +1066,7 @@ def execute_ask_tool(
             if conv_id.startswith("Error:"):
                 return conv_id
 
-            db.unpin_conversation(conv_id)
+            db.pin_conversation(conv_id, pin=False)
             return f"Unpinned conversation {conv_id[:8]}..."
 
         elif tool_name == "archive_conversation":
@@ -1082,7 +1090,7 @@ def execute_ask_tool(
             if conv_id.startswith("Error:"):
                 return conv_id
 
-            db.unarchive_conversation(conv_id)
+            db.archive_conversation(conv_id, archive=False)
             return f"Unarchived conversation {conv_id[:8]}..."
 
         elif tool_name == "rename_conversation":
@@ -1097,7 +1105,7 @@ def execute_ask_tool(
             if conv_id.startswith("Error:"):
                 return conv_id
 
-            db.update_conversation_title(conv_id, title)
+            db.update_conversation_metadata(conv_id, title=title)
             return f"Renamed conversation {conv_id[:8]}... to '{title}'"
 
         elif tool_name == "show_conversation_content":
@@ -1286,7 +1294,7 @@ def execute_ask_tool(
                     MarkdownExporter
 
                 exporter = MarkdownExporter()
-                output = exporter.export_to_string(tree)
+                output = exporter.export_data([tree])
                 return f"Markdown export of '{tree.title}':\n\n{output}"
 
             elif export_format == "json":
@@ -1425,7 +1433,7 @@ def execute_ask_tool(
                     limit = 20
 
             # Build kwargs for list_conversations
-            kwargs = {"limit": limit}
+            kwargs: Dict[str, Any] = {"limit": limit}
             if starred is not None:
                 kwargs["starred"] = starred
             if pinned is not None:
@@ -1515,9 +1523,9 @@ def execute_ask_tool(
             return result_str
 
         elif tool_name == "list_plugins":
-            from ctk.core.plugin import PluginManager
+            from ctk.core.plugin import PluginRegistry
 
-            manager = PluginManager()
+            manager = PluginRegistry()
             importers = manager.list_importers()
             exporters = manager.list_exporters()
 
