@@ -401,13 +401,17 @@ class PluginRegistry:
         importers_dir = plugin_dir_path / "importers"
         if importers_dir.exists():
             self._load_plugins_from_dir(
-                importers_dir, ImporterPlugin, cast(Dict[str, BasePlugin], self.importers)
+                importers_dir,
+                ImporterPlugin,
+                cast(Dict[str, BasePlugin], self.importers),
             )
 
         exporters_dir = plugin_dir_path / "exporters"
         if exporters_dir.exists():
             self._load_plugins_from_dir(
-                exporters_dir, ExporterPlugin, cast(Dict[str, BasePlugin], self.exporters)
+                exporters_dir,
+                ExporterPlugin,
+                cast(Dict[str, BasePlugin], self.exporters),
             )
 
     def _load_builtin_plugins(self):

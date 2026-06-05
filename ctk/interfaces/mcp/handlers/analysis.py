@@ -9,7 +9,9 @@ import numpy as np
 from ctk.core.constants import MAX_ID_LENGTH, MAX_QUERY_LENGTH
 from ctk.core.similarity import cosine_similarity, extract_conversation_text
 from ctk.interfaces.mcp.validation import (
-    validate_float, validate_integer, validate_string
+    validate_float,
+    validate_integer,
+    validate_string,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +38,9 @@ def _no_embeddings_error() -> list[types.TextContent]:
     ]
 
 
-def _build_title_cache(db, conversation_ids: List[str], max_len: int = 50) -> Dict[str, str]:
+def _build_title_cache(
+    db, conversation_ids: List[str], max_len: int = 50
+) -> Dict[str, str]:
     """
     Build a lightweight title cache from conversation summaries.
 
@@ -87,9 +91,7 @@ TOOLS: List[types.Tool] = [
                 },
                 "threshold": {
                     "type": "number",
-                    "description": (
-                        "Minimum similarity score 0.0-1.0 (default: 0.1)"
-                    ),
+                    "description": ("Minimum similarity score 0.0-1.0 (default: 0.1)"),
                     "default": 0.1,
                 },
             },
@@ -108,9 +110,7 @@ TOOLS: List[types.Tool] = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": (
-                        "Natural language query to search by meaning"
-                    ),
+                    "description": ("Natural language query to search by meaning"),
                 },
                 "top_k": {
                     "type": "integer",
@@ -239,10 +239,11 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
     provider_name = all_embs[0].get("provider", "tfidf")
 
     try:
-        from ctk.core.similarity import (ConversationEmbedder,
-                                         ConversationEmbeddingConfig)
-        from ctk.embeddings.base import (AggregationStrategy,
-                                                      ChunkingStrategy)
+        from ctk.core.similarity import (
+            ConversationEmbedder,
+            ConversationEmbeddingConfig,
+        )
+        from ctk.embeddings.base import AggregationStrategy, ChunkingStrategy
 
         config = ConversationEmbeddingConfig(
             provider=provider_name,
@@ -287,9 +288,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
 
     except Exception as e:
         logger.error(f"Failed to embed query: {e}")
-        return [
-            types.TextContent(type="text", text=f"Error embedding query: {e}")
-        ]
+        return [types.TextContent(type="text", text=f"Error embedding query: {e}")]
 
     # Compare against all stored embeddings
     results = []

@@ -16,9 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 import numpy as np
 
 from ctk.core.models import ConversationTree, MessageRole
-from ctk.embeddings.base import (AggregationStrategy,
-                                              ChunkingStrategy,
-                                              EmbeddingProvider)
+from ctk.embeddings.base import AggregationStrategy, ChunkingStrategy, EmbeddingProvider
 
 
 # ==================== Shared Utilities ====================
@@ -229,7 +227,9 @@ class ConversationEmbedder:
         embeddings_as_lists: List[List[float]] = [e.tolist() for e in embeddings]
         if self.config.aggregation == AggregationStrategy.WEIGHTED_MEAN:
             aggregated = self.provider.aggregate_embeddings(
-                embeddings_as_lists, strategy=AggregationStrategy.WEIGHTED_MEAN, weights=weights
+                embeddings_as_lists,
+                strategy=AggregationStrategy.WEIGHTED_MEAN,
+                weights=weights,
             )
         else:
             aggregated = self.provider.aggregate_embeddings(

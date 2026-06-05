@@ -212,7 +212,10 @@ class MessageContent:
         return img
 
     def add_tool_call(
-        self, name: str, arguments: Optional[Dict[str, Any]] = None, tool_id: Optional[str] = None
+        self,
+        name: str,
+        arguments: Optional[Dict[str, Any]] = None,
+        tool_id: Optional[str] = None,
     ) -> ToolCall:
         """Add a tool call to the content"""
         tool_call = ToolCall(
@@ -642,7 +645,9 @@ class ConversationTree:
             return []
         return max(paths, key=len)
 
-    def get_linear_history(self, leaf_message_id: Optional[str] = None) -> List[Message]:
+    def get_linear_history(
+        self, leaf_message_id: Optional[str] = None
+    ) -> List[Message]:
         """Get linear history from root to a specific message or longest path"""
         if not leaf_message_id:
             return self.get_longest_path()
@@ -719,9 +724,7 @@ class ConversationTree:
         to_drop = {node_id, *self.descendants_of(node_id)}
         for mid in to_drop:
             self.message_map.pop(mid, None)
-        self.root_message_ids = [
-            r for r in self.root_message_ids if r not in to_drop
-        ]
+        self.root_message_ids = [r for r in self.root_message_ids if r not in to_drop]
         self._invalidate_paths_cache()
         self.metadata.updated_at = datetime.now()
         return len(to_drop)
@@ -801,9 +804,7 @@ class ConversationTree:
         if parent_id not in self.message_map:
             raise KeyError(parent_id)
         # Old-id → new-id mapping for every message in ``other``.
-        id_map: Dict[str, str] = {
-            old: str(uuid.uuid4()) for old in other.message_map
-        }
+        id_map: Dict[str, str] = {old: str(uuid.uuid4()) for old in other.message_map}
         for old_id, msg in other.message_map.items():
             cloned = _copy.deepcopy(msg)
             cloned.id = id_map[old_id]

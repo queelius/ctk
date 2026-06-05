@@ -9,18 +9,22 @@ from typing import Any, Dict, List, Optional, Union
 try:
     from flask import Flask, Response, jsonify, request
     from flask_cors import CORS
+
     _FLASK_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised by the rest extra in CI
     _FLASK_AVAILABLE = False
 
 from ctk.core import registry
 from ctk.core.models import ConversationTree
-from ctk.interfaces.base import (BaseInterface, InterfaceResponse,
-                                 ResponseStatus)
-from ctk.interfaces.rest._validation import (MAX_YAML_BYTES, check_yaml_size,
-                                             clamp_limit, clamp_offset,
-                                             safe_upload_filename,
-                                             validate_export_format)
+from ctk.interfaces.base import BaseInterface, InterfaceResponse, ResponseStatus
+from ctk.interfaces.rest._validation import (
+    MAX_YAML_BYTES,
+    check_yaml_size,
+    clamp_limit,
+    clamp_offset,
+    safe_upload_filename,
+    validate_export_format,
+)
 
 
 class RestInterface(BaseInterface):
@@ -430,7 +434,6 @@ class RestInterface(BaseInterface):
         # ============================================================
         # Views Endpoints
         # ============================================================
-
 
     def _format_response(self, response: InterfaceResponse) -> "tuple[Response, int]":
         """Format InterfaceResponse for Flask"""
@@ -1071,4 +1074,3 @@ class RestInterface(BaseInterface):
             return InterfaceResponse.success(data=path_data)
         except Exception as e:
             return self.handle_error(e)
-

@@ -4,7 +4,10 @@ pytest.importorskip("flask_cors")  # only runs where the rest extra is installed
 
 from ctk.core.database import ConversationDB
 from ctk.core.models import (
-    ConversationTree, Message, MessageContent, MessageRole,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
 )
 from ctk.interfaces.rest.api import RestInterface
 
@@ -15,8 +18,12 @@ def db_dir(tmp_path):
     tree = ConversationTree(id="conv-1", title="Hello world")
     tree.metadata.source = "openai"
     tree.add_message(
-        Message(id="m1", role=MessageRole.USER,
-                content=MessageContent(text="hi"), parent_id=None)
+        Message(
+            id="m1",
+            role=MessageRole.USER,
+            content=MessageContent(text="hi"),
+            parent_id=None,
+        )
     )
     db.save_conversation(tree)
     db.close()

@@ -3539,7 +3539,7 @@ function createBranchIndicator(parentMsg, childIds, tree, conv) {
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'branch-nav-btn';
-    prevBtn.textContent = '\u25C0';
+    prevBtn.textContent = '\u25c0';
     prevBtn.disabled = currentIndex === 0;
     prevBtn.addEventListener('click', () => {
         switchBranch(parentMsg.id, childIds[currentIndex - 1], tree, conv);
@@ -3547,7 +3547,7 @@ function createBranchIndicator(parentMsg, childIds, tree, conv) {
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'branch-nav-btn';
-    nextBtn.textContent = '\u25B6';
+    nextBtn.textContent = '\u25b6';
     nextBtn.disabled = currentIndex === childIds.length - 1;
     nextBtn.addEventListener('click', () => {
         switchBranch(parentMsg.id, childIds[currentIndex + 1], tree, conv);

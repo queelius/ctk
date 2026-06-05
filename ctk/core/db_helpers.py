@@ -19,19 +19,24 @@ def _write_conversation_csv(items):
     """Write conversation summaries as RFC-4180 CSV to stdout."""
     import csv
     import sys
+
     writer = csv.writer(sys.stdout)
-    writer.writerow(["ID", "Title", "Messages", "Source", "Model", "Created", "Updated"])
+    writer.writerow(
+        ["ID", "Title", "Messages", "Source", "Model", "Created", "Updated"]
+    )
     for conv in items:
         d = conv.to_dict() if hasattr(conv, "to_dict") else conv
-        writer.writerow([
-            d["id"],
-            d.get("title", "Untitled"),
-            d.get("message_count", 0),
-            d.get("source", ""),
-            d.get("model", ""),
-            d.get("created_at", ""),
-            d.get("updated_at", ""),
-        ])
+        writer.writerow(
+            [
+                d["id"],
+                d.get("title", "Untitled"),
+                d.get("message_count", 0),
+                d.get("source", ""),
+                d.get("model", ""),
+                d.get("created_at", ""),
+                d.get("updated_at", ""),
+            ]
+        )
 
 
 def list_conversations_helper(

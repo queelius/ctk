@@ -23,16 +23,37 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from .constants import (AMBIGUITY_CHECK_LIMIT, DEFAULT_SEARCH_LIMIT,
-                        DEFAULT_TIMELINE_LIMIT, MIGRATION_LOCK_TIMEOUT,
-                        SEARCH_BUFFER, TITLE_MATCH_BOOST)
-from .db_models import (Base, ConversationModel, CurrentCommunityModel,
-                        CurrentGraphModel, CurrentNodeMetricsModel,
-                        EmbeddingModel, EmbeddingSessionModel, MessageModel,
-                        PathModel, RoleEnum, SimilarityModel, TagModel,
-                        conversation_tags)
-from .models import (ConversationMetadata, ConversationSummary,
-                     ConversationTree, Message, MessageContent, MessageRole)
+from .constants import (
+    AMBIGUITY_CHECK_LIMIT,
+    DEFAULT_SEARCH_LIMIT,
+    DEFAULT_TIMELINE_LIMIT,
+    MIGRATION_LOCK_TIMEOUT,
+    SEARCH_BUFFER,
+    TITLE_MATCH_BOOST,
+)
+from .db_models import (
+    Base,
+    ConversationModel,
+    CurrentCommunityModel,
+    CurrentGraphModel,
+    CurrentNodeMetricsModel,
+    EmbeddingModel,
+    EmbeddingSessionModel,
+    MessageModel,
+    PathModel,
+    RoleEnum,
+    SimilarityModel,
+    TagModel,
+    conversation_tags,
+)
+from .models import (
+    ConversationMetadata,
+    ConversationSummary,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from .pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
@@ -1398,7 +1419,11 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
+                query = query.filter(
+                    ConversationModel.model.ilike(
+                        f"%{_escape_like(model)}%", escape="\\"
+                    )
+                )
 
             # Tag filters
             if tags:
@@ -1607,7 +1632,11 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
+                query = query.filter(
+                    ConversationModel.model.ilike(
+                        f"%{_escape_like(model)}%", escape="\\"
+                    )
+                )
 
             # Tag filters
             if tags:

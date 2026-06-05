@@ -44,12 +44,16 @@ class InterfaceResponse:
         }
 
     @classmethod
-    def success(cls, data: Any = None, message: Optional[str] = None) -> "InterfaceResponse":
+    def success(
+        cls, data: Any = None, message: Optional[str] = None
+    ) -> "InterfaceResponse":
         """Create a success response"""
         return cls(status=ResponseStatus.SUCCESS, data=data, message=message)
 
     @classmethod
-    def error(cls, message: str, errors: Optional[List[str]] = None) -> "InterfaceResponse":
+    def error(
+        cls, message: str, errors: Optional[List[str]] = None
+    ) -> "InterfaceResponse":
         """Create an error response"""
         return cls(status=ResponseStatus.ERROR, message=message, errors=errors or [])
 
@@ -265,7 +269,10 @@ class BaseInterface(ABC):
             f"Error in {self.__class__.__name__}: {str(exception)}", exc_info=True
         )
         debug = os.environ.get("CTK_REST_DEBUG_ERRORS", "").lower() in (
-            "1", "true", "yes", "on",
+            "1",
+            "true",
+            "yes",
+            "on",
         )
         if debug:
             public_message = f"An error occurred: {exception}"

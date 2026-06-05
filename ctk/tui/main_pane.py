@@ -14,10 +14,10 @@ from ctk.core.models import ConversationTree, Message, MessageContent, MessageRo
 
 def _role_label(role: MessageRole) -> Text:
     mapping = {
-        MessageRole.USER: ("you",        "bold cyan"),
-        MessageRole.ASSISTANT: ("bot",   "bold green"),
-        MessageRole.SYSTEM: ("system",   "dim italic"),
-        MessageRole.TOOL: ("tool",       "bold yellow"),
+        MessageRole.USER: ("you", "bold cyan"),
+        MessageRole.ASSISTANT: ("bot", "bold green"),
+        MessageRole.SYSTEM: ("system", "dim italic"),
+        MessageRole.TOOL: ("tool", "bold yellow"),
     }
     name, style = mapping.get(role, (str(role), "bold"))
     return Text(name, style=style)
@@ -41,8 +41,10 @@ class MessageBubble(Static):
             MessageRole.ASSISTANT: "message-assistant",
             MessageRole.SYSTEM: "message-system",
         }.get(msg.role, "message-assistant")
-        body = msg.content.get_text() if hasattr(msg.content, "get_text") else str(
-            msg.content
+        body = (
+            msg.content.get_text()
+            if hasattr(msg.content, "get_text")
+            else str(msg.content)
         )
         # Render as markdown for assistant output (code fences etc.); keep
         # user/system as plain text to avoid surprise rendering.
@@ -169,9 +171,7 @@ class MessageView(VerticalScroll):
             return False
         new_child = siblings[new_pos]
         # Truncate after parent and rebuild greedy path from new_child.
-        self._path = self._path[: parent_index + 1] + self._extend_path(
-            new_child
-        )
+        self._path = self._path[: parent_index + 1] + self._extend_path(new_child)
         self._render_path()
         return True
 
@@ -212,9 +212,7 @@ class MessageView(VerticalScroll):
             try:
                 from ctk.tui.images import build_image_widgets
 
-                for widget in build_image_widgets(
-                    images, media_root=self._media_root
-                ):
+                for widget in build_image_widgets(images, media_root=self._media_root):
                     self.mount(widget)
             except ImportError:
                 # textual-image not installed; show a minimal fallback
@@ -226,9 +224,7 @@ class MessageView(VerticalScroll):
                         or img.path
                         or f"(embedded {img.mime_type or 'image'})"
                     )
-                    self.mount(
-                        Static(f"[image] {label}", classes="message-system")
-                    )
+                    self.mount(Static(f"[image] {label}", classes="message-system"))
         # Show a branch indicator under any message with siblings beyond
         # the one currently picked. We render it AFTER the bubble whose
         # *child* in the path has siblings — i.e., this is the parent of
@@ -248,9 +244,7 @@ class MessageView(VerticalScroll):
         position = next(
             (i for i, s in enumerate(siblings) if s.id == next_in_path_id), 0
         )
-        self.mount(
-            BranchIndicator(msg.id, position=position, total=len(siblings))
-        )
+        self.mount(BranchIndicator(msg.id, position=position, total=len(siblings)))
 
 
 class ChatInput(TextArea):

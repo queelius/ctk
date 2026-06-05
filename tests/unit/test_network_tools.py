@@ -375,6 +375,7 @@ class TestListNeighborsPopulated:
         )
         # Extract scores from lines like "a-002xx  Conv ...  (0.900)"
         import re
+
         scores = re.findall(r"\((\d+\.\d+)\)", result)
         scores = [float(s) for s in scores]
         assert scores == sorted(scores, reverse=True)
@@ -409,7 +410,9 @@ class TestProviderRegistration:
 
         providers = {p.name: p for p in iter_providers()}
         net = providers["ctk.network"]
-        find_tool = next(t for t in net.tools if t["name"] == "find_similar_conversations")
+        find_tool = next(
+            t for t in net.tools if t["name"] == "find_similar_conversations"
+        )
         assert "conversation_id" in find_tool["input_schema"]["required"]
 
     def test_list_neighbors_schema_requires_conversation_id(self):

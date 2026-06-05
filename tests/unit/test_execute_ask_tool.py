@@ -3,7 +3,10 @@ import pytest
 from ctk.cli import execute_ask_tool
 from ctk.core.database import ConversationDB
 from ctk.core.models import (
-    ConversationTree, Message, MessageContent, MessageRole,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
 )
 
 
@@ -30,9 +33,12 @@ def db():
 
 # Tools that take a conversation_id and resolve it via _resolve_conversation_id.
 RESOLVING_TOOLS = [
-    "star_conversation", "unstar_conversation",
-    "pin_conversation", "unpin_conversation",
-    "archive_conversation", "unarchive_conversation",
+    "star_conversation",
+    "unstar_conversation",
+    "pin_conversation",
+    "unpin_conversation",
+    "archive_conversation",
+    "unarchive_conversation",
     "delete_conversation",
     "list_conversation_paths",
     "auto_tag_conversation",

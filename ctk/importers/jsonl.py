@@ -7,8 +7,13 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -330,4 +335,3 @@ class JSONLImporter(ImporterPlugin):
             conversations.append(tree)
 
         return conversations
-

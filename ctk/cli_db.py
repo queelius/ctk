@@ -16,8 +16,12 @@ from typing import List, Optional
 from sqlalchemy import text
 
 from ctk.core.database import ConversationDB
-from ctk.core.db_operations import (ConversationComparator, DatabaseOperations,
-                                    DuplicateStrategy, MergeStrategy)
+from ctk.core.db_operations import (
+    ConversationComparator,
+    DatabaseOperations,
+    DuplicateStrategy,
+    MergeStrategy,
+)
 
 logger = logging.getLogger(__name__)
 

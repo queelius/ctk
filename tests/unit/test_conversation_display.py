@@ -37,12 +37,16 @@ def _msg(mid: str, parent: str | None, role: MessageRole, text: str) -> Message:
     )
 
 
-def _simple_tree(conv_id: str = "conv-simple", title: str = "Hello World") -> ConversationTree:
+def _simple_tree(
+    conv_id: str = "conv-simple", title: str = "Hello World"
+) -> ConversationTree:
     """Single linear path: user -> assistant."""
     tree = ConversationTree(
         id=conv_id,
         title=title,
-        metadata=ConversationMetadata(source="test", model="test-model", tags=["a", "b"]),
+        metadata=ConversationMetadata(
+            source="test", model="test-model", tags=["a", "b"]
+        ),
     )
     tree.add_message(_msg("m1", None, MessageRole.USER, "Hello"))
     tree.add_message(_msg("m2", "m1", MessageRole.ASSISTANT, "Hi there!"))

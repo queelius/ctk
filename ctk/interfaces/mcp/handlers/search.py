@@ -5,10 +5,12 @@ from typing import Any, Callable, Dict, List
 
 import mcp.types as types
 
-from ctk.core.constants import (MAX_QUERY_LENGTH, MAX_RESULT_LIMIT,
-                                TITLE_TRUNCATE_WIDTH)
-from ctk.interfaces.mcp.validation import (validate_boolean,
-                                           validate_integer, validate_string)
+from ctk.core.constants import MAX_QUERY_LENGTH, MAX_RESULT_LIMIT, TITLE_TRUNCATE_WIDTH
+from ctk.interfaces.mcp.validation import (
+    validate_boolean,
+    validate_integer,
+    validate_string,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,7 @@ TOOLS: List[types.Tool] = [
                 "cursor": {
                     "type": "string",
                     "description": (
-                        "Pagination cursor from previous"
-                        " response's next_cursor."
+                        "Pagination cursor from previous" " response's next_cursor."
                     ),
                 },
             },

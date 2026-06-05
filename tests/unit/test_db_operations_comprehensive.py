@@ -15,10 +15,19 @@ from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from ctk.core.database import ConversationDB
-from ctk.core.db_operations import (ConversationComparator, DatabaseOperations,
-                                    DuplicateStrategy, MergeStrategy)
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.db_operations import (
+    ConversationComparator,
+    DatabaseOperations,
+    DuplicateStrategy,
+    MergeStrategy,
+)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class TestDatabaseOperationsComprehensive(unittest.TestCase):

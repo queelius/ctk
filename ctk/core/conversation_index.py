@@ -212,7 +212,9 @@ class ConversationIndex:
 
     def resolve_with_info(
         self, identifier: str
-    ) -> Tuple[Optional[str], Optional[str], List[Tuple[str, Optional[str], Optional[str]]]]:
+    ) -> Tuple[
+        Optional[str], Optional[str], List[Tuple[str, Optional[str], Optional[str]]]
+    ]:
         """
         Resolve with detailed match information.
 
@@ -291,7 +293,9 @@ class ConversationIndex:
             for p8, ids in self._id_prefix_8.items():
                 if p8.lower() == prefix_8:
                     candidates_long.extend(ids)
-            return [cid for cid in candidates_long if cid.lower().startswith(prefix_lower)]
+            return [
+                cid for cid in candidates_long if cid.lower().startswith(prefix_lower)
+            ]
 
     def get_completions(
         self, prefix: str, limit: int = 20

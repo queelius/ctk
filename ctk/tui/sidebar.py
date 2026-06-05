@@ -69,9 +69,7 @@ class ConversationList(Vertical):
         self._conversations: List = []
         self._table: DataTable = DataTable(cursor_type="row", zebra_stripes=True)
         # ``Tabs`` builds tabs from positional Tab children at compose time.
-        self._tabs = Tabs(
-            *[Tab(label, id=tab_id) for tab_id, label in _TAB_DEFS]
-        )
+        self._tabs = Tabs(*[Tab(label, id=tab_id) for tab_id, label in _TAB_DEFS])
         self._title_label = Static("conversations", id="sidebar-title")
         self._search: Optional[str] = None
         self._mode: str = "all"
@@ -167,34 +165,45 @@ class ConversationList(Vertical):
         # Search overlay overrides the tab — searching against the
         # whole DB is more useful than searching within a single tab.
         if self._search:
-            return cast(PaginatedResult, self._db.search_conversations(
-                self._search, cursor=cursor, page_size=ps
-            ))
+            return cast(
+                PaginatedResult,
+                self._db.search_conversations(
+                    self._search, cursor=cursor, page_size=ps
+                ),
+            )
 
         if self._mode == "starred":
-            return cast(PaginatedResult, self._db.list_conversations(
-                starred=True, cursor=cursor, page_size=ps
-            ))
+            return cast(
+                PaginatedResult,
+                self._db.list_conversations(starred=True, cursor=cursor, page_size=ps),
+            )
         if self._mode == "pinned":
-            return cast(PaginatedResult, self._db.list_conversations(
-                pinned=True, cursor=cursor, page_size=ps
-            ))
+            return cast(
+                PaginatedResult,
+                self._db.list_conversations(pinned=True, cursor=cursor, page_size=ps),
+            )
         if self._mode == "archived":
-            return cast(PaginatedResult, self._db.list_conversations(
-                archived=True,
-                include_archived=True,
-                cursor=cursor,
-                page_size=ps,
-            ))
+            return cast(
+                PaginatedResult,
+                self._db.list_conversations(
+                    archived=True,
+                    include_archived=True,
+                    cursor=cursor,
+                    page_size=ps,
+                ),
+            )
         if self._mode == "recent":
             # "Recent" is the small fast tab. It deliberately does
             # not paginate -- 20 rows is the whole story.
-            return cast(PaginatedResult, self._db.list_conversations(
-                cursor=cursor, page_size=20
-            ))
+            return cast(
+                PaginatedResult,
+                self._db.list_conversations(cursor=cursor, page_size=20),
+            )
 
         # "all" and unknown modes both fall through to the unfiltered list.
-        return cast(PaginatedResult, self._db.list_conversations(cursor=cursor, page_size=ps))
+        return cast(
+            PaginatedResult, self._db.list_conversations(cursor=cursor, page_size=ps)
+        )
 
     def _merge_page(self, page: PaginatedResult) -> int:
         """Append page items to the table; update cursor / has_more."""
@@ -218,9 +227,7 @@ class ConversationList(Vertical):
         """Reflect pagination state in the sidebar header."""
         n = len(self._conversations)
         if self._has_more:
-            self._title_label.update(
-                f"conversations · {n} loaded · more (Ctrl+L)"
-            )
+            self._title_label.update(f"conversations · {n} loaded · more (Ctrl+L)")
         elif n > 0:
             self._title_label.update(f"conversations · {n}")
         else:

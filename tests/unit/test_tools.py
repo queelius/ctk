@@ -55,7 +55,9 @@ class TestGetAskTools:
     def test_each_tool_has_input_schema(self):
         """Every tool should have an 'input_schema' key with a dict value."""
         for tool in get_ask_tools():
-            assert "input_schema" in tool, f"Tool missing 'input_schema': {tool['name']}"
+            assert (
+                "input_schema" in tool
+            ), f"Tool missing 'input_schema': {tool['name']}"
             assert isinstance(tool["input_schema"], dict)
 
     @pytest.mark.unit
@@ -63,16 +65,18 @@ class TestGetAskTools:
         """Every tool's input_schema should declare type 'object'."""
         for tool in get_ask_tools():
             schema = tool["input_schema"]
-            assert schema.get("type") == "object", (
-                f"Tool '{tool['name']}' input_schema.type is not 'object'"
-            )
+            assert (
+                schema.get("type") == "object"
+            ), f"Tool '{tool['name']}' input_schema.type is not 'object'"
 
     @pytest.mark.unit
     def test_input_schema_has_required_list(self):
         """Every tool's input_schema should have a 'required' list."""
         for tool in get_ask_tools():
             schema = tool["input_schema"]
-            assert "required" in schema, f"Tool '{tool['name']}' missing 'required' in schema"
+            assert (
+                "required" in schema
+            ), f"Tool '{tool['name']}' missing 'required' in schema"
             assert isinstance(schema["required"], list)
 
     @pytest.mark.unit
@@ -95,9 +99,9 @@ class TestGetAskTools:
         """With include_pass_through=False, no tool should have 'pass_through' key."""
         tools = get_ask_tools(include_pass_through=False)
         for tool in tools:
-            assert "pass_through" not in tool, (
-                f"Tool '{tool['name']}' still has 'pass_through' key when excluded"
-            )
+            assert (
+                "pass_through" not in tool
+            ), f"Tool '{tool['name']}' still has 'pass_through' key when excluded"
 
     @pytest.mark.unit
     def test_include_pass_through_false_same_count(self):
@@ -148,9 +152,9 @@ class TestIsPassThroughTool:
     def test_known_pass_through_returns_true(self):
         """Tools in PASS_THROUGH_TOOLS should return True."""
         for name in PASS_THROUGH_TOOLS:
-            assert is_pass_through_tool(name) is True, (
-                f"Expected {name!r} to be a pass-through tool"
-            )
+            assert (
+                is_pass_through_tool(name) is True
+            ), f"Expected {name!r} to be a pass-through tool"
 
     @pytest.mark.unit
     def test_unknown_tool_returns_false(self):

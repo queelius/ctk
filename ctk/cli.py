@@ -13,10 +13,12 @@ from typing import Any, Dict, List, Optional
 
 import ctk
 from ctk.core.database import ConversationDB
-from ctk.core.input_validation import (ValidationError,
-                                       validate_conversation_id,
-                                       validate_file_path,
-                                       validate_path_selection)
+from ctk.core.input_validation import (
+    ValidationError,
+    validate_conversation_id,
+    validate_file_path,
+    validate_path_selection,
+)
 from ctk.core.plugin import registry
 from ctk.core.sanitizer import Sanitizer
 
@@ -873,7 +875,10 @@ def execute_ask_tool(
             results_list = results.items if isinstance(results, _PR) else list(results)
 
             if debug:
-                print(f"[DEBUG] Query returned {len(results_list)} results", file=sys.stderr)
+                print(
+                    f"[DEBUG] Query returned {len(results_list)} results",
+                    file=sys.stderr,
+                )
 
             if not results_list:
                 return "No conversations found."
@@ -1290,8 +1295,7 @@ def execute_ask_tool(
                 return f"Conversation {conv_id} not found"
 
             if export_format == "markdown":
-                from ctk.exporters.markdown import \
-                    MarkdownExporter
+                from ctk.exporters.markdown import MarkdownExporter
 
                 exporter = MarkdownExporter()
                 output = exporter.export_data([tree])
@@ -2438,6 +2442,7 @@ def _display_sql_results(console, rows, keys, format_type, limit):
     elif format_type == "csv":
         import csv
         import sys
+
         writer = csv.writer(sys.stdout)
         writer.writerow([str(k) for k in keys])
         for row in rows:
@@ -2854,9 +2859,17 @@ def main():
 
     # Special handling for db subcommands
     if args.command == "db":
-        from ctk.cli_db import (cmd_backup, cmd_dedupe, cmd_diff, cmd_filter,
-                                cmd_info, cmd_init, cmd_intersect, cmd_merge,
-                                cmd_split)
+        from ctk.cli_db import (
+            cmd_backup,
+            cmd_dedupe,
+            cmd_diff,
+            cmd_filter,
+            cmd_info,
+            cmd_init,
+            cmd_intersect,
+            cmd_merge,
+            cmd_split,
+        )
         from ctk.cli_db import cmd_stats as cmd_db_stats
         from ctk.cli_db import cmd_vacuum, cmd_validate
 

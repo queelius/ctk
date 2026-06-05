@@ -9,8 +9,13 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Union
 
 from ctk.core import registry
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class CTK:

@@ -87,9 +87,7 @@ async def handle_execute_sql(arguments: dict, db) -> list[types.TextContent]:
                     text="Error: Only SELECT queries are allowed (database is read-only).",
                 )
             ]
-        return [
-            types.TextContent(type="text", text=f"SQL error: {error_msg}")
-        ]
+        return [types.TextContent(type="text", text=f"SQL error: {error_msg}")]
 
     if not rows:
         return [types.TextContent(type="text", text="Query returned no results.")]

@@ -224,7 +224,9 @@ async def handle_update_conversation(arguments: dict, db) -> list[types.TextCont
     title = validate_string(arguments.get("title"), "title", MAX_TITLE_LENGTH)
 
     if not conv_id:
-        return [types.TextContent(type="text", text="Error: conversation ID is required")]
+        return [
+            types.TextContent(type="text", text="Error: conversation ID is required")
+        ]
 
     full_id = resolve_conversation_id(conv_id, db=db)
     if not full_id:

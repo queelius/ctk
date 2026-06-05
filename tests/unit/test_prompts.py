@@ -38,7 +38,9 @@ def make_memory_db() -> ConversationDB:
     return ConversationDB(":memory:")
 
 
-def make_conversation(conv_id: str = "conv_001", title: str = "Test Conv") -> ConversationTree:
+def make_conversation(
+    conv_id: str = "conv_001", title: str = "Test Conv"
+) -> ConversationTree:
     """Build a minimal ConversationTree with one user message."""
     tree = ConversationTree(
         id=conv_id,
@@ -462,7 +464,9 @@ class TestGenerateTuiPromptFromHelp:
     @pytest.mark.unit
     def test_only_help_key(self):
         """A dict with only 'help' must still produce valid output (no commands listed)."""
-        result = generate_tui_prompt_from_help({"help": {"desc": "show help", "usage": "/help"}})
+        result = generate_tui_prompt_from_help(
+            {"help": {"desc": "show help", "usage": "/help"}}
+        )
         assert isinstance(result, str)
         assert "**/help**" not in result
 

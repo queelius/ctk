@@ -36,8 +36,14 @@ from ctk.core.tree import ConversationTreeNavigator, TreeMessage
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _db_msg(mid: str, parent: str | None = None, role: MessageRole = MessageRole.USER,
-             text: str = "", metadata: dict | None = None) -> Message:
+
+def _db_msg(
+    mid: str,
+    parent: str | None = None,
+    role: MessageRole = MessageRole.USER,
+    text: str = "",
+    metadata: dict | None = None,
+) -> Message:
     """Build a Message with an explicit id for deterministic tests."""
     return Message(
         id=mid,
@@ -75,9 +81,9 @@ def _branching_tree() -> ConversationTree:
 
 def _deep_branching_tree() -> ConversationTree:
     """Create a deeper tree:
-        root
-        |- left  -> left2
-        |- right -> right2 -> right3
+    root
+    |- left  -> left2
+    |- right -> right2 -> right3
     """
     tree = ConversationTree()
     tree.add_message(_db_msg("root"))
@@ -97,6 +103,7 @@ def _navigator(tree: ConversationTree) -> ConversationTreeNavigator:
 # TreeMessage direct construction tests
 # ---------------------------------------------------------------------------
 
+
 class TestTreeMessageConstruction:
     @pytest.mark.unit
     def test_basic_attributes(self):
@@ -112,8 +119,9 @@ class TestTreeMessageConstruction:
 
     @pytest.mark.unit
     def test_optional_metadata(self):
-        msg = TreeMessage(role=MessageRole.ASSISTANT, content="reply",
-                          model="gpt-4", user="alice")
+        msg = TreeMessage(
+            role=MessageRole.ASSISTANT, content="reply", model="gpt-4", user="alice"
+        )
         assert msg.model == "gpt-4"
         assert msg.user == "alice"
 
@@ -157,6 +165,7 @@ class TestTreeMessageConstruction:
 # ---------------------------------------------------------------------------
 # TreeMessage navigation methods
 # ---------------------------------------------------------------------------
+
 
 class TestTreeMessageNavigation:
     @pytest.mark.unit
@@ -203,6 +212,7 @@ class TestTreeMessageNavigation:
 # TreeMessage formatting methods
 # ---------------------------------------------------------------------------
 
+
 class TestTreeMessageFormatting:
     @pytest.mark.unit
     def test_format_message_no_index(self):
@@ -220,8 +230,9 @@ class TestTreeMessageFormatting:
 
     @pytest.mark.unit
     def test_format_message_with_metadata(self):
-        msg = TreeMessage(role=MessageRole.ASSISTANT, content="reply",
-                          model="gpt-4", user="bob")
+        msg = TreeMessage(
+            role=MessageRole.ASSISTANT, content="reply", model="gpt-4", user="bob"
+        )
         text = msg.format_message(show_metadata=True)
         assert "model: gpt-4" in text
         assert "user: bob" in text
@@ -289,14 +300,17 @@ class TestTreeMessageFormatting:
     @pytest.mark.unit
     def test_print_message_with_markdown(self):
         console = Console(file=StringIO(), width=80, highlight=False)
-        msg = TreeMessage(role=MessageRole.ASSISTANT, content="```python\nprint('hi')\n```")
+        msg = TreeMessage(
+            role=MessageRole.ASSISTANT, content="```python\nprint('hi')\n```"
+        )
         msg.print_message(console=console, render_markdown=True)
 
     @pytest.mark.unit
     def test_print_message_metadata(self):
         console = Console(file=StringIO(), width=80, highlight=False)
-        msg = TreeMessage(role=MessageRole.ASSISTANT, content="reply",
-                          model="gpt-4", user="alice")
+        msg = TreeMessage(
+            role=MessageRole.ASSISTANT, content="reply", model="gpt-4", user="alice"
+        )
         msg.print_message(console=console, show_metadata=True)
 
     @pytest.mark.unit
@@ -315,6 +329,7 @@ class TestTreeMessageFormatting:
 # ---------------------------------------------------------------------------
 # ConversationTreeNavigator: empty tree
 # ---------------------------------------------------------------------------
+
 
 class TestNavigatorEmptyTree:
     @pytest.mark.unit
@@ -401,6 +416,7 @@ class TestNavigatorEmptyTree:
 # ConversationTreeNavigator: single node tree
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorSingleNode:
     @pytest.mark.unit
     def test_root_set(self):
@@ -472,6 +488,7 @@ class TestNavigatorSingleNode:
 # ---------------------------------------------------------------------------
 # ConversationTreeNavigator: linear (multi-node) tree
 # ---------------------------------------------------------------------------
+
 
 class TestNavigatorLinearTree:
     @pytest.mark.unit
@@ -623,6 +640,7 @@ class TestNavigatorLinearTree:
 # ConversationTreeNavigator: branching tree
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorBranchingTree:
     @pytest.mark.unit
     def test_has_branches(self):
@@ -715,6 +733,7 @@ class TestNavigatorBranchingTree:
 # ConversationTreeNavigator: latest path (timestamp ordering)
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorLatestPath:
     @pytest.mark.unit
     def test_latest_path_picks_newer_leaf(self):
@@ -725,16 +744,25 @@ class TestNavigatorLatestPath:
 
         # Build tree with explicit timestamps
         root_msg = Message(
-            id="root", parent_id=None, role=MessageRole.USER,
-            content=MessageContent(text="root"), timestamp=earlier,
+            id="root",
+            parent_id=None,
+            role=MessageRole.USER,
+            content=MessageContent(text="root"),
+            timestamp=earlier,
         )
         left_msg = Message(
-            id="left", parent_id="root", role=MessageRole.ASSISTANT,
-            content=MessageContent(text="left"), timestamp=earlier,
+            id="left",
+            parent_id="root",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="left"),
+            timestamp=earlier,
         )
         right_msg = Message(
-            id="right", parent_id="root", role=MessageRole.ASSISTANT,
-            content=MessageContent(text="right"), timestamp=later,
+            id="right",
+            parent_id="root",
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text="right"),
+            timestamp=later,
         )
         tree.add_message(root_msg)
         tree.add_message(left_msg)
@@ -755,12 +783,15 @@ class TestNavigatorLatestPath:
 # ConversationTreeNavigator: metadata propagation
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorMetadata:
     @pytest.mark.unit
     def test_model_metadata_extracted(self):
         tree = ConversationTree()
         msg = Message(
-            id="m1", parent_id=None, role=MessageRole.ASSISTANT,
+            id="m1",
+            parent_id=None,
+            role=MessageRole.ASSISTANT,
             content=MessageContent(text="hi"),
             metadata={"model": "gpt-4", "user": "alice"},
         )
@@ -782,8 +813,11 @@ class TestNavigatorMetadata:
         tree = ConversationTree()
         ts = datetime(2024, 3, 15, 9, 0, 0)
         msg = Message(
-            id="m1", parent_id=None, role=MessageRole.USER,
-            content=MessageContent(text="hi"), timestamp=ts,
+            id="m1",
+            parent_id=None,
+            role=MessageRole.USER,
+            content=MessageContent(text="hi"),
+            timestamp=ts,
         )
         tree.add_message(msg)
         nav = _navigator(tree)
@@ -793,10 +827,14 @@ class TestNavigatorMetadata:
     @pytest.mark.unit
     def test_role_preserved(self):
         tree = ConversationTree()
-        tree.add_message(Message(
-            id="sys", parent_id=None, role=MessageRole.SYSTEM,
-            content=MessageContent(text="system"),
-        ))
+        tree.add_message(
+            Message(
+                id="sys",
+                parent_id=None,
+                role=MessageRole.SYSTEM,
+                content=MessageContent(text="system"),
+            )
+        )
         nav = _navigator(tree)
         assert nav.message_map["sys"].role is MessageRole.SYSTEM
 
@@ -804,6 +842,7 @@ class TestNavigatorMetadata:
 # ---------------------------------------------------------------------------
 # ConversationTreeNavigator: to_conversation_tree round-trip
 # ---------------------------------------------------------------------------
+
 
 class TestNavigatorToConversationTree:
     @pytest.mark.unit
@@ -861,11 +900,15 @@ class TestNavigatorToConversationTree:
     @pytest.mark.unit
     def test_round_trip_with_model_metadata(self):
         tree = ConversationTree()
-        tree.add_message(Message(
-            id="m1", parent_id=None, role=MessageRole.ASSISTANT,
-            content=MessageContent(text="hi"),
-            metadata={"model": "gpt-4", "user": "alice"},
-        ))
+        tree.add_message(
+            Message(
+                id="m1",
+                parent_id=None,
+                role=MessageRole.ASSISTANT,
+                content=MessageContent(text="hi"),
+                metadata={"model": "gpt-4", "user": "alice"},
+            )
+        )
         nav = _navigator(tree)
         result = nav.to_conversation_tree()
         meta = result.message_map["m1"].metadata
@@ -893,6 +936,7 @@ class TestNavigatorToConversationTree:
 # ConversationTreeNavigator: orphan / disconnected message handling
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorOrphanMessages:
     @pytest.mark.unit
     def test_orphan_picks_earliest_as_root(self):
@@ -900,12 +944,16 @@ class TestNavigatorOrphanMessages:
         tree = ConversationTree()
         # Two messages with no parent (both are orphans)
         early = Message(
-            id="early", parent_id=None, role=MessageRole.USER,
+            id="early",
+            parent_id=None,
+            role=MessageRole.USER,
             content=MessageContent(text="early"),
             timestamp=datetime(2024, 1, 1),
         )
         late = Message(
-            id="late", parent_id=None, role=MessageRole.USER,
+            id="late",
+            parent_id=None,
+            role=MessageRole.USER,
             content=MessageContent(text="late"),
             timestamp=datetime(2024, 6, 1),
         )
@@ -919,10 +967,14 @@ class TestNavigatorOrphanMessages:
     def test_dangling_parent_id_treated_as_orphan(self):
         """A message whose parent_id references a non-existent id becomes orphan."""
         tree = ConversationTree()
-        tree.add_message(Message(
-            id="m1", parent_id="nonexistent", role=MessageRole.USER,
-            content=MessageContent(text="orphan"),
-        ))
+        tree.add_message(
+            Message(
+                id="m1",
+                parent_id="nonexistent",
+                role=MessageRole.USER,
+                content=MessageContent(text="orphan"),
+            )
+        )
         nav = _navigator(tree)
         # m1 should become root since its parent doesn't resolve
         assert nav.root is not None
@@ -933,12 +985,15 @@ class TestNavigatorOrphanMessages:
 # ConversationTreeNavigator: print_path_summary with roles
 # ---------------------------------------------------------------------------
 
+
 class TestNavigatorPrintPathSummaryRoles:
     @pytest.mark.unit
     def test_assistant_leaf_color_path(self):
         tree = ConversationTree()
         tree.add_message(_db_msg("q", role=MessageRole.USER, text="question"))
-        tree.add_message(_db_msg("a", parent="q", role=MessageRole.ASSISTANT, text="answer"))
+        tree.add_message(
+            _db_msg("a", parent="q", role=MessageRole.ASSISTANT, text="answer")
+        )
         nav = _navigator(tree)
         console = Console(file=StringIO(), width=80)
         nav.print_path_summary(console=console)
@@ -963,10 +1018,14 @@ class TestNavigatorPrintPathSummaryRoles:
     def test_long_content_preview_truncated(self):
         tree = ConversationTree()
         long_text = "x" * 200
-        tree.add_message(Message(
-            id="m1", parent_id=None, role=MessageRole.USER,
-            content=MessageContent(text=long_text),
-        ))
+        tree.add_message(
+            Message(
+                id="m1",
+                parent_id=None,
+                role=MessageRole.USER,
+                content=MessageContent(text=long_text),
+            )
+        )
         nav = _navigator(tree)
         summary = nav.format_path_summary()
         assert "..." in summary
@@ -975,6 +1034,7 @@ class TestNavigatorPrintPathSummaryRoles:
 # ---------------------------------------------------------------------------
 # ConversationTreeNavigator: roles in print_tree
 # ---------------------------------------------------------------------------
+
 
 class TestNavigatorPrintTreeRoles:
     @pytest.mark.unit
@@ -1004,10 +1064,14 @@ class TestNavigatorPrintTreeRoles:
     @pytest.mark.unit
     def test_print_tree_long_content_truncated(self):
         tree = ConversationTree()
-        tree.add_message(Message(
-            id="m1", parent_id=None, role=MessageRole.USER,
-            content=MessageContent(text="x" * 200),
-        ))
+        tree.add_message(
+            Message(
+                id="m1",
+                parent_id=None,
+                role=MessageRole.USER,
+                content=MessageContent(text="x" * 200),
+            )
+        )
         nav = _navigator(tree)
         console = Console(file=StringIO(), width=80)
         nav.print_tree(console=console, max_content_length=10)
