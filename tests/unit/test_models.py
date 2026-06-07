@@ -3,7 +3,6 @@ Unit tests for core models
 """
 
 from datetime import datetime
-from typing import List
 
 import pytest
 

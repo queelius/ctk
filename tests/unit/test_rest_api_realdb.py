@@ -2,14 +2,14 @@ import pytest
 
 pytest.importorskip("flask_cors")  # only runs where the rest extra is installed
 
-from ctk.core.database import ConversationDB
-from ctk.core.models import (
+from ctk.core.database import ConversationDB  # noqa: E402
+from ctk.core.models import (  # noqa: E402
     ConversationTree,
     Message,
     MessageContent,
     MessageRole,
 )
-from ctk.interfaces.rest.api import RestInterface
+from ctk.interfaces.rest.api import RestInterface  # noqa: E402
 
 
 @pytest.fixture

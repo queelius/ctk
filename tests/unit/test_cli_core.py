@@ -419,7 +419,7 @@ class TestCLIConfigurationHandling:
             # Verify that the strategy is properly accessible
             assert args.path_selection == strategy
 
-    @patch("ctk.cli.Sanitizer")
+    @patch("ctk.core.sanitizer.Sanitizer")
     def test_sanitization_option_handling(self, mock_sanitizer_class):
         """Test that sanitization option is properly handled"""
         # Given: Import with sanitization enabled

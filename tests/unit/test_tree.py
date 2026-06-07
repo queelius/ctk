@@ -13,17 +13,13 @@ Covers:
 
 from __future__ import annotations
 
-import time
 from datetime import datetime
 from io import StringIO
-from typing import List
-from unittest.mock import MagicMock
 
 import pytest
 from rich.console import Console
 
 from ctk.core.models import (
-    ConversationMetadata,
     ConversationTree,
     Message,
     MessageContent,

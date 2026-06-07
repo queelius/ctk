@@ -9,7 +9,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import ConversationTree, Message
 
 
 class ResponseStatus(Enum):

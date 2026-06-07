@@ -2,7 +2,6 @@
 RESTful API implementation for CTK
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
@@ -15,11 +14,8 @@ except ImportError:  # pragma: no cover - exercised by the rest extra in CI
     _FLASK_AVAILABLE = False
 
 from ctk.core import registry
-from ctk.core.models import ConversationTree
 from ctk.interfaces.base import BaseInterface, InterfaceResponse, ResponseStatus
 from ctk.interfaces.rest._validation import (
-    MAX_YAML_BYTES,
-    check_yaml_size,
     clamp_limit,
     clamp_offset,
     safe_upload_filename,
@@ -830,7 +826,7 @@ class RestInterface(BaseInterface):
 
             return InterfaceResponse.success(
                 data={"new_conversation_id": new_conv.id if new_conv else None},
-                message=f"Conversation duplicated",
+                message="Conversation duplicated",
             )
         except Exception as e:
             return self.handle_error(e)
@@ -1061,7 +1057,7 @@ class RestInterface(BaseInterface):
                 paths = conv.get_all_paths()
                 if path_index < 0 or path_index >= len(paths):
                     return InterfaceResponse.error(
-                        f"Path index {path_index} out of range (0-{len(paths)-1})"
+                        f"Path index {path_index} out of range (0-{len(paths) - 1})"
                     )
 
                 path = paths[path_index]

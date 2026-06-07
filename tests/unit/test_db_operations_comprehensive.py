@@ -5,14 +5,10 @@ Tests all operations: merge, diff, intersect, filter, split, dedupe
 Focuses on edge cases, error handling, and real-world scenarios
 """
 
-import json
 import shutil
-import sqlite3
 import tempfile
 import unittest
-from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, patch
 
 from ctk.core.database import ConversationDB
 from ctk.core.db_operations import (
@@ -179,7 +175,7 @@ class TestDatabaseOperationsComprehensive(unittest.TestCase):
         self._create_database(str(db1), [conv1])
         self._create_database(str(db2), [conv2])
 
-        stats = self.db_ops.merge(
+        self.db_ops.merge(
             [str(db1), str(db2)], str(output), strategy=MergeStrategy.LONGEST
         )
 
@@ -230,7 +226,7 @@ class TestDatabaseOperationsComprehensive(unittest.TestCase):
             # The actual API passes stats dict to callback
             progress_updates.append(stats.copy())
 
-        stats = self.db_ops.merge(
+        self.db_ops.merge(
             [str(db1), str(db2)], str(output), progress_callback=progress_callback
         )
 
@@ -386,7 +382,7 @@ class TestDatabaseOperationsComprehensive(unittest.TestCase):
             # Add partial overlap between consecutive databases
             if i > 0:
                 convs.append(
-                    self._create_conversation(f"partial{i-1}", f"Shared with {i-1}")
+                    self._create_conversation(f"partial{i - 1}", f"Shared with {i - 1}")
                 )
 
             self._create_database(str(db_path), convs)

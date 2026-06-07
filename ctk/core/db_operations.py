@@ -4,20 +4,17 @@ Following Unix philosophy: do one thing well, composable, pipeable
 """
 
 import hashlib
-import json
 import logging
 from collections import defaultdict
-from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-from sqlalchemy import func, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
 
 from .database import ConversationDB
-from .db_models import ConversationModel, MessageModel, PathModel, TagModel
+from .db_models import ConversationModel, TagModel
 from .models import ConversationTree
 
 logger = logging.getLogger(__name__)
@@ -755,7 +752,7 @@ class DatabaseOperations:
 
         chunk_dbs = []
         for i in range(chunks):
-            output_file = output_dir / f"chunk_{i+1:03d}.db"
+            output_file = output_dir / f"chunk_{i + 1:03d}.db"
             chunk_dbs.append(ConversationDB(str(output_file)))
 
         current_chunk = 0

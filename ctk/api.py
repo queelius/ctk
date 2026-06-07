@@ -3,14 +3,12 @@ Fluent Python API for CTK - A pythonic interface for conversation management
 """
 
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Union
 
 from ctk.core import registry
 from ctk.core.database import ConversationDB
 from ctk.core.models import (
-    ConversationMetadata,
     ConversationTree,
     Message,
     MessageContent,

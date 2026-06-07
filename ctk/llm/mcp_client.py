@@ -5,9 +5,7 @@ Provides MCP server management and tool calling capabilities.
 """
 
 import asyncio
-import json
 import threading
-from concurrent.futures import Future
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 

@@ -9,7 +9,7 @@ ConversationTree model.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -18,8 +18,6 @@ from rich.text import Text
 from .models import ConversationTree
 from .models import Message as DBMessage
 from .models import MessageContent
-from .models import MessageRole as DBMessageRole
-
 logger = logging.getLogger(__name__)
 
 
@@ -80,7 +78,10 @@ class TreeMessage:
         return len(self.children) == 0
 
     def __repr__(self):
-        return f"TreeMessage(id={self.id[:8]}..., role={self.role.value}, children={len(self.children)})"
+        return (
+            f"TreeMessage(id={self.id[:8]}..., role={self.role.value},"
+            f" children={len(self.children)})"
+        )
 
     def format_tree(self, prefix="", is_last=True, max_content_length=30) -> str:
         """

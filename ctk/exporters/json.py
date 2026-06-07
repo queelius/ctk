@@ -126,7 +126,7 @@ class JSONExporter(ExporterPlugin):
                 for i, path in enumerate(paths):
                     conv_data = {
                         "title": (
-                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            f"{conv.title or 'Conversation'} - Path {i + 1}"
                             if len(paths) > 1
                             else conv.title
                         ),
@@ -157,7 +157,7 @@ class JSONExporter(ExporterPlugin):
                     conv_data = {
                         "uuid": f"{conv.id}-{i}" if len(paths) > 1 else conv.id,
                         "name": (
-                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            f"{conv.title or 'Conversation'} - Path {i + 1}"
                             if len(paths) > 1
                             else conv.title
                         ),

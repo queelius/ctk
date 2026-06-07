@@ -6,7 +6,6 @@ when multiple connections attempt to migrate simultaneously.
 """
 
 import fcntl
-import json
 import logging
 import time
 from contextlib import contextmanager
@@ -17,8 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, U
 if TYPE_CHECKING:
     from .models import PaginatedResult
 
-from sqlalchemy import and_, create_engine, func, or_, select, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import and_, create_engine, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -102,7 +100,7 @@ def migration_lock(lock_path: Path, timeout: float = 30.0):
                 logger.debug(f"Migration lock acquired: {lock_path}")
                 yield True
                 return
-            except (IOError, OSError) as e:
+            except (IOError, OSError):
                 if time.time() - start_time > timeout:
                     logger.warning(f"Migration lock timeout after {timeout}s")
                     raise TimeoutError(
@@ -323,7 +321,8 @@ class ConversationDB:
                 # Check if FTS5 tables already exist
                 result = conn.execute(
                     text(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='conversations_fts'"
                     )
                 )
                 if result.fetchone():
@@ -485,7 +484,8 @@ class ConversationDB:
             with self.engine.connect() as conn:
                 result = conn.execute(
                     text(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='conversations_fts'"
                     )
                 )
                 return result.fetchone() is not None
@@ -742,8 +742,9 @@ class ConversationDB:
                 session.add(path_model)
 
             session.commit()
+            msg_count = len(conversation.message_map)
             logger.info(
-                f"Saved conversation {conversation.id} with {len(conversation.message_map)} messages"
+                f"Saved conversation {conversation.id} with {msg_count} messages"
             )
 
         return conversation.id
@@ -2726,7 +2727,8 @@ class ConversationDB:
             session.flush()
 
             logger.info(
-                f"Created embedding session {session_model.id} with {num_conversations} conversations"
+                f"Created embedding session {session_model.id}"
+                f" with {num_conversations} conversations"
             )
             return session_model.id
 
@@ -2740,7 +2742,7 @@ class ConversationDB:
         with self.session_scope() as session:
             session_model = (
                 session.query(EmbeddingSessionModel)
-                .filter(EmbeddingSessionModel.is_current == True)
+                .filter(EmbeddingSessionModel.is_current.is_(True))
                 .first()
             )
 
@@ -2964,7 +2966,7 @@ class ConversationDB:
             # Delete graph
             count = session.query(CurrentGraphModel).delete()
 
-            logger.info(f"Deleted current graph and associated data")
+            logger.info("Deleted current graph and associated data")
             return count > 0
 
     # ==================== Hierarchical Tag Methods ====================

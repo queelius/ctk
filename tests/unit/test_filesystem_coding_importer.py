@@ -13,8 +13,6 @@ Tests cover:
 
 import json
 import sqlite3
-import uuid
-from pathlib import Path
 
 import pytest
 
@@ -947,7 +945,7 @@ class TestCursorImport:
     def test_import_cursor_with_conversation_table_placeholder_returns_empty(
         self, tmp_path
     ):
-        """Cursor with conversation table rows still returns empty (placeholder parser returns None)."""
+        """Cursor with conversation table rows still returns empty (placeholder parser returns None)."""  # noqa: E501
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir()
         db_path = cursor_dir / "state.db"

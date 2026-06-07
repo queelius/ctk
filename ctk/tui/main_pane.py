@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 from rich.markdown import Markdown
 from rich.text import Text
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, TextArea
 
-from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
+from ctk.core.models import ConversationTree, Message, MessageRole
 
 
 def _role_label(role: MessageRole) -> Text:

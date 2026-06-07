@@ -223,7 +223,8 @@ class ConversationEmbedder:
         embeddings = [np.array(resp.embedding) for resp in embedding_responses]
 
         # Aggregate using specified strategy
-        # Convert numpy arrays to plain lists to satisfy EmbeddingProvider.aggregate_embeddings signature
+        # Convert numpy arrays to plain lists to satisfy EmbeddingProvider.aggregate_embeddings
+        # signature
         embeddings_as_lists: List[List[float]] = [e.tolist() for e in embeddings]
         if self.config.aggregation == AggregationStrategy.WEIGHTED_MEAN:
             aggregated = self.provider.aggregate_embeddings(
@@ -832,7 +833,8 @@ class ConversationGraphBuilder:
             conversations = [c.id for c in self.similarity.db.list_conversations()]
 
         # Compute similarity matrix
-        # cast: conversations is List[str]; compute_similarity_matrix accepts List[Union[ConversationTree, str]]
+        # cast: conversations is List[str]; compute_similarity_matrix accepts
+        # List[Union[ConversationTree, str]]
         matrix = self.similarity.compute_similarity_matrix(
             cast(List[Union[ConversationTree, str]], conversations),
             use_cache=use_cache,
@@ -896,7 +898,6 @@ class ConversationGraphBuilder:
             Mapping of conversation_id -> community_id
         """
         try:
-            import networkx as nx
             import networkx.algorithms.community as nx_comm
         except ImportError:
             raise ImportError(

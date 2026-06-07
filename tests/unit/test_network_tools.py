@@ -234,7 +234,7 @@ class TestFindSimilarPopulated:
             "find_similar_conversations",
             {"conversation_id": "a-001", "limit": 1},
         )
-        lines = [l for l in result.strip().splitlines() if l.strip()]
+        lines = [ln for ln in result.strip().splitlines() if ln.strip()]
         assert len(lines) == 1
 
     def test_min_similarity_filters(self, multi_sim_db):
@@ -272,7 +272,7 @@ class TestFindSimilarPopulated:
             "find_similar_conversations",
             {"conversation_id": "a-001"},
         )
-        lines = [l for l in result.strip().splitlines() if l.strip()]
+        lines = [ln for ln in result.strip().splitlines() if ln.strip()]
         assert len(lines) == 3  # three similarity rows stored
 
 
@@ -354,7 +354,7 @@ class TestListNeighborsPopulated:
             "list_neighbors",
             {"conversation_id": "a-001", "limit": 2},
         )
-        lines = [l for l in result.strip().splitlines() if l.strip()]
+        lines = [ln for ln in result.strip().splitlines() if ln.strip()]
         assert len(lines) == 2
 
     def test_default_limit_is_twenty(self, multi_sim_db):
@@ -364,7 +364,7 @@ class TestListNeighborsPopulated:
             "list_neighbors",
             {"conversation_id": "a-001"},
         )
-        lines = [l for l in result.strip().splitlines() if l.strip()]
+        lines = [ln for ln in result.strip().splitlines() if ln.strip()]
         assert len(lines) == 3
 
     def test_neighbors_sorted_descending(self, multi_sim_db):

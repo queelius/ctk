@@ -209,7 +209,6 @@ def cmd_provider(app: "CTKApp", args: str) -> str:
         lines = ["Provider profiles:"]
         for name in profiles:
             marker = "*" if name == current else " "
-            cfg_section = (app.db and None) or None  # placate linter
             from ctk.core.config import get_config
 
             pconfig = get_config().get_provider_config(name) or {}
@@ -300,7 +299,8 @@ def _toggle_flag(app: "CTKApp", flag: str) -> Optional[str]:
     method(conv_id, not is_set)
     if app.sidebar is not None:
         app.sidebar.refresh_list()
-    return f"{flag.capitalize()}{'red' if flag == 'star' else 'ned' if flag == 'pin' else 'd'} conversation."
+    suffix = "red" if flag == "star" else "ned" if flag == "pin" else "d"
+    return f"{flag.capitalize()}{suffix} conversation."
 
 
 @register("star", summary="Toggle starred flag on current conversation", usage="/star")

@@ -93,7 +93,7 @@ def show_conversation_helper(
                 "success": False,
                 "conversation": conversation,
                 "output": "",
-                "error": f"Path {path_num} not found (available: 0-{path_count-1})",
+                "error": f"Path {path_num} not found (available: 0-{path_count - 1})",
             }
     else:
         path = nav.get_longest_path()

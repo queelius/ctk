@@ -4,7 +4,6 @@ Filesystem-based importer for coding agent conversations
 
 import json
 import logging
-import os
 import sqlite3
 import uuid
 from datetime import datetime
@@ -312,7 +311,8 @@ class FilesystemCodingImporter(ImporterPlugin):
 
                 # Look for conversation tables
                 cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%conversation%'"
+                    "SELECT name FROM sqlite_master"
+                    " WHERE type='table' AND name LIKE '%conversation%'"
                 )
                 tables = cursor.fetchall()
 
@@ -333,7 +333,8 @@ class FilesystemCodingImporter(ImporterPlugin):
     def _parse_cursor_conversation(self, row: Any) -> Optional[ConversationTree]:
         """Parse Cursor conversation data (stub — format not yet supported)."""
         logger.warning(
-            "Cursor row parser is a stub; row skipped. File an issue with a sample export to add support."
+            "Cursor row parser is a stub; row skipped."
+            " File an issue with a sample export to add support."
         )
         return None
 

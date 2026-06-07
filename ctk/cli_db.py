@@ -4,7 +4,6 @@ Database operations CLI commands for CTK
 Implements Unix-philosophy database manipulation tools
 """
 
-import argparse
 import json
 import logging
 import sys
@@ -17,7 +16,6 @@ from sqlalchemy import text
 
 from ctk.core.database import ConversationDB
 from ctk.core.db_operations import (
-    ConversationComparator,
     DatabaseOperations,
     DuplicateStrategy,
     MergeStrategy,
@@ -354,7 +352,7 @@ def cmd_merge(args):
         if args.progress:
             print()  # New line after progress
 
-        print(f"\nMerge completed:")
+        print("\nMerge completed:")
         print(f"  Total input conversations: {stats['total_input']}")
         print(f"  Total output conversations: {stats['total_output']}")
         print(f"  Duplicates found: {stats['duplicates_found']}")
@@ -387,7 +385,7 @@ def cmd_diff(args):
             comparison=comparison,
         )
 
-        print(f"\nDiff results:")
+        print("\nDiff results:")
         print(f"  Left database total: {stats['left_total']}")
         print(f"  Right database total: {stats['right_total']}")
         print(f"  Common conversations: {stats['common']}")
@@ -428,7 +426,7 @@ def cmd_intersect(args):
             input_files, args.output, min_count=args.min_count, comparison=comparison
         )
 
-        print(f"\nIntersect results:")
+        print("\nIntersect results:")
         print(f"  Total unique conversations: {stats['total_unique']}")
         print(f"  Common to all databases: {stats['common_to_all']}")
 
@@ -469,7 +467,7 @@ def cmd_filter(args):
             query=args.query,
         )
 
-        print(f"\nFilter results:")
+        print("\nFilter results:")
         print(f"  Total input conversations: {stats['total_input']}")
         print(f"  Filtered out: {stats['filtered_out']}")
         print(f"  Output conversations: {stats['total_output']}")
@@ -497,7 +495,7 @@ def cmd_split(args):
             args.input, args.output_dir, by=args.by, chunks=args.chunks
         )
 
-        print(f"\nSplit results:")
+        print("\nSplit results:")
         print(f"  Total conversations: {stats['total_conversations']}")
         print(f"  Databases created: {stats['databases_created']}")
         print(f"  Split by: {stats['split_by']}")
@@ -533,7 +531,7 @@ def cmd_dedupe(args):
             dry_run=args.dry_run,
         )
 
-        print(f"\nDedupe results:")
+        print("\nDedupe results:")
         print(f"  Total conversations: {stats['total_conversations']}")
         print(f"  Duplicate groups found: {stats['groups_found']}")
         print(f"  Duplicates found: {stats['duplicates_found']}")
@@ -617,7 +615,7 @@ def cmd_validate(args):
         with ConversationDB(args.input) as db:
             # Basic validation - try to get statistics
             stats = db.get_statistics()
-            print(f"Database appears valid:")
+            print("Database appears valid:")
             print(f"  Conversations: {stats['total_conversations']}")
             print(f"  Messages: {stats['total_messages']}")
 
@@ -625,7 +623,7 @@ def cmd_validate(args):
             # This would require additional methods in ConversationDB
 
             if args.repair and args.output:
-                print(f"Repair functionality not yet implemented")
+                print("Repair functionality not yet implemented")
                 # Would copy valid data to new database
 
         return 0
@@ -695,12 +693,12 @@ def cmd_init(args):
     # Remove existing if force
     if db_dir.exists() and args.force:
         shutil.rmtree(db_dir)
-        console.print(f"[yellow]Removed existing database directory[/yellow]")
+        console.print("[yellow]Removed existing database directory[/yellow]")
 
     try:
         # Create new database (ConversationDB handles directory creation)
         with ConversationDB(str(db_dir)) as db:
-            stats = db.get_statistics()
+            db.get_statistics()
 
         console.print(f"[green]✓ Initialized database:[/green] {db_file}")
         console.print(f"  Directory: {db_dir}")
@@ -716,7 +714,6 @@ def cmd_init(args):
 def cmd_info(args):
     """Show database information"""
     from rich.console import Console
-    from rich.table import Table
 
     console = Console()
 
@@ -768,7 +765,7 @@ def cmd_info(args):
             return 0
 
         # Rich table output
-        console.print(f"\n[bold cyan]Database Information[/bold cyan]")
+        console.print("\n[bold cyan]Database Information[/bold cyan]")
         console.print(f"  Path: {db_file}")
         console.print(f"  Size: {format_size(get_db_size(str(db_file)))}")
         console.print(f"  SQLite version: {sqlite_version}")
@@ -833,7 +830,7 @@ def cmd_vacuum(args):
         size_after = get_db_size(str(db_file))
         saved = size_before - size_after
 
-        console.print(f"\n[green]✓ Vacuum completed[/green]")
+        console.print("\n[green]✓ Vacuum completed[/green]")
         console.print(f"  Before: {format_size(size_before)}")
         console.print(f"  After:  {format_size(size_after)}")
 
@@ -842,7 +839,7 @@ def cmd_vacuum(args):
                 f"  Saved:  {format_size(saved)} ({100 * saved / size_before:.1f}%)"
             )
         else:
-            console.print(f"  [dim]No space reclaimed[/dim]")
+            console.print("  [dim]No space reclaimed[/dim]")
 
         return 0
 
@@ -903,7 +900,7 @@ def cmd_backup(args):
         source_size = get_db_size(str(source_file))
         output_size = get_db_size(str(output_file))
 
-        console.print(f"\n[green]✓ Backup created[/green]")
+        console.print("\n[green]✓ Backup created[/green]")
         console.print(f"  Source: {source_file} ({format_size(source_size)})")
         console.print(f"  Backup: {output_file} ({format_size(output_size)})")
 

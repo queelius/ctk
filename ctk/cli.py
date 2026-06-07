@@ -7,7 +7,6 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -20,7 +19,6 @@ from ctk.core.input_validation import (
     validate_path_selection,
 )
 from ctk.core.plugin import registry
-from ctk.core.sanitizer import Sanitizer
 
 
 def setup_logging(verbose: bool = False):
@@ -54,8 +52,8 @@ def cmd_import(args):
             found_paths = CopilotImporter.find_copilot_data()
 
             if not found_paths:
-                print(f"No Copilot data found in VS Code storage")
-                print(f"Searched in:")
+                print("No Copilot data found in VS Code storage")
+                print("Searched in:")
                 import platform
 
                 system = platform.system().lower()
@@ -361,7 +359,7 @@ def cmd_export(args):
         if hasattr(db, "db_dir") and db.db_dir:
             export_kwargs["db_dir"] = str(db.db_dir)
 
-        # Validate output path (for Hugo exports, this is a directory; for file formats, it's a file)
+        # Validate output path (Hugo exports: directory; file formats: file)
         try:
             output_path = validate_file_path(
                 args.output,
@@ -416,11 +414,6 @@ def cmd_query(args):
     """
     import re
     from datetime import datetime, timedelta
-
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console()
 
     if not args.db:
         _err("Error: Database path required (-d)")
@@ -692,12 +685,12 @@ def cmd_auto_tag(args):
                 context += f"{role}: {content}\n\n"
 
             # Ask LLM for tags
-            tag_prompt = f"""Based on this conversation, suggest 3-5 relevant tags (single words or short phrases).
-Return ONLY the tags as a comma-separated list, nothing else.
-
-{context}
-
-Tags:"""
+            tag_prompt = (
+                "Based on this conversation, suggest 3-5 relevant tags"
+                " (single words or short phrases).\n"
+                "Return ONLY the tags as a comma-separated list, nothing else.\n"
+                f"\n{context}\n\nTags:"
+            )
 
             try:
                 response = provider.chat(
@@ -794,7 +787,7 @@ def execute_ask_tool(
 
             # Convert string booleans to actual booleans
             # IMPORTANT: Only return True if explicitly true, otherwise None (not False!)
-            # When LLM passes "false" or False, it usually means "not filtering" not "filter to false"
+            # When LLM passes "false" or False, it usually means "not filtering"
             def to_bool_or_none(val):
                 if val is None:
                     return None
@@ -832,7 +825,8 @@ def execute_ask_tool(
 
             if debug:
                 print(
-                    f"[DEBUG] Parsed filters: starred={starred}, pinned={pinned}, archived={archived}",
+                    f"[DEBUG] Parsed filters: starred={starred},"
+                    f" pinned={pinned}, archived={archived}",
                     file=sys.stderr,
                 )
                 print(
@@ -895,8 +889,9 @@ def execute_ask_tool(
                     from rich.console import Console
 
                     console = Console()
+                    extra = len(results_list) - 10
                     console.print(
-                        f"[dim]... and {len(results_list) - 10} more results (showing first 10)[/dim]"
+                        f"[dim]... and {extra} more results (showing first 10)[/dim]"
                     )
 
                 return ""  # Already printed
@@ -914,7 +909,7 @@ def execute_ask_tool(
                     )
 
                 result_str += (
-                    f"\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
+                    "\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
                 )
                 return result_str
 
@@ -1001,7 +996,10 @@ def execute_ask_tool(
                 return "Error: No command provided"
 
             if shell_executor is None:
-                return "Error: Shell command execution not available in this context. Use the TUI shell mode."
+                return (
+                    "Error: Shell command execution not available in this context."
+                    " Use the TUI shell mode."
+                )
 
             # Execute the command via the provided executor
             try:
@@ -1156,7 +1154,8 @@ def execute_ask_tool(
             if not tree:
                 return f"Conversation {conv_id} not found"
 
-            return f"Tree for {tree.title or 'Untitled'}:\n(Use TUI shell mode for full tree visualization)"
+            title = tree.title or "Untitled"
+            return f"Tree for {title}:\n(Use TUI shell mode for full tree visualization)"
 
         elif tool_name == "delete_conversation":
             conv_id = tool_args.get("conversation_id", "")
@@ -1234,7 +1233,7 @@ def execute_ask_tool(
                 return f"Conversation {conv_id} not found"
 
             if not tree.metadata or not tree.metadata.tags:
-                return f"Conversation has no tags"
+                return "Conversation has no tags"
 
             if tag not in tree.metadata.tags:
                 return f"Tag '{tag}' not found on conversation"
@@ -1418,7 +1417,7 @@ def execute_ask_tool(
                 result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
                 result_str += f"   Updated: {updated}\n"
 
-            result_str += f"\nType `show <id>` to view any conversation."
+            result_str += "\nType `show <id>` to view any conversation."
             return result_str
 
         elif tool_name == "list_conversations":
@@ -1564,7 +1563,11 @@ def execute_ask_tool(
             # Auto-tagging requires LLM - check if we have one in context
             # This is a simplified version - the full implementation would use the TUI's provider
             # For now, return a message suggesting manual tagging
-            return f"Auto-tagging requires an LLM provider. Use `ctk auto-tag {conv_id[:8]}` from the command line, or manually add tags with `tag_conversation`."
+            return (
+                f"Auto-tagging requires an LLM provider."
+                f" Use `ctk auto-tag {conv_id[:8]}` from the command line,"
+                " or manually add tags with `tag_conversation`."
+            )
 
         else:
             return f"Unknown tool: {tool_name}"
@@ -1640,7 +1643,7 @@ def cmd_tags(args):
 
             # Show uncategorized tags
             if uncategorized:
-                print(f"\n🏷️  UNCATEGORIZED:")
+                print("\n🏷️  UNCATEGORIZED:")
                 for tag in sorted(
                     uncategorized, key=lambda x: x.get("usage_count", 0), reverse=True
                 )[:20]:
@@ -1867,7 +1870,7 @@ def cmd_show(args):
         print()
 
         if not path:
-            print(f"No messages in conversation")
+            print("No messages in conversation")
             return 0
 
         # Display path using navigator's pretty-print method
@@ -1894,7 +1897,7 @@ def cmd_show(args):
         # Show branch info
         if path_count > 1:
             print(f"\nNote: This conversation has {path_count} paths")
-            print(f"Use --path longest|latest|N to view different paths")
+            print("Use --path longest|latest|N to view different paths")
 
         return 0
 
@@ -1933,7 +1936,7 @@ def cmd_delete(args):
 
         # Confirm deletion unless --yes flag
         if not args.yes:
-            print(f"\nAbout to delete conversation:")
+            print("\nAbout to delete conversation:")
             print(f"  ID: {tree.id[:8]}...")
             print(f"  Title: {tree.title}")
             print(f"  Messages: {len(tree.message_map)}")
@@ -2098,7 +2101,7 @@ def cmd_title(args):
         # Save back
         db.save_conversation(tree)
 
-        print(f"✓ Renamed conversation")
+        print("✓ Renamed conversation")
         print(f"  Old title: {old_title}")
         print(f"  New title: {args.new_title}")
 
@@ -2274,13 +2277,13 @@ def cmd_duplicate(args):
 
         if new_id:
             new_tree = db.load_conversation(new_id)
-            print(f"✓ Duplicated conversation")
+            print("✓ Duplicated conversation")
             print(f"  Original: {tree.title}")
             print(f"  New ID: {new_id[:8]}...")
             print(f"  New title: {new_tree.title}")
             return 0
         else:
-            _err(f"Error: Failed to duplicate conversation")
+            _err("Error: Failed to duplicate conversation")
             return 1
 
     except Exception as e:
@@ -2532,7 +2535,10 @@ def build_parser():
     import_parser.add_argument(
         "--format",
         "-f",
-        help="Input format: openai, anthropic, copilot, gemini, jsonl, filesystem_coding (auto-detect if not specified)",
+        help=(
+            "Input format: openai, anthropic, copilot, gemini, jsonl,"
+            " filesystem_coding (auto-detect if not specified)"
+        ),
     )
     import_parser.add_argument("--db", "-d", help="Database path to save to")
     import_parser.add_argument(
@@ -2616,11 +2622,17 @@ def build_parser():
         action="store_false",
         dest="embed",
         default=True,
-        help="Create separate index.html + conversations.jsonl (requires web server). Default: embed data in single HTML file",
+        help=(
+            "Create separate index.html + conversations.jsonl (requires web server)."
+            " Default: embed data in single HTML file"
+        ),
     )
     export_parser.add_argument(
         "--media-dir",
-        help="Output media files to directory instead of embedding. Path relative to output file (default: embed in HTML)",
+        help=(
+            "Output media files to directory instead of embedding."
+            " Path relative to output file (default: embed in HTML)"
+        ),
     )
     # Organization filters
     export_parser.add_argument(
@@ -2646,7 +2658,10 @@ def build_parser():
         "--hugo-organize",
         choices=["none", "tags", "source", "date"],
         default="date",
-        help="Hugo: organize conversations into subdirectories (default: date). 'none' = flat, 'tags' = by tag, 'source' = by source, 'date' = by date",
+        help=(
+            "Hugo: organize conversations into subdirectories (default: date)."
+            " 'none' = flat, 'tags' = by tag, 'source' = by source, 'date' = by date"
+        ),
     )
     # ECHO-specific options
     export_parser.add_argument(

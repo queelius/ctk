@@ -9,13 +9,11 @@ Security model:
 """
 
 import ast
-import hashlib
 import importlib
 import importlib.util
 import inspect
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Type, cast
@@ -197,7 +195,6 @@ class PluginASTValidator(ast.NodeVisitor):
 
         # Check imported names for dangerous patterns
         for alias in node.names:
-            full_name = f"{module_name}.{alias.name}" if module_name else alias.name
             if alias.name in self.DANGEROUS_CALLS:
                 self.violations.append(
                     f"Import of dangerous function '{alias.name}' at line {node.lineno}"
