@@ -7,13 +7,11 @@ not implementation details. They should enable confident refactoring.
 
 import json
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ctk.cli import cmd_export, cmd_import, cmd_list, cmd_search, main
-from ctk.core.models import ConversationMetadata, ConversationTree
+from ctk.cli import cmd_export, cmd_import, main
 
 
 class TestCLICommandBehaviors:
@@ -391,15 +389,13 @@ class TestCLIConfigurationHandling:
 
     def test_verbose_logging_configuration(self):
         """Test that verbose flag configures logging appropriately"""
-        import logging
-
         # Given: CLI with verbose flag
         with patch("sys.argv", ["ctk", "--verbose", "lib", "list", "--db", "test.db"]):
             # When: Running with verbose flag
             try:
                 main()
-            except:
-                pass  # We expect this to fail due to mocking, focus on logging setup
+            except (SystemExit, Exception):
+                pass  # argparse may sys.exit on the mocked argv; we only check flag parsing
 
             # Then: Should configure verbose logging (root logger level)
             # Note: The verbose flag should set logging level to DEBUG
