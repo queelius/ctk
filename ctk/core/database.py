@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, U
 if TYPE_CHECKING:
     from .models import PaginatedResult
 
-from sqlalchemy import and_, create_engine, func, or_, text
+from sqlalchemy import and_, create_engine, distinct, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -1044,10 +1044,13 @@ class ConversationDB:
             if tag:
                 query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
             if tags:
-                # Match any of the tags
+                # Match any of the tags. DISTINCT so a conversation carrying
+                # more than one of the requested tags is returned once, not
+                # once per matching tag.
                 query = query.join(ConversationModel.tags).filter(
                     TagModel.name.in_(tags)
                 )
+                query = query.distinct()
 
             # Archive filtering
             if not include_archived and archived is None:
@@ -1153,7 +1156,10 @@ class ConversationDB:
         materialised in Python.
         """
         with self.session_scope() as session:
-            query = session.query(func.count(ConversationModel.id))
+            # COUNT(DISTINCT id): a conversation matching several of the
+            # requested tags joins to one row per matching tag, which would
+            # otherwise inflate the count (and the REST `total`).
+            query = session.query(func.count(distinct(ConversationModel.id)))
 
             if source:
                 query = query.filter(ConversationModel.source == source)

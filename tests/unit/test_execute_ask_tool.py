@@ -31,7 +31,11 @@ def db():
     database.close()
 
 
-# Tools that take a conversation_id and resolve it via _resolve_conversation_id.
+# All 15 tool branches in execute_ask_tool that resolve a conversation_id via
+# _resolve_conversation_id (the helper whose absence used to make every one of
+# these silently fail). Tools needing extra args (rename/tag/export) still
+# resolve the id first, so an unknown id reports "not found" before any
+# missing-arg error, and a valid id never trips the old NameError.
 RESOLVING_TOOLS = [
     "star_conversation",
     "unstar_conversation",
@@ -39,7 +43,13 @@ RESOLVING_TOOLS = [
     "unpin_conversation",
     "archive_conversation",
     "unarchive_conversation",
+    "rename_conversation",
+    "show_conversation_tree",
     "delete_conversation",
+    "tag_conversation",
+    "remove_tag",
+    "export_conversation",
+    "duplicate_conversation",
     "list_conversation_paths",
     "auto_tag_conversation",
 ]

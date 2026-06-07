@@ -1488,6 +1488,8 @@ def execute_ask_tool(
 
         elif tool_name == "list_conversation_paths":
             conv_id_arg = tool_args.get("conversation_id", "")
+            if not conv_id_arg:
+                return "Error: conversation_id required"
             conv_id = _resolve_conversation_id(db, conv_id_arg)
             if conv_id.startswith("Error:"):
                 return f"Conversation not found: {conv_id_arg}"
@@ -1552,6 +1554,8 @@ def execute_ask_tool(
 
         elif tool_name == "auto_tag_conversation":
             conv_id_arg = tool_args.get("conversation_id", "")
+            if not conv_id_arg:
+                return "Error: conversation_id required"
             conv_id = _resolve_conversation_id(db, conv_id_arg)
             if conv_id.startswith("Error:"):
                 return f"Conversation not found: {conv_id_arg}"
