@@ -37,6 +37,15 @@ direction is internally consistent.
 | **D** | TUI as a real chat client | Interruptibility, edit/regenerate, streaming-with-tools, responsiveness | Medium to High |
 | **E** | DB foundations and scale | Versioned migrations, FTS5 tests, single-source metadata, perf/scale | High |
 | **F** | Trustworthy docs and onboarding | Regenerate the stale doc site, fix examples, add a staleness guard | Low to Medium |
+| **G** | Repo-wide lint sweep (black + flake8) | Bring the whole repo to a green lint job: black-format every file and flake8-clean the remaining pre-existing issues | Low (mechanical) |
+
+Sub-project G was discovered during sub-project A's execution: the CI lint job runs
+`black --check`, `flake8`, and `mypy`, and on `master` it was already red on both black
+(76 files needing reformat) and flake8 (432 issues), a pre-existing debt the original plan
+did not scope. Sub-project A black-formatted and flake8-cleaned only the files it touched
+(so it adds no debt and reaches mypy 0); G is the standalone, mostly-mechanical follow-up that
+brings the remaining files to green so the lint job passes repo-wide. G is independent and can
+run any time after A.
 
 Two themes are split so foundational parts run early and scale/regeneration parts run late:
 
@@ -92,6 +101,7 @@ Each sub-project gets a `design` doc (and later an `implementation` doc) under `
 | D | `YYYY-MM-DD-tui-chat-client-design.md` (TBD) |
 | E-scale | `YYYY-MM-DD-search-scaling-design.md` (TBD) |
 | F-full | `YYYY-MM-DD-docs-regeneration-design.md` (TBD) |
+| G | (mechanical; no design doc needed: run `make format` repo-wide, then a flake8 sweep) |
 
 Each sub-project runs its own brainstorm, spec, writing-plans, implement, and review cycle. We are
 currently at sub-project A.
