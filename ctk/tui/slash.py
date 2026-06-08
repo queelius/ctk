@@ -167,10 +167,11 @@ def cmd_model(app: "CTKApp", args: str) -> str:
         if app.provider is None:
             return "No provider configured."
         profile = app.provider.profile_name or "(unknown)"
+        base_url = getattr(app.provider, "base_url", None)
         return (
             f"Current model: {app.provider.model}\n"
             f"  profile:  {profile}\n"
-            f"  base_url: {app.provider.base_url}"
+            f"  base_url: {base_url}"
         )
     if app.provider is None:
         return "No provider configured; cannot switch models."
@@ -233,9 +234,10 @@ def cmd_provider(app: "CTKApp", args: str) -> str:
     # on B.
     app.set_provider(new_provider)
     app._refresh_status()
+    new_base_url = getattr(new_provider, "base_url", None)
     return (
         f"Switched to provider '{new_name}' "
-        f"(model={new_provider.model}, base_url={new_provider.base_url})."
+        f"(model={new_provider.model}, base_url={new_base_url})."
     )
 
 
@@ -285,12 +287,20 @@ def _toggle_flag(app: "CTKApp", flag: str) -> Optional[str]:
     if method is None:
         return f"db has no {flag}_conversation method."
     # Read the current value from DB so we toggle correctly.
-    meta_attr = f"{flag}red_at" if flag == "star" else f"{flag}ned_at" if flag == "pin" else "archived_at"
+    if flag == "star":
+        meta_attr = "starred_at"
+        suffix = "red"
+    elif flag == "pin":
+        meta_attr = "pinned_at"
+        suffix = "ned"
+    else:
+        meta_attr = "archived_at"
+        suffix = "d"
     is_set = bool(getattr(app._current_tree.metadata, meta_attr, None))
     method(conv_id, not is_set)
     if app.sidebar is not None:
         app.sidebar.refresh_list()
-    return f"{flag.capitalize()}{'red' if flag == 'star' else 'ned' if flag == 'pin' else 'd'} conversation."
+    return f"{flag.capitalize()}{suffix} conversation."
 
 
 @register("star", summary="Toggle starred flag on current conversation", usage="/star")
@@ -303,12 +313,18 @@ def cmd_pin(app: "CTKApp", args: str) -> Optional[str]:
     return _toggle_flag(app, "pin")
 
 
-@register("archive", summary="Toggle archived flag on current conversation", usage="/archive")
+@register(
+    "archive", summary="Toggle archived flag on current conversation", usage="/archive"
+)
 def cmd_archive(app: "CTKApp", args: str) -> Optional[str]:
     return _toggle_flag(app, "archive")
 
 
-@register("tag", summary="Add tag(s) to the current conversation", usage="/tag <tag> [tag ...]")
+@register(
+    "tag",
+    summary="Add tag(s) to the current conversation",
+    usage="/tag <tag> [tag ...]",
+)
 def cmd_tag(app: "CTKApp", args: str) -> Optional[str]:
     if app._current_tree is None:
         return "No conversation loaded."
@@ -321,7 +337,9 @@ def cmd_tag(app: "CTKApp", args: str) -> Optional[str]:
     return f"Tagged: {', '.join(tags)}"
 
 
-@register("untag", summary="Remove a tag from the current conversation", usage="/untag <tag>")
+@register(
+    "untag", summary="Remove a tag from the current conversation", usage="/untag <tag>"
+)
 def cmd_untag(app: "CTKApp", args: str) -> Optional[str]:
     if app._current_tree is None:
         return "No conversation loaded."
@@ -334,7 +352,11 @@ def cmd_untag(app: "CTKApp", args: str) -> Optional[str]:
     return f"Untagged: {tag}"
 
 
-@register("export", summary="Export current conversation to a file", usage="/export <path> [json|jsonl|md]")
+@register(
+    "export",
+    summary="Export current conversation to a file",
+    usage="/export <path> [json|jsonl|md]",
+)
 def cmd_export(app: "CTKApp", args: str) -> Optional[str]:
     """Export the current conversation to a single file.
 
@@ -367,7 +389,11 @@ def cmd_export(app: "CTKApp", args: str) -> Optional[str]:
     return f"Exported to {path} ({fmt})."
 
 
-@register("attach", summary="Attach a file as a system message (skip modal)", usage="/attach <path>")
+@register(
+    "attach",
+    summary="Attach a file as a system message (skip modal)",
+    usage="/attach <path>",
+)
 def cmd_attach(app: "CTKApp", args: str) -> Optional[str]:
     path = args.strip()
     if not path:
@@ -378,12 +404,20 @@ def cmd_attach(app: "CTKApp", args: str) -> Optional[str]:
     return None  # the helper already posts a Textual notification
 
 
-@register("fork", summary="Fork at current path tail (no need to focus a message)", usage="/fork")
+@register(
+    "fork",
+    summary="Fork at current path tail (no need to focus a message)",
+    usage="/fork",
+)
 def cmd_fork(app: "CTKApp", args: str) -> Optional[str]:
     return _fork_or_branch_at_tail(app, preserve_tree=False)
 
 
-@register("branch", summary="Branch at current path tail (preserve full tree)", usage="/branch")
+@register(
+    "branch",
+    summary="Branch at current path tail (preserve full tree)",
+    usage="/branch",
+)
 def cmd_branch(app: "CTKApp", args: str) -> Optional[str]:
     return _fork_or_branch_at_tail(app, preserve_tree=True)
 
@@ -419,7 +453,9 @@ def _fork_or_branch_at_tail(app: "CTKApp", preserve_tree: bool) -> Optional[str]
     return f"{verb}ed at tail — new id {new_id[:8]} (old: {old_id[:8]})"
 
 
-@register("clone", summary="Duplicate the current conversation as a sibling", usage="/clone")
+@register(
+    "clone", summary="Duplicate the current conversation as a sibling", usage="/clone"
+)
 def cmd_clone(app: "CTKApp", args: str) -> Optional[str]:
     """Save a copy of the current conversation under a new id."""
     if app._current_tree is None:
@@ -432,7 +468,11 @@ def cmd_clone(app: "CTKApp", args: str) -> Optional[str]:
     return f"Cloned to new conversation {new_tree.id[:8]}."
 
 
-@register("snapshot", summary="Save a dated snapshot of the current conversation", usage="/snapshot")
+@register(
+    "snapshot",
+    summary="Save a dated snapshot of the current conversation",
+    usage="/snapshot",
+)
 def cmd_snapshot(app: "CTKApp", args: str) -> Optional[str]:
     """Like /clone but prefixes the title with today's date."""
     from datetime import date
@@ -449,7 +489,11 @@ def cmd_snapshot(app: "CTKApp", args: str) -> Optional[str]:
     return f"Snapshot saved as {new_tree.id[:8]}."
 
 
-@register("delete", summary="Delete the current conversation entirely (confirm)", usage="/delete")
+@register(
+    "delete",
+    summary="Delete the current conversation entirely (confirm)",
+    usage="/delete",
+)
 def cmd_delete(app: "CTKApp", args: str) -> Optional[str]:
     """Delete the loaded conversation. Requires --force to skip confirm."""
     from ctk.tui.modals import ConfirmModal
@@ -485,19 +529,29 @@ def cmd_delete(app: "CTKApp", args: str) -> Optional[str]:
     return None  # Modal posts its own notification on completion.
 
 
-@register("delete-subtree", summary="Delete focused message + descendants (confirm)", usage="/delete-subtree")
+@register(
+    "delete-subtree",
+    summary="Delete focused message + descendants (confirm)",
+    usage="/delete-subtree",
+)
 def cmd_delete_subtree(app: "CTKApp", args: str) -> Optional[str]:
     app.action_delete_subtree_at_focus()
     return None
 
 
-@register("extract", summary="Copy focused subtree as a new conversation", usage="/extract")
+@register(
+    "extract", summary="Copy focused subtree as a new conversation", usage="/extract"
+)
 def cmd_extract(app: "CTKApp", args: str) -> Optional[str]:
     app.action_extract_subtree_at_focus()
     return None
 
 
-@register("detach", summary="Move focused subtree out as a new conversation (confirm)", usage="/detach")
+@register(
+    "detach",
+    summary="Move focused subtree out as a new conversation (confirm)",
+    usage="/detach",
+)
 def cmd_detach(app: "CTKApp", args: str) -> Optional[str]:
     """detach = extract + delete_subtree on the source.
 
@@ -547,13 +601,21 @@ def cmd_detach(app: "CTKApp", args: str) -> Optional[str]:
     return None
 
 
-@register("promote", summary="Make focused message's path the only path (confirm)", usage="/promote")
+@register(
+    "promote",
+    summary="Make focused message's path the only path (confirm)",
+    usage="/promote",
+)
 def cmd_promote(app: "CTKApp", args: str) -> Optional[str]:
     app.action_promote_path_at_focus()
     return None
 
 
-@register("graft", summary="Attach another conversation under focused message", usage="/graft <conv-id-prefix>")
+@register(
+    "graft",
+    summary="Attach another conversation under focused message",
+    usage="/graft <conv-id-prefix>",
+)
 def cmd_graft(app: "CTKApp", args: str) -> Optional[str]:
     """Attach a copy of another conversation under the focused message.
 
@@ -596,7 +658,9 @@ def cmd_clear(app: "CTKApp", args: str) -> Optional[str]:
     return None
 
 
-@register("sql", summary="Run a read-only SQL query on the database", usage="/sql <query>")
+@register(
+    "sql", summary="Run a read-only SQL query on the database", usage="/sql <query>"
+)
 def cmd_sql(app: "CTKApp", args: str) -> str:
     """Execute a read-only SQL query and return the rows as text.
 

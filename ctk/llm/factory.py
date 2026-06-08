@@ -34,8 +34,11 @@ def list_profiles() -> List[str]:
     """
     cfg = get_config()
     providers = cfg.get("providers", {}) or {}
-    return sorted(name for name, value in providers.items()
-                  if name != "default" and isinstance(value, dict))
+    return sorted(
+        name
+        for name, value in providers.items()
+        if name != "default" and isinstance(value, dict)
+    )
 
 
 def list_profile_summaries() -> List[Tuple[str, Dict[str, Any]]]:
@@ -47,8 +50,7 @@ def list_profile_summaries() -> List[Tuple[str, Dict[str, Any]]]:
     re-walking the config themselves.
     """
     cfg = get_config()
-    return [(name, cfg.get_provider_config(name) or {})
-            for name in list_profiles()]
+    return [(name, cfg.get_provider_config(name) or {}) for name in list_profiles()]
 
 
 def active_profile_name(explicit: Optional[str] = None) -> str:
@@ -81,9 +83,7 @@ def build_provider(
     provider_config = cfg.get_provider_config(name) or {}
 
     resolved: Dict[str, Any] = {
-        "model": model
-        or provider_config.get("default_model")
-        or "gpt-3.5-turbo",
+        "model": model or provider_config.get("default_model") or "gpt-3.5-turbo",
         "base_url": base_url
         or provider_config.get("base_url")
         or os.environ.get("OPENAI_BASE_URL")
@@ -92,9 +92,7 @@ def build_provider(
         # ``muse`` reads MUSE_API_KEY. Falls back to the canonical
         # OPENAI_API_KEY so users who only set that don't have to mirror
         # it across profiles.
-        "api_key": api_key
-        or cfg.get_api_key(name)
-        or os.environ.get("OPENAI_API_KEY"),
+        "api_key": api_key or cfg.get_api_key(name) or os.environ.get("OPENAI_API_KEY"),
         "timeout": timeout or provider_config.get("timeout") or 120,
         # The profile this provider was built from; readers reach it via
         # ``provider.profile_name`` (see LLMProvider.__init__).

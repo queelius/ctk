@@ -17,11 +17,10 @@ Adding a new filter mode means: append a ``(label, mode_key)`` tuple to
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from textual.containers import Vertical
-from textual.widgets import DataTable, Static, Tabs, Tab
+from textual.widgets import DataTable, Static, Tab, Tabs
 
 from ctk.core.database import ConversationDB
 from ctk.core.models import PaginatedResult
@@ -67,11 +66,9 @@ class ConversationList(Vertical):
         super().__init__(id="sidebar")
         self._db = db
         self._conversations: List = []
-        self._table = DataTable(cursor_type="row", zebra_stripes=True)
+        self._table: DataTable = DataTable(cursor_type="row", zebra_stripes=True)
         # ``Tabs`` builds tabs from positional Tab children at compose time.
-        self._tabs = Tabs(
-            *[Tab(label, id=tab_id) for tab_id, label in _TAB_DEFS]
-        )
+        self._tabs = Tabs(*[Tab(label, id=tab_id) for tab_id, label in _TAB_DEFS])
         self._title_label = Static("conversations", id="sidebar-title")
         self._search: Optional[str] = None
         self._mode: str = "all"
@@ -164,7 +161,7 @@ class ConversationList(Vertical):
     # Mode -> extra filter kwargs for ``list_conversations``. "all" (and
     # any unknown mode) maps to no filters; "recent" is handled separately
     # because it isn't a paginated view.
-    _MODE_FILTERS = {
+    _MODE_FILTERS: Dict[str, Dict[str, Any]] = {
         "all": {},
         "starred": {"starred": True},
         "pinned": {"pinned": True},
@@ -174,25 +171,32 @@ class ConversationList(Vertical):
     def _fetch_page(self, cursor: str) -> PaginatedResult:
         """Run the right cursor-mode DB query for the current mode + search."""
         ps = self.DEFAULT_PAGE_SIZE
-        # Search overlay overrides the tab — searching against the
+        # Search overlay overrides the tab -- searching against the
         # whole DB is more useful than searching within a single tab.
         if self._search:
-            return self._db.search_conversations(
-                self._search, cursor=cursor, page_size=ps
+            # cursor is always provided, so db returns PaginatedResult.
+            return cast(
+                PaginatedResult,
+                self._db.search_conversations(
+                    self._search, cursor=cursor, page_size=ps
+                ),
             )
 
         if self._mode == "recent":
             # "Recent" is a fixed 20-row snapshot, not a paginated view:
             # always fetch page 1 and drop has_more/next_cursor so
             # load_more() stays a no-op on this tab.
-            page = self._db.list_conversations(cursor="", page_size=20)
-            return PaginatedResult(
-                items=page.items, next_cursor=None, has_more=False
+            recent = cast(
+                PaginatedResult,
+                self._db.list_conversations(cursor="", page_size=20),
             )
+            return PaginatedResult(items=recent.items, next_cursor=None, has_more=False)
 
         filters = self._MODE_FILTERS.get(self._mode, {})
-        return self._db.list_conversations(
-            cursor=cursor, page_size=ps, **filters
+        # cursor is always provided, so db returns PaginatedResult.
+        return cast(
+            PaginatedResult,
+            self._db.list_conversations(cursor=cursor, page_size=ps, **filters),
         )
 
     def _merge_page(self, page: PaginatedResult) -> int:
@@ -217,9 +221,7 @@ class ConversationList(Vertical):
         """Reflect pagination state in the sidebar header."""
         n = len(self._conversations)
         if self._has_more:
-            self._title_label.update(
-                f"conversations · {n} loaded · more (Ctrl+L)"
-            )
+            self._title_label.update(f"conversations · {n} loaded · more (Ctrl+L)")
         elif n > 0:
             self._title_label.update(f"conversations · {n}")
         else:
