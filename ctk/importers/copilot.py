@@ -12,8 +12,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.core.plugin import ImporterPlugin
 
 logger = logging.getLogger(__name__)
@@ -115,12 +120,13 @@ class CopilotImporter(ImporterPlugin):
 
         for ws_dir in ws_dirs:
             # Get project info from workspace.json if available
-            project_path = None
+            project_path: Optional[str] = None
             ws_json = ws_dir / "workspace.json"
             if ws_json.exists():
                 try:
                     ws_data = json.loads(ws_json.read_text())
-                    project_path = ws_data.get("folder")
+                    folder = ws_data.get("folder")
+                    project_path = str(folder) if folder is not None else None
                 except Exception:
                     pass
 
@@ -204,7 +210,10 @@ class CopilotImporter(ImporterPlugin):
         return "requests" in data or "messages" in data or "sessionId" in data
 
     def _parse_chat_session(
-        self, data: Dict[str, Any], session_id: str = None, project_path: str = None
+        self,
+        data: Dict[str, Any],
+        session_id: Optional[str] = None,
+        project_path: Optional[str] = None,
     ) -> Optional[ConversationTree]:
         """Parse Copilot chat session data (based on copikit approach)"""
         # Extract session info

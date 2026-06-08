@@ -6,30 +6,52 @@ when multiple connections attempt to migrate simultaneously.
 """
 
 import fcntl
-import json
 import logging
 import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple, Union
 
-from sqlalchemy import and_, create_engine, func, or_, select, text
-from sqlalchemy.engine import Engine
+if TYPE_CHECKING:
+    from .models import PaginatedResult
+
+from sqlalchemy import and_, create_engine, distinct, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from .constants import (AMBIGUITY_CHECK_LIMIT, DEFAULT_SEARCH_LIMIT,
-                        DEFAULT_TIMELINE_LIMIT, MIGRATION_LOCK_TIMEOUT,
-                        SEARCH_BUFFER, TITLE_MATCH_BOOST)
-from .db_models import (Base, ConversationModel, CurrentCommunityModel,
-                        CurrentGraphModel, CurrentNodeMetricsModel,
-                        EmbeddingModel, EmbeddingSessionModel, MessageModel,
-                        PathModel, RoleEnum, SimilarityModel, TagModel,
-                        conversation_tags)
-from .models import (ConversationMetadata, ConversationSummary,
-                     ConversationTree, Message, MessageContent, MessageRole)
+from .constants import (
+    AMBIGUITY_CHECK_LIMIT,
+    DEFAULT_SEARCH_LIMIT,
+    DEFAULT_TIMELINE_LIMIT,
+    MIGRATION_LOCK_TIMEOUT,
+    SEARCH_BUFFER,
+    TITLE_MATCH_BOOST,
+)
+from .db_models import (
+    Base,
+    ConversationModel,
+    CurrentCommunityModel,
+    CurrentGraphModel,
+    CurrentNodeMetricsModel,
+    EmbeddingModel,
+    EmbeddingSessionModel,
+    MessageModel,
+    PathModel,
+    RoleEnum,
+    SimilarityModel,
+    TagModel,
+    conversation_tags,
+)
+from .models import (
+    ConversationMetadata,
+    ConversationSummary,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from .pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
@@ -78,7 +100,7 @@ def migration_lock(lock_path: Path, timeout: float = 30.0):
                 logger.debug(f"Migration lock acquired: {lock_path}")
                 yield True
                 return
-            except (IOError, OSError) as e:
+            except (IOError, OSError):
                 if time.time() - start_time > timeout:
                     logger.warning(f"Migration lock timeout after {timeout}s")
                     raise TimeoutError(
@@ -134,7 +156,7 @@ class ConversationDB:
         else:
             # SQLite - use directory structure
             self.db_dir = Path(db_path)
-            self.db_path = self.db_dir / "conversations.db"
+            self.db_path = str(self.db_dir / "conversations.db")
             self.media_dir = self.db_dir / "media"
 
             # Create directory structure
@@ -299,7 +321,8 @@ class ConversationDB:
                 # Check if FTS5 tables already exist
                 result = conn.execute(
                     text(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='conversations_fts'"
                     )
                 )
                 if result.fetchone():
@@ -461,7 +484,8 @@ class ConversationDB:
             with self.engine.connect() as conn:
                 result = conn.execute(
                     text(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'"
+                        "SELECT name FROM sqlite_master"
+                        " WHERE type='table' AND name='conversations_fts'"
                     )
                 )
                 return result.fetchone() is not None
@@ -718,8 +742,9 @@ class ConversationDB:
                 session.add(path_model)
 
             session.commit()
+            msg_count = len(conversation.message_map)
             logger.info(
-                f"Saved conversation {conversation.id} with {len(conversation.message_map)} messages"
+                f"Saved conversation {conversation.id} with {msg_count} messages"
             )
 
         return conversation.id
@@ -1019,10 +1044,13 @@ class ConversationDB:
             if tag:
                 query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
             if tags:
-                # Match any of the tags
+                # Match any of the tags. DISTINCT so a conversation carrying
+                # more than one of the requested tags is returned once, not
+                # once per matching tag.
                 query = query.join(ConversationModel.tags).filter(
                     TagModel.name.in_(tags)
                 )
+                query = query.distinct()
 
             # Archive filtering
             if not include_archived and archived is None:
@@ -1109,6 +1137,61 @@ class ConversationDB:
                     ConversationSummary.from_dict(conv.to_dict())
                     for conv in conversations
                 ]
+
+    def count_conversations(
+        self,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        archived: Optional[bool] = None,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        include_archived: bool = False,
+    ) -> int:
+        """Return the number of conversations matching the given filters.
+
+        Issues a single SQL COUNT(*) query; no rows are fetched or
+        materialised in Python.
+        """
+        with self.session_scope() as session:
+            # COUNT(DISTINCT id): a conversation matching several of the
+            # requested tags joins to one row per matching tag, which would
+            # otherwise inflate the count (and the REST `total`).
+            query = session.query(func.count(distinct(ConversationModel.id)))
+
+            if source:
+                query = query.filter(ConversationModel.source == source)
+            if project:
+                query = query.filter(ConversationModel.project == project)
+            if model:
+                query = query.filter(ConversationModel.model == model)
+            if tag:
+                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
+            if tags:
+                query = query.join(ConversationModel.tags).filter(
+                    TagModel.name.in_(tags)
+                )
+
+            if not include_archived and archived is None:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+            elif archived is True:
+                query = query.filter(ConversationModel.archived_at.isnot(None))
+            elif archived is False:
+                query = query.filter(ConversationModel.archived_at.is_(None))
+
+            if starred is True:
+                query = query.filter(ConversationModel.starred_at.isnot(None))
+            elif starred is False:
+                query = query.filter(ConversationModel.starred_at.is_(None))
+
+            if pinned is True:
+                query = query.filter(ConversationModel.pinned_at.isnot(None))
+            elif pinned is False:
+                query = query.filter(ConversationModel.pinned_at.is_(None))
+
+            return query.scalar() or 0
 
     def iter_conversations(
         self,
@@ -1204,18 +1287,18 @@ class ConversationDB:
 
     def iter_search_results(
         self,
-        query_text: str = None,
-        limit: int = None,
+        query_text: Optional[str] = None,
+        limit: Optional[int] = None,
         title_only: bool = False,
         content_only: bool = False,
-        date_from: datetime = None,
-        date_to: datetime = None,
-        source: str = None,
-        project: str = None,
-        model: str = None,
-        tags: List[str] = None,
-        min_messages: int = None,
-        max_messages: int = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        model: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        min_messages: Optional[int] = None,
+        max_messages: Optional[int] = None,
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
@@ -1343,7 +1426,11 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
+                query = query.filter(
+                    ConversationModel.model.ilike(
+                        f"%{_escape_like(model)}%", escape="\\"
+                    )
+                )
 
             # Tag filters
             if tags:
@@ -1406,20 +1493,20 @@ class ConversationDB:
 
     def search_conversations(
         self,
-        query_text: str = None,
+        query_text: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
         title_only: bool = False,
         content_only: bool = False,
-        date_from: datetime = None,
-        date_to: datetime = None,
-        source: str = None,
-        project: str = None,
-        model: str = None,
-        tags: List[str] = None,
-        min_messages: int = None,
-        max_messages: int = None,
-        has_branches: bool = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        model: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        min_messages: Optional[int] = None,
+        max_messages: Optional[int] = None,
+        has_branches: Optional[bool] = None,
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
@@ -1557,7 +1644,11 @@ class ConversationDB:
             if project:
                 query = query.filter(ConversationModel.project == project)
             if model:
-                query = query.filter(ConversationModel.model.ilike(f"%{_escape_like(model)}%", escape="\\"))
+                query = query.filter(
+                    ConversationModel.model.ilike(
+                        f"%{_escape_like(model)}%", escape="\\"
+                    )
+                )
 
             # Tag filters
             if tags:
@@ -2647,7 +2738,8 @@ class ConversationDB:
             session.flush()
 
             logger.info(
-                f"Created embedding session {session_model.id} with {num_conversations} conversations"
+                f"Created embedding session {session_model.id}"
+                f" with {num_conversations} conversations"
             )
             return session_model.id
 
@@ -2661,7 +2753,7 @@ class ConversationDB:
         with self.session_scope() as session:
             session_model = (
                 session.query(EmbeddingSessionModel)
-                .filter(EmbeddingSessionModel.is_current == True)
+                .filter(EmbeddingSessionModel.is_current.is_(True))
                 .first()
             )
 
@@ -2885,7 +2977,7 @@ class ConversationDB:
             # Delete graph
             count = session.query(CurrentGraphModel).delete()
 
-            logger.info(f"Deleted current graph and associated data")
+            logger.info("Deleted current graph and associated data")
             return count > 0
 
     # ==================== Hierarchical Tag Methods ====================

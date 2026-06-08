@@ -3,14 +3,17 @@ Fluent Python API for CTK - A pythonic interface for conversation management
 """
 
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Union
 
 from ctk.core import registry
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class CTK:
@@ -40,7 +43,7 @@ class CTK:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize CTK with optional database"""
         self.db_path = db_path
-        self._db = None
+        self._db: Optional[ConversationDB] = None
         self._current_conversations: List[ConversationTree] = []
 
     @property

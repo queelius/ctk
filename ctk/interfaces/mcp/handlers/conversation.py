@@ -1,7 +1,7 @@
 """MCP handlers for conversation operations."""
 
 import logging
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import mcp.types as types
 
@@ -224,7 +224,9 @@ async def handle_update_conversation(arguments: dict, db) -> list[types.TextCont
     title = validate_string(arguments.get("title"), "title", MAX_TITLE_LENGTH)
 
     if not conv_id:
-        return [types.TextContent(type="text", text="Error: conversation ID is required")]
+        return [
+            types.TextContent(type="text", text="Error: conversation ID is required")
+        ]
 
     full_id = resolve_conversation_id(conv_id, db=db)
     if not full_id:
@@ -271,7 +273,7 @@ async def handle_update_conversation(arguments: dict, db) -> list[types.TextCont
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "get_conversation": handle_get_conversation,
     "update_conversation": handle_update_conversation,
 }

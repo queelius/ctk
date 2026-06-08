@@ -4,15 +4,19 @@ Filesystem-based importer for coding agent conversations
 
 import json
 import logging
-import os
 import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -70,18 +74,37 @@ class FilesystemCodingImporter(ImporterPlugin):
                     pass
         return False
 
-    def _detect_agent_type(self, path: Path) -> Optional[str]:
-        """Detect which coding agent this directory belongs to"""
-        path_str = str(path).lower()
+    # Exact sentinel names that unambiguously identify a coding agent when they
+    # appear as the final path component (lowercased).  Only canonical names
+    # and their well-known dot-prefixed forms are listed; no substring logic.
+    _AGENT_NAME_MAP: Dict[str, str] = {
+        ".vscode": "copilot",
+        "copilot": "copilot",
+        ".cursor": "cursor",
+        "cursor": "cursor",
+        ".claude": "claude_code",
+        "claude": "claude_code",
+        ".codeium": "codeium",
+        "codeium": "codeium",
+    }
 
-        if ".vscode" in path_str or "copilot" in path_str:
-            return "copilot"
-        elif ".cursor" in path_str or "cursor" in path_str:
-            return "cursor"
-        elif ".claude" in path_str or "claude" in path_str:
-            return "claude_code"
-        elif ".codeium" in path_str or "codeium" in path_str:
-            return "codeium"
+    def _detect_agent_type(self, path: Path) -> Optional[str]:
+        """Detect which coding agent this directory belongs to.
+
+        Uses exact set-membership on the final path component so that
+        directories whose name merely contains a keyword (e.g. 'claude-1000')
+        are not misidentified.  Only the canonical sentinel names listed in
+        ``_AGENT_NAME_MAP`` trigger name-based detection.
+
+        Falls back to presence of well-known sentinel files when the name
+        does not match.
+        """
+        name = path.name.lower()
+
+        # Exact-membership lookup; no substring matching.
+        agent = self._AGENT_NAME_MAP.get(name)
+        if agent is not None:
+            return agent
 
         # Check for specific files that indicate agent type
         if (path / "copilot.db").exists() or (
@@ -288,7 +311,8 @@ class FilesystemCodingImporter(ImporterPlugin):
 
                 # Look for conversation tables
                 cursor.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%conversation%'"
+                    "SELECT name FROM sqlite_master"
+                    " WHERE type='table' AND name LIKE '%conversation%'"
                 )
                 tables = cursor.fetchall()
 
@@ -309,7 +333,8 @@ class FilesystemCodingImporter(ImporterPlugin):
     def _parse_cursor_conversation(self, row: Any) -> Optional[ConversationTree]:
         """Parse Cursor conversation data (stub — format not yet supported)."""
         logger.warning(
-            "Cursor row parser is a stub; row skipped. File an issue with a sample export to add support."
+            "Cursor row parser is a stub; row skipped."
+            " File an issue with a sample export to add support."
         )
         return None
 

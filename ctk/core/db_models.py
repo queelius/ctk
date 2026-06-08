@@ -3,13 +3,25 @@ SQLAlchemy database models for CTK
 """
 
 import enum
-import json
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import (JSON, Boolean, CheckConstraint, Column, DateTime, Enum,
-                        Float, ForeignKey, Index, Integer, String, Table, Text,
-                        UniqueConstraint)
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -323,7 +335,7 @@ class EmbeddingModel(Base):
         """Get embedding as list of floats"""
         return self.embedding_json
 
-    @embedding.setter
+    @embedding.setter  # type: ignore[no-redef]  # mypy does not model hybrid_property setter
     def embedding(self, value):
         """Set embedding from list of floats or numpy array"""
         if hasattr(value, "tolist"):

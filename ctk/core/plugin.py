@@ -9,16 +9,14 @@ Security model:
 """
 
 import ast
-import hashlib
 import importlib
 import importlib.util
 import inspect
 import json
 import logging
-import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, cast
 
 from .models import ConversationTree
 
@@ -197,7 +195,6 @@ class PluginASTValidator(ast.NodeVisitor):
 
         # Check imported names for dangerous patterns
         for alias in node.names:
-            full_name = f"{module_name}.{alias.name}" if module_name else alias.name
             if alias.name in self.DANGEROUS_CALLS:
                 self.violations.append(
                     f"Import of dangerous function '{alias.name}' at line {node.lineno}"
@@ -393,18 +390,26 @@ class PluginRegistry:
             self._discovered = True
             return
 
-        plugin_dir = Path(plugin_dir)
-        if not self._is_plugin_dir_allowed(plugin_dir):
-            logger.warning(f"Plugin directory not allowed: {plugin_dir}")
+        plugin_dir_path: Path = Path(plugin_dir)
+        if not self._is_plugin_dir_allowed(plugin_dir_path):
+            logger.warning(f"Plugin directory not allowed: {plugin_dir_path}")
             return
 
-        importers_dir = plugin_dir / "importers"
+        importers_dir = plugin_dir_path / "importers"
         if importers_dir.exists():
-            self._load_plugins_from_dir(importers_dir, ImporterPlugin, self.importers)
+            self._load_plugins_from_dir(
+                importers_dir,
+                ImporterPlugin,
+                cast(Dict[str, BasePlugin], self.importers),
+            )
 
-        exporters_dir = plugin_dir / "exporters"
+        exporters_dir = plugin_dir_path / "exporters"
         if exporters_dir.exists():
-            self._load_plugins_from_dir(exporters_dir, ExporterPlugin, self.exporters)
+            self._load_plugins_from_dir(
+                exporters_dir,
+                ExporterPlugin,
+                cast(Dict[str, BasePlugin], self.exporters),
+            )
 
     def _load_builtin_plugins(self):
         """Load first-party importers and exporters via package imports."""

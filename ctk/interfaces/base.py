@@ -9,7 +9,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import ConversationTree, Message
 
 
 class ResponseStatus(Enum):
@@ -44,12 +43,16 @@ class InterfaceResponse:
         }
 
     @classmethod
-    def success(cls, data: Any = None, message: str = None) -> "InterfaceResponse":
+    def success(
+        cls, data: Any = None, message: Optional[str] = None
+    ) -> "InterfaceResponse":
         """Create a success response"""
         return cls(status=ResponseStatus.SUCCESS, data=data, message=message)
 
     @classmethod
-    def error(cls, message: str, errors: List[str] = None) -> "InterfaceResponse":
+    def error(
+        cls, message: str, errors: Optional[List[str]] = None
+    ) -> "InterfaceResponse":
         """Create an error response"""
         return cls(status=ResponseStatus.ERROR, message=message, errors=errors or [])
 
@@ -76,7 +79,7 @@ class BaseInterface(ABC):
         self._db: Optional[ConversationDB] = None
 
     @property
-    def db(self) -> ConversationDB:
+    def db(self) -> Optional[ConversationDB]:
         """Lazy-load database connection"""
         if self._db is None and self.db_path:
             self._db = ConversationDB(self.db_path)
@@ -145,7 +148,7 @@ class BaseInterface(ABC):
         self,
         query: str,
         limit: int = 100,
-        filters: Optional[Dict[str, Any]] = None,
+        options: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> InterfaceResponse:
         """
@@ -154,7 +157,7 @@ class BaseInterface(ABC):
         Args:
             query: Search query string
             limit: Maximum number of results
-            filters: Additional filter criteria
+            options: Additional filter criteria
             **kwargs: Additional search options
         """
         pass
@@ -265,7 +268,10 @@ class BaseInterface(ABC):
             f"Error in {self.__class__.__name__}: {str(exception)}", exc_info=True
         )
         debug = os.environ.get("CTK_REST_DEBUG_ERRORS", "").lower() in (
-            "1", "true", "yes", "on",
+            "1",
+            "true",
+            "yes",
+            "on",
         )
         if debug:
             public_message = f"An error occurred: {exception}"

@@ -4,7 +4,6 @@ Test suite for CTK database operations
 Tests merge, diff, intersect, filter, split, dedupe functionality
 """
 
-import json
 import shutil
 import tempfile
 import unittest
@@ -12,10 +11,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ctk.core.database import ConversationDB
-from ctk.core.db_operations import (ConversationComparator, DatabaseOperations,
-                                    DuplicateStrategy, MergeStrategy)
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.db_operations import (
+    ConversationComparator,
+    DatabaseOperations,
+    DuplicateStrategy,
+    MergeStrategy,
+)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class TestDatabaseOperations(unittest.TestCase):
@@ -477,7 +485,7 @@ class TestCLIIntegration(unittest.TestCase):
         """Test CLI merge command execution"""
         # This would test the actual CLI command execution
         # For now, just test that imports work
-        from ctk.cli_db import cmd_merge, expand_globs
+        from ctk.cli_db import expand_globs
 
         # Test glob expansion
         patterns = ["*.db", "test.db"]
@@ -486,8 +494,6 @@ class TestCLIIntegration(unittest.TestCase):
 
     def test_cli_stats_command(self):
         """Test CLI stats command"""
-        from ctk.cli_db import cmd_stats
-
         # Create a test database
         db_path = Path(self.test_dir) / "test.db"
         db = ConversationDB(str(db_path))

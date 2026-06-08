@@ -57,7 +57,7 @@ class Sanitizer:
             SanitizationRule(
                 name="generic_api_key",
                 pattern=re.compile(
-                    r'(?i)(api[_-]?key|apikey|api[_-]?secret|apisecret)[\s:="\']*([A-Za-z0-9_\-]{20,})'
+                    r'(?i)(api[_-]?key|apikey|api[_-]?secret|apisecret)[\s:="\']*([A-Za-z0-9_\-]{20,})'  # noqa: E501
                 ),
                 replacement=r"\1=***REDACTED***",
             ),
@@ -70,7 +70,7 @@ class Sanitizer:
             SanitizationRule(
                 name="aws_secret_key",
                 pattern=re.compile(
-                    r'(?i)(aws[_-]?secret[_-]?access[_-]?key|aws[_-]?secret)[\s:="\']*([A-Za-z0-9/+=]{40})'
+                    r'(?i)(aws[_-]?secret[_-]?access[_-]?key|aws[_-]?secret)[\s:="\']*([A-Za-z0-9/+=]{40})'  # noqa: E501
                 ),
                 replacement=r"\1=***REDACTED***",
             ),
@@ -104,7 +104,7 @@ class Sanitizer:
             SanitizationRule(
                 name="database_url",
                 pattern=re.compile(
-                    r"(?i)(postgres|postgresql|mysql|mongodb|redis|sqlite|mssql):\/\/([^:]+):([^@]+)@"
+                    r"(?i)(postgres|postgresql|mysql|mongodb|redis|sqlite|mssql):\/\/([^:]+):([^@]+)@"  # noqa: E501
                 ),
                 replacement=r"\1://***USER***:***PASS***@",
             ),
@@ -114,7 +114,7 @@ class Sanitizer:
                 pattern=re.compile(
                     r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]+?-----END"
                 ),
-                replacement="-----BEGIN PRIVATE KEY-----\n***REDACTED***\n-----END PRIVATE KEY-----",
+                replacement="-----BEGIN PRIVATE KEY-----\n***REDACTED***\n-----END PRIVATE KEY-----",  # noqa: E501
             ),
             # Credit Cards
             SanitizationRule(
@@ -173,7 +173,7 @@ class Sanitizer:
         if not self.enabled:
             return data
 
-        sanitized = {}
+        sanitized: Dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, str):
                 sanitized[key] = self.sanitize_text(value)

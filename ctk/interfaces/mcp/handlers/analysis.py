@@ -1,7 +1,7 @@
 """MCP handlers for semantic search and network analysis operations."""
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import mcp.types as types
 import numpy as np
@@ -9,7 +9,9 @@ import numpy as np
 from ctk.core.constants import MAX_ID_LENGTH, MAX_QUERY_LENGTH
 from ctk.core.similarity import cosine_similarity, extract_conversation_text
 from ctk.interfaces.mcp.validation import (
-    validate_float, validate_integer, validate_string
+    validate_float,
+    validate_integer,
+    validate_string,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +38,9 @@ def _no_embeddings_error() -> list[types.TextContent]:
     ]
 
 
-def _build_title_cache(db, conversation_ids: List[str], max_len: int = 50) -> Dict[str, str]:
+def _build_title_cache(
+    db, conversation_ids: List[str], max_len: int = 50
+) -> Dict[str, str]:
     """
     Build a lightweight title cache from conversation summaries.
 
@@ -87,9 +91,7 @@ TOOLS: List[types.Tool] = [
                 },
                 "threshold": {
                     "type": "number",
-                    "description": (
-                        "Minimum similarity score 0.0-1.0 (default: 0.1)"
-                    ),
+                    "description": ("Minimum similarity score 0.0-1.0 (default: 0.1)"),
                     "default": 0.1,
                 },
             },
@@ -108,9 +110,7 @@ TOOLS: List[types.Tool] = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": (
-                        "Natural language query to search by meaning"
-                    ),
+                    "description": ("Natural language query to search by meaning"),
                 },
                 "top_k": {
                     "type": "integer",
@@ -220,9 +220,13 @@ async def handle_find_similar(arguments: dict, db) -> list[types.TextContent]:
 
 async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]:
     """Handle semantic_search tool call."""
-    query = validate_string(
+    query_raw = validate_string(
         arguments.get("query"), "query", MAX_QUERY_LENGTH, required=True
     )
+    # validate_string raises ValidationError if required and None, so this
+    # assertion narrows the type for mypy without hiding real failures.
+    assert query_raw is not None
+    query: str = query_raw
     top_k = (
         validate_integer(arguments.get("top_k"), "top_k", min_val=1, max_val=100) or 10
     )
@@ -235,10 +239,11 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
     provider_name = all_embs[0].get("provider", "tfidf")
 
     try:
-        from ctk.core.similarity import (ConversationEmbedder,
-                                         ConversationEmbeddingConfig)
-        from ctk.embeddings.base import (AggregationStrategy,
-                                                      ChunkingStrategy)
+        from ctk.core.similarity import (
+            ConversationEmbedder,
+            ConversationEmbeddingConfig,
+        )
+        from ctk.embeddings.base import AggregationStrategy, ChunkingStrategy
 
         config = ConversationEmbeddingConfig(
             provider=provider_name,
@@ -283,9 +288,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
 
     except Exception as e:
         logger.error(f"Failed to embed query: {e}")
-        return [
-            types.TextContent(type="text", text=f"Error embedding query: {e}")
-        ]
+        return [types.TextContent(type="text", text=f"Error embedding query: {e}")]
 
     # Compare against all stored embeddings
     results = []
@@ -327,7 +330,7 @@ async def handle_semantic_search(arguments: dict, db) -> list[types.TextContent]
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "find_similar": handle_find_similar,
     "semantic_search": handle_semantic_search,
 }

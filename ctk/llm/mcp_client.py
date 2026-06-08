@@ -5,14 +5,13 @@ Provides MCP server management and tool calling capabilities.
 """
 
 import asyncio
-import json
 import threading
-from concurrent.futures import Future
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from pydantic import AnyUrl
 
 
 @dataclass
@@ -79,7 +78,7 @@ class MCPToolResult:
 
         Returns structured data that an LLM can parse and reason about.
         """
-        result = {
+        result: Dict[str, Any] = {
             "success": not self.is_error,
         }
 
@@ -396,7 +395,7 @@ class MCPClient:
             uri: Resource URI
 
         Returns:
-            Tuple of (content, mime_type)
+            Tuple of (first content item, mime_type string)
         """
         if server_name not in self.sessions:
             raise RuntimeError(f"Server '{server_name}' is not connected")
@@ -404,8 +403,11 @@ class MCPClient:
         session = self.sessions[server_name]
 
         try:
-            content, mime_type = await session.read_resource(uri)
-            return content, mime_type
+            result = await session.read_resource(AnyUrl(uri))
+            contents = result.contents
+            first = contents[0] if contents else None
+            mime_type = getattr(first, "mimeType", None) or "application/octet-stream"
+            return first, mime_type
         except Exception as e:
             raise RuntimeError(f"Failed to read resource: {e}")
 

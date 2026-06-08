@@ -5,7 +5,7 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 import json
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
 from ctk.core.plugin import ExporterPlugin
@@ -136,10 +136,10 @@ class HTMLExporter(ExporterPlugin):
     def _prepare_data(
         self,
         conversations: List[ConversationTree],
-        db_dir: str = None,
+        db_dir: Optional[str] = None,
         embed: bool = True,
-        media_dir: str = None,
-    ):
+        media_dir: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """Prepare conversation data and stats
 
         Args:
@@ -151,14 +151,15 @@ class HTMLExporter(ExporterPlugin):
         import base64
         from pathlib import Path
 
-        conv_data = []
-        stats = {
+        conv_data: List[Dict[str, Any]] = []
+        date_range: Dict[str, Any] = {"earliest": None, "latest": None}
+        stats: Dict[str, Any] = {
             "total_conversations": len(conversations),
             "total_messages": 0,
             "sources": {},
             "models": {},
             "tags": {},
-            "date_range": {"earliest": None, "latest": None},
+            "date_range": date_range,
         }
 
         for conv in conversations:
@@ -275,7 +276,8 @@ class HTMLExporter(ExporterPlugin):
                                 import sys
 
                                 print(
-                                    f"Warning: Image not found: {img_ref} (looked in {db_dir}/media/)",
+                                    f"Warning: Image not found: {img_ref}"
+                                    f" (looked in {db_dir}/media/)",
                                     file=sys.stderr,
                                 )
 
@@ -369,9 +371,9 @@ class HTMLExporter(ExporterPlugin):
         include_metadata: bool = True,
         theme: str = "auto",
         embed: bool = True,
-        db_dir: str = None,
-        media_dir: str = None,
-        **kwargs,
+        db_dir: Optional[str] = None,
+        media_dir: Optional[str] = None,
+        **kwargs: Any,
     ) -> str:
         """
         Export conversations to advanced HTML5 application
@@ -427,20 +429,34 @@ class HTMLExporter(ExporterPlugin):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CTK Conversation Browser</title>
-    <meta name="description" content="Interactive conversation browser exported by CTK (Conversation Toolkit)">
+    <meta name="description"
+          content="Interactive conversation browser exported by CTK (Conversation Toolkit)">
     <meta name="generator" content="CTK HTML Exporter v2.0">
 
     <!-- KaTeX for LaTeX math rendering -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"></script>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+          integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV"
+          crossorigin="anonymous">
+    <script defer
+            src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+            integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8"
+            crossorigin="anonymous"></script>
+    <script defer
+            src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+            integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05"
+            crossorigin="anonymous"></script>
 
     <!-- Marked.js for markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 
     <!-- Highlight.js for code syntax highlighting -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css"
+          media="(prefers-color-scheme: light)">
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
+          media="(prefers-color-scheme: dark)">
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
 
     <style>{self._get_css()}</style>
@@ -459,7 +475,8 @@ class HTMLExporter(ExporterPlugin):
                 <button class="tab" data-tab="media">🖼️ Media</button>
             </div>
             <div class="header-actions">
-                <button id="keyboardBtn" class="btn btn-secondary" title="Keyboard shortcuts (?)">⌨️</button>
+                <button id="keyboardBtn" class="btn btn-secondary"
+                        title="Keyboard shortcuts (?)">⌨️</button>
                 <button id="statsBtn" class="btn btn-secondary" title="Statistics">📊</button>
                 <button id="settingsBtn" class="btn btn-secondary" title="Settings">⚙️</button>
                 <button id="themeBtn" class="btn btn-secondary" title="Toggle theme">🌓</button>
@@ -474,8 +491,10 @@ class HTMLExporter(ExporterPlugin):
                         <input type="search" id="mainSearch" class="search-box"
                                placeholder="Search conversations and messages..." autofocus>
                         <div class="search-options">
-                            <label><input type="checkbox" id="searchContent"> Search message content</label>
-                            <label><input type="checkbox" id="searchTitles" checked> Search titles</label>
+                            <label><input type="checkbox" id="searchContent">
+                                Search message content</label>
+                            <label><input type="checkbox" id="searchTitles" checked>
+                                Search titles</label>
                             <label><input type="checkbox" id="searchRegex"> Regex</label>
                         </div>
                     </div>
@@ -490,7 +509,8 @@ class HTMLExporter(ExporterPlugin):
                 <!-- Top Filter Bar -->
                 <div class="filter-bar">
                     <div class="filter-bar-row">
-                        <input type="search" id="filterSearch" placeholder="🔍 Filter conversations..." class="filter-search">
+                        <input type="search" id="filterSearch"
+                               placeholder="🔍 Filter conversations..." class="filter-search">
                         <select id="filterSource" class="filter-select">
                             <option value="">All Sources</option>
                         </select>
@@ -500,9 +520,12 @@ class HTMLExporter(ExporterPlugin):
                         <select id="filterTag" class="filter-select">
                             <option value="">All Tags</option>
                         </select>
-                        <label class="filter-checkbox"><input type="checkbox" id="filterFavorites"> ⭐ Favorites</label>
-                        <label class="filter-checkbox"><input type="checkbox" id="filterUnread"> 📖 Unread</label>
-                        <label class="filter-checkbox"><input type="checkbox" id="filterAnnotated"> 📝 Notes</label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filterFavorites"> ⭐ Favorites</label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filterUnread"> 📖 Unread</label>
+                        <label class="filter-checkbox">
+                            <input type="checkbox" id="filterAnnotated"> 📝 Notes</label>
                         <select id="sortSelect" class="filter-select">
                             <option value="date">Latest first</option>
                             <option value="date-asc">Oldest first</option>
@@ -577,7 +600,8 @@ class HTMLExporter(ExporterPlugin):
                 <div class="media-header">
                     <h2>🖼️ Media Gallery</h2>
                     <div class="media-controls">
-                        <input type="search" id="mediaSearch" placeholder="Filter media..." class="filter-search">
+                        <input type="search" id="mediaSearch"
+                               placeholder="Filter media..." class="filter-search">
                         <select id="mediaSort" class="filter-select">
                             <option value="date">Latest first</option>
                             <option value="date-asc">Oldest first</option>
@@ -611,21 +635,38 @@ class HTMLExporter(ExporterPlugin):
                 </div>
                 <div class="modal-body">
                     <h3>Preferences</h3>
-                    <label>Font Size: <input type="range" id="fontSizeSlider" min="12" max="20" value="14"> <span id="fontSizeValue">14px</span></label>
-                    <label>Messages per page: <input type="number" id="pageSize" min="10" max="100" value="50"></label>
-                    <label><input type="checkbox" id="showTimestamps" checked> Show message timestamps</label>
+                    <label>Font Size:
+                        <input type="range" id="fontSizeSlider" min="12" max="20" value="14">
+                        <span id="fontSizeValue">14px</span></label>
+                    <label>Messages per page:
+                        <input type="number" id="pageSize" min="10" max="100" value="50"></label>
+                    <label><input type="checkbox" id="showTimestamps" checked>
+                        Show message timestamps</label>
                     <label><input type="checkbox" id="compactMode"> Compact view</label>
 
                     <h3>AI Chat</h3>
-                    <p class="help-text">Configure a local LLM endpoint (Ollama, LM Studio, etc.) to continue conversations in the browser.</p>
-                    <label>Endpoint: <input type="text" id="chatEndpoint" placeholder="http://localhost:11434/v1" style="width: 100%;"></label>
-                    <label>Model: <input type="text" id="chatModel" placeholder="e.g. llama3.2, mistral" style="width: 100%;"></label>
-                    <label>Temperature: <input type="number" id="chatTemperature" min="0" max="2" step="0.1" value="0.7" style="width: 4rem;"></label>
-                    <label>System Prompt: <textarea id="chatSystemPrompt" rows="3" style="width: 100%; font-family: inherit;" placeholder="Optional system prompt for all chats"></textarea></label>
+                    <p class="help-text">Configure a local LLM endpoint
+                        (Ollama, LM Studio, etc.) to continue conversations in the browser.</p>
+                    <label>Endpoint:
+                        <input type="text" id="chatEndpoint"
+                               placeholder="http://localhost:11434/v1" style="width: 100%;"></label>
+                    <label>Model:
+                        <input type="text" id="chatModel"
+                               placeholder="e.g. llama3.2, mistral" style="width: 100%;"></label>
+                    <label>Temperature:
+                        <input type="number" id="chatTemperature"
+                               min="0" max="2" step="0.1" value="0.7" style="width: 4rem;"></label>
+                    <label>System Prompt:
+                        <textarea id="chatSystemPrompt" rows="3"
+                                  style="width: 100%; font-family: inherit;"
+                                  placeholder="Optional system prompt for all chats">
+                        </textarea></label>
 
                     <h3>Data Management</h3>
-                    <button id="clearLocalStorage" class="btn btn-danger">Clear All Local Data</button>
-                    <p class="help-text">This will remove all favorites, annotations, collections, and preferences.</p>
+                    <button id="clearLocalStorage" class="btn btn-danger">
+                        Clear All Local Data</button>
+                    <p class="help-text">This will remove all favorites, annotations,
+                        collections, and preferences.</p>
                 </div>
             </div>
         </div>
@@ -637,7 +678,8 @@ class HTMLExporter(ExporterPlugin):
                     <button class="modal-close">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <textarea id="annotationText" placeholder="Enter your note..." rows="6"></textarea>
+                    <textarea id="annotationText"
+                              placeholder="Enter your note..." rows="6"></textarea>
                     <div class="modal-actions">
                         <button id="saveAnnotation" class="btn">Save Note</button>
                         <button id="deleteAnnotation" class="btn btn-danger">Delete Note</button>
@@ -712,7 +754,8 @@ class HTMLExporter(ExporterPlugin):
 
         <!-- Footer -->
         <footer class="app-footer">
-            Exported by <a href="https://github.com/your-org/ctk" target="_blank">CTK</a> (Conversation Toolkit)
+            Exported by <a href="https://github.com/your-org/ctk"
+                          target="_blank">CTK</a> (Conversation Toolkit)
             • Press <kbd>?</kbd> for keyboard shortcuts
         </footer>
     </div>
@@ -2415,7 +2458,9 @@ class AppState {
     addToCollection(collectionName, convIds) {
         let collection = this.collections.find(c => c.name === collectionName);
         if (!collection) {
-            collection = { name: collectionName, conversations: [], created: new Date().toISOString() };
+            collection = {
+                name: collectionName, conversations: [], created: new Date().toISOString()
+            };
             this.collections.push(collection);
         }
         collection.conversations = [...new Set([...collection.conversations, ...convIds])];
@@ -2434,7 +2479,9 @@ class AppState {
     }
 
     clearAllData() {
-        if (confirm('Are you sure? This will delete all favorites, annotations, collections, and preferences.')) {
+        const confirmMsg = 'Are you sure? This will delete all favorites, ' +
+            'annotations, collections, and preferences.';
+        if (confirm(confirmMsg)) {
             localStorage.clear();
             location.reload();
         }
@@ -2614,7 +2661,9 @@ function setupEventListeners() {
     });
 
     // Settings
-    document.getElementById('clearLocalStorage').addEventListener('click', () => state.clearAllData());
+    document.getElementById('clearLocalStorage').addEventListener(
+        'click', () => state.clearAllData()
+    );
     document.getElementById('fontSizeSlider').addEventListener('input', (e) => {
         const size = e.target.value;
         document.getElementById('fontSizeValue').textContent = size + 'px';
@@ -2630,9 +2679,11 @@ function setupEventListeners() {
     const chatPromptEl = document.getElementById('chatSystemPrompt');
 
     const chatSettings = state.preferences.chat || {};
-    if (chatEndpointEl) chatEndpointEl.value = chatSettings.endpoint || 'http://localhost:11434/v1';
+    if (chatEndpointEl)
+        chatEndpointEl.value = chatSettings.endpoint || 'http://localhost:11434/v1';
     if (chatModelEl) chatModelEl.value = chatSettings.model || '';
-    if (chatTempEl) chatTempEl.value = chatSettings.temperature !== undefined ? chatSettings.temperature : 0.7;
+    if (chatTempEl)
+        chatTempEl.value = chatSettings.temperature !== undefined ? chatSettings.temperature : 0.7;
     if (chatPromptEl) chatPromptEl.value = chatSettings.systemPrompt || '';
 
     ['chatEndpoint', 'chatModel', 'chatTemperature', 'chatSystemPrompt'].forEach(id => {
@@ -2919,12 +2970,16 @@ function renderSearchResults(results, query) {
     const container = document.getElementById('searchResults');
 
     if (!query) {
-        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Enter a search query to see results</div>';
+        container.innerHTML =
+            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">' +
+            'Enter a search query to see results</div>';
         return;
     }
 
     if (results.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No results found</div>';
+        container.innerHTML =
+            '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">' +
+            'No results found</div>';
         return;
     }
 
@@ -2941,7 +2996,9 @@ function renderSearchResults(results, query) {
 
         const meta = document.createElement('div');
         meta.className = 'search-result-meta';
-        meta.textContent = `${result.conversation.source} • ${result.matches.length} match${result.matches.length > 1 ? 'es' : ''}`;
+        const matchWord = result.matches.length > 1 ? 'es' : '';
+        meta.textContent =
+            `${result.conversation.source} • ${result.matches.length} match${matchWord}`;
         div.appendChild(meta);
 
         const snippet = document.createElement('div');
@@ -2961,7 +3018,7 @@ function renderSearchResults(results, query) {
 }
 
 function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&');
 }
 
 function appendHighlightedText(container, text, query) {
@@ -3016,10 +3073,13 @@ function getFilteredConversations() {
         if (state.filters.favorites && !state.favorites.has(conv.id)) return false;
         if (state.filters.unread && state.readStatus.has(conv.id)) return false;
         if (state.filters.annotated) {
-            const hasAnnotation = Object.keys(state.annotations).some(k => k.startsWith(conv.id + ':'));
+            const hasAnnotation = Object.keys(state.annotations).some(
+                k => k.startsWith(conv.id + ':')
+            );
             if (!hasAnnotation) return false;
         }
-        if (state.filters.search && !conv.title.toLowerCase().includes(state.filters.search)) return false;
+        if (state.filters.search &&
+            !conv.title.toLowerCase().includes(state.filters.search)) return false;
         return true;
     });
 }
@@ -3480,7 +3540,9 @@ function createMessageElement(conv, msg) {
             img.onerror = () => {
                 imageWrapper.classList.remove('loading');
                 spinner.remove();
-                imageWrapper.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">⚠️ Failed to load image</div>';
+                imageWrapper.innerHTML =
+                    '<div style="padding: 1rem; text-align: center;' +
+                    ' color: var(--text-secondary);">⚠️ Failed to load image</div>';
             };
 
             imageWrapper.appendChild(img);
@@ -3538,7 +3600,7 @@ function createBranchIndicator(parentMsg, childIds, tree, conv) {
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'branch-nav-btn';
-    prevBtn.textContent = '\u25C0';
+    prevBtn.textContent = '\u25c0';
     prevBtn.disabled = currentIndex === 0;
     prevBtn.addEventListener('click', () => {
         switchBranch(parentMsg.id, childIds[currentIndex - 1], tree, conv);
@@ -3546,7 +3608,7 @@ function createBranchIndicator(parentMsg, childIds, tree, conv) {
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'branch-nav-btn';
-    nextBtn.textContent = '\u25B6';
+    nextBtn.textContent = '\u25b6';
     nextBtn.disabled = currentIndex === childIds.length - 1;
     nextBtn.addEventListener('click', () => {
         switchBranch(parentMsg.id, childIds[currentIndex + 1], tree, conv);
@@ -3750,7 +3812,8 @@ async function sendChatMessage(conv, parentMsgId, text, inputContainer) {
         } else if (err.message.startsWith('MODEL_NOT_FOUND:')) {
             const model = err.message.split(':')[1];
             errorDiv.textContent = "Model '" + model + "' not found. Check model name in Settings.";
-        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        } else if (err.message.includes('Failed to fetch') ||
+                   err.message.includes('NetworkError')) {
             errorDiv.textContent = 'Could not reach endpoint. Check that your server is running.';
         } else {
             errorDiv.textContent = err.message;
@@ -3844,7 +3907,8 @@ function renderTimeline() {
         headerDiv.appendChild(periodTitle);
         const periodCount = document.createElement('span');
         periodCount.className = 'timeline-period-count';
-        periodCount.textContent = `${group.conversations.length} conversation${group.conversations.length !== 1 ? 's' : ''}`;
+        const convSuffix = group.conversations.length !== 1 ? 's' : '';
+        periodCount.textContent = `${group.conversations.length} conversation${convSuffix}`;
         headerDiv.appendChild(periodCount);
         periodDiv.appendChild(headerDiv);
 
@@ -3912,7 +3976,9 @@ function renderTimeline() {
     });
 
     if (sortedGroups.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No conversations to display</p>';
+        container.innerHTML =
+            '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">' +
+            'No conversations to display</p>';
     }
 }
 
@@ -4069,7 +4135,9 @@ function renderCollections() {
 
         // Collection header
         const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;';
+        header.style.cssText =
+            'display: flex; justify-content: space-between;' +
+            ' align-items: center; margin-bottom: 1rem;';
 
         const title = document.createElement('div');
         title.className = 'collection-title';
@@ -4096,8 +4164,11 @@ function renderCollections() {
 
         // Collection meta
         const meta = document.createElement('div');
-        meta.style.cssText = 'font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;';
-        meta.textContent = `${collection.conversations.length} conversations • Created ${new Date(collection.created).toLocaleDateString()}`;
+        meta.style.cssText =
+            'font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;';
+        const createdDate = new Date(collection.created).toLocaleDateString();
+        meta.textContent =
+            `${collection.conversations.length} conversations • Created ${createdDate}`;
         div.appendChild(meta);
 
         // Conversations in collection
@@ -4110,7 +4181,10 @@ function renderCollections() {
                 if (!conv) return; // Skip if conversation not found
 
                 const convItem = document.createElement('div');
-                convItem.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px;';
+                convItem.style.cssText =
+                    'display: flex; justify-content: space-between; align-items: center;' +
+                    ' padding: 0.75rem; background: var(--bg-primary);' +
+                    ' border: 1px solid var(--border); border-radius: 4px;';
 
                 const convInfo = document.createElement('div');
                 convInfo.style.cssText = 'flex: 1; cursor: pointer;';
@@ -4143,7 +4217,9 @@ function renderCollections() {
             div.appendChild(convList);
         } else {
             const empty = document.createElement('div');
-            empty.style.cssText = 'text-align: center; padding: 1rem; color: var(--text-secondary); font-style: italic;';
+            empty.style.cssText =
+                'text-align: center; padding: 1rem;' +
+                ' color: var(--text-secondary); font-style: italic;';
             empty.textContent = 'No conversations in this collection yet';
             div.appendChild(empty);
         }
@@ -4202,7 +4278,8 @@ function renderSnippets() {
         div.className = 'snippet-card';
         const p = document.createElement('p');
         const small = document.createElement('small');
-        small.textContent = `${snippet.source || ''} • ${new Date(snippet.timestamp).toLocaleDateString()}`;
+        const snippetDate = new Date(snippet.timestamp).toLocaleDateString();
+        small.textContent = `${snippet.source || ''} • ${snippetDate}`;
         p.appendChild(small);
         div.appendChild(p);
         const pre = document.createElement('pre');
@@ -4289,15 +4366,20 @@ function renderMediaGallery() {
             ? `data:${item.mime_type};base64,${item.data}`
             : item.url;
 
+        const titleTrunc = escapeHtml(item.conversationTitle.substring(0, 30)) +
+            (item.conversationTitle.length > 30 ? '...' : '');
+        const timestampHtml = item.timestamp
+            ? `<span>${new Date(item.timestamp).toLocaleDateString()}</span>`
+            : '';
         div.innerHTML = `
             <img src="${imgSrc}" alt="${escapeHtml(item.caption)}" class="media-item-image">
             <div class="media-item-info">
                 ${captionHtml}
                 <div class="media-item-meta">
                     <a class="media-item-conversation" data-conv-id="${item.conversationId}">
-                        ${escapeHtml(item.conversationTitle.substring(0, 30))}${item.conversationTitle.length > 30 ? '...' : ''}
+                        ${titleTrunc}
                     </a>
-                    ${item.timestamp ? `<span>${new Date(item.timestamp).toLocaleDateString()}</span>` : ''}
+                    ${timestampHtml}
                 </div>
             </div>
         `;
@@ -4359,15 +4441,22 @@ function copyConversation(convId) {
 // Show loading indicator
 const loadingDiv = document.createElement('div');
 loadingDiv.id = 'loading-indicator';
-loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-primary); padding: 2rem; border-radius: 8px; box-shadow: var(--shadow); z-index: 10000; text-align: center;';
-loadingDiv.innerHTML = '<div style="font-size: 1.5rem; margin-bottom: 1rem;">Loading conversations...</div><div id="loading-progress">0 loaded</div>';
+loadingDiv.style.cssText =
+    'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);' +
+    ' background: var(--bg-primary); padding: 2rem; border-radius: 8px;' +
+    ' box-shadow: var(--shadow); z-index: 10000; text-align: center;';
+loadingDiv.innerHTML =
+    '<div style="font-size: 1.5rem; margin-bottom: 1rem;">Loading conversations...</div>' +
+    '<div id="loading-progress">0 loaded</div>';
 document.body.appendChild(loadingDiv);
 
 // Load conversations from JSONL
 fetch('conversations.jsonl')
     .then(response => {
         if (!response.ok) {
-            throw new Error(`Failed to load conversations.jsonl: ${response.status} ${response.statusText}`);
+            throw new Error(
+                `Failed to load conversations.jsonl: ${response.status} ${response.statusText}`
+            );
         }
         return response.text();
     })
@@ -4412,16 +4501,19 @@ fetch('conversations.jsonl')
     .catch(error => {
         console.error('Error loading conversations:', error);
         loadingDiv.innerHTML = `
-            <div style="color: var(--danger); font-size: 1.2rem; margin-bottom: 1rem;">⚠️ Error Loading Data</div>
+            <div style="color: var(--danger); font-size: 1.2rem; margin-bottom: 1rem;">
+                ⚠️ Error Loading Data</div>
             <div style="margin-bottom: 1rem;">${error.message}</div>
             <div style="font-size: 0.9rem; color: var(--text-secondary);">
-                <p>This HTML file needs to load data from <code>conversations.jsonl</code>.</p>
+                <p>This HTML file needs to load data from
+                    <code>conversations.jsonl</code>.</p>
                 <p style="margin-top: 0.5rem;">Make sure:</p>
                 <ul style="text-align: left; margin-top: 0.5rem;">
                     <li>Both files are in the same directory</li>
                     <li>You're viewing this via a web server (not file://)</li>
                 </ul>
-                <p style="margin-top: 1rem;">To serve locally, run: <code>python -m http.server</code></p>
+                <p style="margin-top: 1rem;">To serve locally, run:
+                    <code>python -m http.server</code></p>
             </div>
         `;
     });

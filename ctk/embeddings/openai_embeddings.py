@@ -10,8 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from ctk.embeddings.base import (EmbeddingInfo, EmbeddingProvider,
-                                 EmbeddingResponse)
+from ctk.embeddings.base import EmbeddingInfo, EmbeddingProvider, EmbeddingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +31,10 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.api_key = config.get("api_key")
-        self.base_url = (
-            config.get("base_url") or "https://api.openai.com/v1"
-        ).rstrip("/")
-        self.model = config.get("model") or "text-embedding-3-small"
+        self.base_url = (config.get("base_url") or "https://api.openai.com/v1").rstrip(
+            "/"
+        )
+        self.model: str = str(config.get("model") or "text-embedding-3-small")
         self.timeout = config.get("timeout", 30)
 
         from openai import OpenAI
@@ -63,9 +62,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             metadata={"provider": "openai"},
         )
 
-    def embed_batch(
-        self, texts: List[str], **kwargs: Any
-    ) -> List[EmbeddingResponse]:
+    def embed_batch(self, texts: List[str], **kwargs: Any) -> List[EmbeddingResponse]:
         if not texts:
             return []
         response = self._client.embeddings.create(

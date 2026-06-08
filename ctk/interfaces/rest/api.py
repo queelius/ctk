@@ -2,21 +2,25 @@
 RESTful API implementation for CTK
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from flask import Flask, Response, jsonify, request
-from flask_cors import CORS
+try:
+    from flask import Flask, Response, jsonify, request
+    from flask_cors import CORS
+
+    _FLASK_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised by the rest extra in CI
+    _FLASK_AVAILABLE = False
 
 from ctk.core import registry
-from ctk.core.models import ConversationTree
-from ctk.interfaces.base import (BaseInterface, InterfaceResponse,
-                                 ResponseStatus)
-from ctk.interfaces.rest._validation import (MAX_YAML_BYTES, check_yaml_size,
-                                             clamp_limit, clamp_offset,
-                                             safe_upload_filename,
-                                             validate_export_format)
+from ctk.interfaces.base import BaseInterface, InterfaceResponse, ResponseStatus
+from ctk.interfaces.rest._validation import (
+    clamp_limit,
+    clamp_offset,
+    safe_upload_filename,
+    validate_export_format,
+)
 
 
 class RestInterface(BaseInterface):
@@ -25,6 +29,11 @@ class RestInterface(BaseInterface):
     def __init__(
         self, db_path: Optional[str] = None, config: Optional[Dict[str, Any]] = None
     ):
+        if not _FLASK_AVAILABLE:
+            raise ImportError(
+                "The REST interface requires Flask. Install it with: "
+                "pip install conversation-tk[rest]"
+            )
         super().__init__(db_path, config)
         self.app = Flask(__name__)
         CORS(self.app)  # Enable CORS for web frontends
@@ -87,7 +96,6 @@ class RestInterface(BaseInterface):
             """List conversations with pagination and filters"""
             limit = clamp_limit(request.args.get("limit", type=int))
             offset = clamp_offset(request.args.get("offset", type=int))
-            sort_by = request.args.get("sort_by", "updated_at")
 
             filters = {}
             if request.args.get("source"):
@@ -99,7 +107,7 @@ class RestInterface(BaseInterface):
             if request.args.get("tags"):
                 filters["tags"] = request.args.get("tags").split(",")
 
-            response = self.list_conversations(limit, offset, sort_by, filters)
+            response = self.list_conversations(limit, offset, filters)
             return self._format_response(response)
 
         @self.app.route("/api/conversations/<conversation_id>", methods=["GET"])
@@ -423,8 +431,7 @@ class RestInterface(BaseInterface):
         # Views Endpoints
         # ============================================================
 
-
-    def _format_response(self, response: InterfaceResponse) -> Response:
+    def _format_response(self, response: InterfaceResponse) -> "tuple[Response, int]":
         """Format InterfaceResponse for Flask"""
         status_code_map = {
             ResponseStatus.SUCCESS: 200,
@@ -452,6 +459,10 @@ class RestInterface(BaseInterface):
                 conversations = registry.import_file(source, format=format)
             else:
                 # Direct data
+                if not format:
+                    return InterfaceResponse.error(
+                        "No format specified for non-file import"
+                    )
                 importer = registry.get_importer(format)
                 if not importer:
                     return InterfaceResponse.error(
@@ -497,15 +508,17 @@ class RestInterface(BaseInterface):
                             if conv:
                                 conversations.append(conv)
                     else:
-                        # Get all with filters
-                        query = db.session.query(db.ConversationModel)
-
-                        if filters:
-                            query = self.apply_filters(query, filters)
-
-                        for conv_model in query.all():
-                            conv = db._model_to_tree(conv_model)
-                            conversations.append(conv)
+                        filters = filters or {}
+                        for summary in db.list_conversations(
+                            limit=None,
+                            source=filters.get("source"),
+                            project=filters.get("project"),
+                            model=filters.get("model"),
+                            tags=filters.get("tags"),
+                        ):
+                            conv = db.load_conversation(summary.id)
+                            if conv:
+                                conversations.append(conv)
 
             # Export using registry
             exporter = registry.get_exporter(format)
@@ -514,9 +527,9 @@ class RestInterface(BaseInterface):
                     f"No exporter found for format: {format}"
                 )
 
-            exported_data = exporter.export_conversations(
-                conversations, output_file=output, **kwargs
-            )
+            exported_data = exporter.export_data(conversations, **kwargs)
+            if output:
+                exporter.export_to_file(conversations, output, **kwargs)
 
             return InterfaceResponse.success(
                 data=exported_data,
@@ -585,32 +598,34 @@ class RestInterface(BaseInterface):
         filters: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> InterfaceResponse:
-        """List conversations"""
+        """List conversations.
+
+        Pushes limit and offset to the database so large tables are never
+        fully materialised in Python. The total count is obtained via a
+        dedicated SQL COUNT(*) query that fetches no rows.
+        """
         try:
             conversations = []
             total = 0
 
             if self.db:
                 with self.db as db:
-                    query = db.session.query(db.ConversationModel)
-
-                    if filters:
-                        query = self.apply_filters(query, filters)
-
-                    # Get total count
-                    total = query.count()
-
-                    # Apply sorting
-                    if hasattr(db.ConversationModel, sort_by):
-                        query = query.order_by(
-                            getattr(db.ConversationModel, sort_by).desc()
-                        )
-
-                    # Apply pagination
-                    query = query.limit(limit).offset(offset)
-
-                    for conv_model in query.all():
-                        conversations.append(conv_model.to_dict())
+                    filters = filters or {}
+                    filter_kwargs = {
+                        "source": filters.get("source"),
+                        "project": filters.get("project"),
+                        "model": filters.get("model"),
+                        "tags": filters.get("tags"),
+                    }
+                    # Issue a SQL COUNT(*) without fetching any rows.
+                    total = db.count_conversations(**filter_kwargs)
+                    # Fetch only the requested page via SQL-level limit/offset.
+                    page = db.list_conversations(
+                        limit=limit,
+                        offset=offset,
+                        **filter_kwargs,
+                    )
+                    conversations = [s.to_dict() for s in page]
 
             return InterfaceResponse.success(
                 data={
@@ -673,27 +688,19 @@ class RestInterface(BaseInterface):
                 return InterfaceResponse.error("Database not initialized")
 
             with self.db as db:
-                conv_model = (
-                    db.session.query(db.ConversationModel)
-                    .filter_by(id=conversation_id)
-                    .first()
-                )
-
-                if not conv_model:
+                existing = db.load_conversation(conversation_id)
+                if not existing:
                     return InterfaceResponse.error(
                         f"Conversation {conversation_id} not found"
                     )
 
-                # Update allowed fields
+                meta_updates = {}
                 if "title" in updates:
-                    conv_model.title = updates["title"]
-                if "tags" in updates:
-                    # Handle tag updates
-                    pass
+                    meta_updates["title"] = updates["title"]
                 if "project" in updates:
-                    conv_model.project = updates["project"]
-
-                db.session.commit()
+                    meta_updates["project"] = updates["project"]
+                if meta_updates:
+                    db.update_conversation_metadata(conversation_id, **meta_updates)
 
             return InterfaceResponse.success(
                 message=f"Conversation {conversation_id} updated"
@@ -819,7 +826,7 @@ class RestInterface(BaseInterface):
 
             return InterfaceResponse.success(
                 data={"new_conversation_id": new_conv.id if new_conv else None},
-                message=f"Conversation duplicated",
+                message="Conversation duplicated",
             )
         except Exception as e:
             return self.handle_error(e)
@@ -1050,7 +1057,7 @@ class RestInterface(BaseInterface):
                 paths = conv.get_all_paths()
                 if path_index < 0 or path_index >= len(paths):
                     return InterfaceResponse.error(
-                        f"Path index {path_index} out of range (0-{len(paths)-1})"
+                        f"Path index {path_index} out of range (0-{len(paths) - 1})"
                     )
 
                 path = paths[path_index]
@@ -1063,4 +1070,3 @@ class RestInterface(BaseInterface):
             return InterfaceResponse.success(data=path_data)
         except Exception as e:
             return self.handle_error(e)
-

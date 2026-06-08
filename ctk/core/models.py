@@ -4,12 +4,11 @@ Core data models for conversation representation
 
 import copy as _copy
 import hashlib
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 
 class MessageRole(Enum):
@@ -92,7 +91,7 @@ class MediaContent:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        data = {}
+        data: Dict[str, Any] = {}
         if self.type:
             # Convert ContentType enum to string
             data["type"] = (
@@ -193,11 +192,11 @@ class MessageContent:
 
     def add_image(
         self,
-        url: str = None,
-        path: str = None,
-        data: str = None,
-        caption: str = None,
-        mime_type: str = None,
+        url: Optional[str] = None,
+        path: Optional[str] = None,
+        data: Optional[str] = None,
+        caption: Optional[str] = None,
+        mime_type: Optional[str] = None,
     ):
         """Add an image to the content"""
         img = MediaContent(
@@ -212,7 +211,10 @@ class MessageContent:
         return img
 
     def add_tool_call(
-        self, name: str, arguments: Dict[str, Any] = None, tool_id: str = None
+        self,
+        name: str,
+        arguments: Optional[Dict[str, Any]] = None,
+        tool_id: Optional[str] = None,
     ) -> ToolCall:
         """Add a tool call to the content"""
         tool_call = ToolCall(
@@ -231,7 +233,7 @@ class MessageContent:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        data = {}
+        data: Dict[str, Any] = {}
         # Always include text field, using get_text() to extract from parts if needed
         text_content = self.get_text()
         data["text"] = text_content  # Always include, even if empty
@@ -271,6 +273,33 @@ class MessageContent:
                     MediaContent(
                         type=ContentType.IMAGE,
                         **{k: v for k, v in img_data.items() if k != "type"}
+                    )
+                )
+
+        if "audio" in data:
+            for item in data["audio"]:
+                content.audio.append(
+                    MediaContent(
+                        type=ContentType.AUDIO,
+                        **{k: v for k, v in item.items() if k != "type"}
+                    )
+                )
+
+        if "video" in data:
+            for item in data["video"]:
+                content.video.append(
+                    MediaContent(
+                        type=ContentType.VIDEO,
+                        **{k: v for k, v in item.items() if k != "type"}
+                    )
+                )
+
+        if "documents" in data:
+            for item in data["documents"]:
+                content.documents.append(
+                    MediaContent(
+                        type=ContentType.DOCUMENT,
+                        **{k: v for k, v in item.items() if k != "type"}
                     )
                 )
 
@@ -615,13 +644,15 @@ class ConversationTree:
             return []
         return max(paths, key=len)
 
-    def get_linear_history(self, leaf_message_id: str = None) -> List[Message]:
+    def get_linear_history(
+        self, leaf_message_id: Optional[str] = None
+    ) -> List[Message]:
         """Get linear history from root to a specific message or longest path"""
         if not leaf_message_id:
             return self.get_longest_path()
 
         history = []
-        current_id = leaf_message_id
+        current_id: Optional[str] = leaf_message_id
 
         while current_id:
             message = self.message_map.get(current_id)
@@ -692,9 +723,7 @@ class ConversationTree:
         to_drop = {node_id, *self.descendants_of(node_id)}
         for mid in to_drop:
             self.message_map.pop(mid, None)
-        self.root_message_ids = [
-            r for r in self.root_message_ids if r not in to_drop
-        ]
+        self.root_message_ids = [r for r in self.root_message_ids if r not in to_drop]
         self._invalidate_paths_cache()
         self.metadata.updated_at = datetime.now()
         return len(to_drop)
@@ -774,9 +803,7 @@ class ConversationTree:
         if parent_id not in self.message_map:
             raise KeyError(parent_id)
         # Old-id → new-id mapping for every message in ``other``.
-        id_map: Dict[str, str] = {
-            old: str(uuid.uuid4()) for old in other.message_map
-        }
+        id_map: Dict[str, str] = {old: str(uuid.uuid4()) for old in other.message_map}
         for old_id, msg in other.message_map.items():
             cloned = _copy.deepcopy(msg)
             cloned.id = id_map[old_id]

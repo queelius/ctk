@@ -1,7 +1,7 @@
 """MCP handler for read-only SQL queries."""
 
 import logging
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 import mcp.types as types
 from sqlalchemy import text
@@ -87,9 +87,7 @@ async def handle_execute_sql(arguments: dict, db) -> list[types.TextContent]:
                     text="Error: Only SELECT queries are allowed (database is read-only).",
                 )
             ]
-        return [
-            types.TextContent(type="text", text=f"SQL error: {error_msg}")
-        ]
+        return [types.TextContent(type="text", text=f"SQL error: {error_msg}")]
 
     if not rows:
         return [types.TextContent(type="text", text="Query returned no results.")]
@@ -108,6 +106,6 @@ async def handle_execute_sql(arguments: dict, db) -> list[types.TextContent]:
 
 # --- Handler Dispatch Map ---
 
-HANDLERS: Dict[str, callable] = {
+HANDLERS: Dict[str, Callable] = {
     "execute_sql": handle_execute_sql,
 }

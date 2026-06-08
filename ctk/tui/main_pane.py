@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import List, Optional, Union
 
 from rich.markdown import Markdown
 from rich.text import Text
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, TextArea
 
-from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
+from ctk.core.models import ConversationTree, Message, MessageRole
 
 
 def _role_label(role: MessageRole) -> Text:
     mapping = {
-        MessageRole.USER: ("you",        "bold cyan"),
-        MessageRole.ASSISTANT: ("bot",   "bold green"),
-        MessageRole.SYSTEM: ("system",   "dim italic"),
-        MessageRole.TOOL: ("tool",       "bold yellow"),
+        MessageRole.USER: ("you", "bold cyan"),
+        MessageRole.ASSISTANT: ("bot", "bold green"),
+        MessageRole.SYSTEM: ("system", "dim italic"),
+        MessageRole.TOOL: ("tool", "bold yellow"),
     }
     name, style = mapping.get(role, (str(role), "bold"))
     return Text(name, style=style)
@@ -41,11 +41,14 @@ class MessageBubble(Static):
             MessageRole.ASSISTANT: "message-assistant",
             MessageRole.SYSTEM: "message-system",
         }.get(msg.role, "message-assistant")
-        body = msg.content.get_text() if hasattr(msg.content, "get_text") else str(
-            msg.content
+        body = (
+            msg.content.get_text()
+            if hasattr(msg.content, "get_text")
+            else str(msg.content)
         )
         # Render as markdown for assistant output (code fences etc.); keep
         # user/system as plain text to avoid surprise rendering.
+        renderable: Union[Markdown, Text]
         if msg.role == MessageRole.ASSISTANT:
             renderable = Markdown(body or "")
         else:
@@ -168,9 +171,7 @@ class MessageView(VerticalScroll):
             return False
         new_child = siblings[new_pos]
         # Truncate after parent and rebuild greedy path from new_child.
-        self._path = self._path[: parent_index + 1] + self._extend_path(
-            new_child
-        )
+        self._path = self._path[: parent_index + 1] + self._extend_path(new_child)
         self._render_path()
         return True
 
@@ -211,9 +212,7 @@ class MessageView(VerticalScroll):
             try:
                 from ctk.tui.images import build_image_widgets
 
-                for widget in build_image_widgets(
-                    images, media_root=self._media_root
-                ):
+                for widget in build_image_widgets(images, media_root=self._media_root):
                     self.mount(widget)
             except ImportError:
                 # textual-image not installed; show a minimal fallback
@@ -225,9 +224,7 @@ class MessageView(VerticalScroll):
                         or img.path
                         or f"(embedded {img.mime_type or 'image'})"
                     )
-                    self.mount(
-                        Static(f"[image] {label}", classes="message-system")
-                    )
+                    self.mount(Static(f"[image] {label}", classes="message-system"))
         # Show a branch indicator under any message with siblings beyond
         # the one currently picked. We render it AFTER the bubble whose
         # *child* in the path has siblings — i.e., this is the parent of
@@ -247,9 +244,7 @@ class MessageView(VerticalScroll):
         position = next(
             (i for i, s in enumerate(siblings) if s.id == next_in_path_id), 0
         )
-        self.mount(
-            BranchIndicator(msg.id, position=position, total=len(siblings))
-        )
+        self.mount(BranchIndicator(msg.id, position=position, total=len(siblings)))
 
 
 class ChatInput(TextArea):
@@ -269,11 +264,11 @@ class ChatInput(TextArea):
     def __init__(self) -> None:
         super().__init__(id="input-area", language=None, show_line_numbers=False)
 
-    def _on_key(self, event) -> None:
+    async def _on_key(self, event) -> None:
         # Textual encodes modifier combos in the key string itself:
         # plain "enter" submits; "shift+enter" (or ctrl+enter) inserts a
         # newline via TextArea's default handler. The Key event has no
-        # `.shift` attribute — rely on the string key instead.
+        # `.shift` attribute -- rely on the string key instead.
         if event.key == "enter":
             text = self.text.strip()
             if text:
@@ -284,6 +279,7 @@ class ChatInput(TextArea):
                 return
         # Fall through to TextArea's default handler for everything else
         # (including shift+enter, which inserts a newline).
+        await super()._on_key(event)
 
 
 class MainPane(Vertical):

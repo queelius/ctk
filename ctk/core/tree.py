@@ -9,7 +9,7 @@ ConversationTree model.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -18,8 +18,6 @@ from rich.text import Text
 from .models import ConversationTree
 from .models import Message as DBMessage
 from .models import MessageContent
-from .models import MessageRole as DBMessageRole
-
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +58,7 @@ class TreeMessage:
     def get_path_to_root(self) -> List["TreeMessage"]:
         """Get path from root to this message"""
         path = []
-        current = self
+        current: Optional["TreeMessage"] = self
         while current:
             path.append(current)
             current = current.parent
@@ -80,7 +78,10 @@ class TreeMessage:
         return len(self.children) == 0
 
     def __repr__(self):
-        return f"TreeMessage(id={self.id[:8]}..., role={self.role.value}, children={len(self.children)})"
+        return (
+            f"TreeMessage(id={self.id[:8]}..., role={self.role.value},"
+            f" children={len(self.children)})"
+        )
 
     def format_tree(self, prefix="", is_last=True, max_content_length=30) -> str:
         """
@@ -589,7 +590,7 @@ class ConversationTreeNavigator:
                 metadata=(
                     {"model": tree_msg.model, "user": tree_msg.user}
                     if (tree_msg.model or tree_msg.user)
-                    else None
+                    else {}
                 ),
             )
             tree.add_message(db_msg)

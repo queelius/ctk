@@ -391,9 +391,7 @@ class CTKApp(App):
         """
         if self.main is None:
             return
-        self.main.messages.mount(
-            Static(Text(text), classes="message-system")
-        )
+        self.main.messages.mount(Static(Text(text), classes="message-system"))
         self.main.messages.scroll_end(animate=False)
 
     def _start_streaming_bubble(self, parent_id: str) -> None:
@@ -429,7 +427,9 @@ class CTKApp(App):
                 metadata=ConversationMetadata(
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
-                    model=getattr(self.provider, "model", None) if self.provider else None,
+                    model=(
+                        getattr(self.provider, "model", None) if self.provider else None
+                    ),
                 ),
             )
             self._current_tree = tree
@@ -539,13 +539,9 @@ class CTKApp(App):
                 tool_calls = response.tool_calls or []
 
                 if content:
-                    self.post_message(
-                        _ChatAssistantText(content, final=not tool_calls)
-                    )
+                    self.post_message(_ChatAssistantText(content, final=not tool_calls))
                     history.append(
-                        LLMMessage(
-                            role=LLMMessageRole.ASSISTANT, content=content
-                        )
+                        LLMMessage(role=LLMMessageRole.ASSISTANT, content=content)
                     )
 
                 if not tool_calls:
@@ -601,9 +597,7 @@ class CTKApp(App):
     # ctk.core.network_tools.execute_network_tool instead of the legacy
     # cli.execute_ask_tool dispatcher. Kept as a class-level set so the
     # check is O(1) and the list is greppable.
-    _NETWORK_TOOL_NAMES = frozenset(
-        {"find_similar_conversations", "list_neighbors"}
-    )
+    _NETWORK_TOOL_NAMES = frozenset({"find_similar_conversations", "list_neighbors"})
 
     def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
         """Run a CTK tool, returning its result as a string.
@@ -750,9 +744,7 @@ class CTKApp(App):
             return
         conv_id = self._current_tree.id
         # Flip based on current metadata.
-        starred = bool(
-            getattr(self._current_tree.metadata, "starred_at", None)
-        )
+        starred = bool(getattr(self._current_tree.metadata, "starred_at", None))
         self.db.star_conversation(conv_id, star=not starred)
         self.sidebar.refresh_list()
 
@@ -781,9 +773,9 @@ class CTKApp(App):
                 metadata=ConversationMetadata(
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
-                    model=getattr(self.provider, "model", None)
-                    if self.provider
-                    else None,
+                    model=(
+                        getattr(self.provider, "model", None) if self.provider else None
+                    ),
                 ),
             )
         target_id = self._current_tree.id
@@ -793,9 +785,7 @@ class CTKApp(App):
             lambda result: self._on_system_prompt_saved(target_id, result),
         )
 
-    def _existing_system_prompt(
-        self, tree: ConversationTree
-    ) -> Optional[str]:
+    def _existing_system_prompt(self, tree: ConversationTree) -> Optional[str]:
         """Return the text of the first SYSTEM message in the path, if any."""
         for msg in tree.get_longest_path():
             if msg.role == MessageRole.SYSTEM:
@@ -812,19 +802,14 @@ class CTKApp(App):
         still matches; otherwise reload from the DB. Returns None if
         the tree no longer exists.
         """
-        if (
-            self._current_tree is not None
-            and self._current_tree.id == tree_id
-        ):
+        if self._current_tree is not None and self._current_tree.id == tree_id:
             return self._current_tree
         try:
             return self.db.load_conversation(tree_id)
         except Exception:
             return None
 
-    def _on_system_prompt_saved(
-        self, tree_id: str, new_text: Optional[str]
-    ) -> None:
+    def _on_system_prompt_saved(self, tree_id: str, new_text: Optional[str]) -> None:
         if new_text is None:
             return  # cancelled
         target = self._resolve_tree(tree_id)
@@ -917,9 +902,7 @@ class CTKApp(App):
         tree. If no tree is loaded, defers tree creation until the
         callback so the title can include the basename.
         """
-        target_id = (
-            self._current_tree.id if self._current_tree is not None else None
-        )
+        target_id = self._current_tree.id if self._current_tree is not None else None
         self.push_screen(
             FilePathModal(prompt="Attach file (path will be read as text):"),
             lambda result: self._on_file_attached(target_id, result),
@@ -952,23 +935,24 @@ class CTKApp(App):
                 metadata=ConversationMetadata(
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
-                    model=getattr(self.provider, "model", None)
-                    if self.provider
-                    else None,
+                    model=(
+                        getattr(self.provider, "model", None) if self.provider else None
+                    ),
                 ),
             )
             # If user is still looking at "no tree", adopt the new one.
             if self._current_tree is None:
                 self._current_tree = target
         else:
-            target = self._resolve_tree(target_id)
-            if target is None:
+            resolved = self._resolve_tree(target_id)
+            if resolved is None:
                 self.notify(
                     f"Conversation no longer available; {os.path.basename(path)} "
                     "not attached.",
                     severity="warning",
                 )
                 return
+            target = resolved
 
         # Append the file as a SYSTEM message at the END of the current
         # path (NOT at the root) so it acts as in-line context for the
@@ -1077,8 +1061,7 @@ class CTKApp(App):
             self.main.set_header(self._header_for(self._current_tree))
 
         self.notify(
-            f"{verb}ed at {target_id[:8]} — new id {new_id[:8]} "
-            f"(old: {old_id[:8]})"
+            f"{verb}ed at {target_id[:8]} — new id {new_id[:8]} " f"(old: {old_id[:8]})"
         )
         if self.sidebar is not None:
             self.sidebar.refresh_list()
@@ -1220,14 +1203,11 @@ class CTKApp(App):
             return
         added = self.sidebar.load_more()
         self.notify(
-            f"Loaded {added} more (now showing "
-            f"{self.sidebar.loaded_count()})."
+            f"Loaded {added} more (now showing " f"{self.sidebar.loaded_count()})."
         )
 
     @staticmethod
-    def _truncate_tree_to_message(
-        tree: ConversationTree, target_id: str
-    ) -> None:
+    def _truncate_tree_to_message(tree: ConversationTree, target_id: str) -> None:
         """Prune ``tree`` so only ancestors of target_id (plus target) remain.
 
         Thin wrapper around ``ConversationTree.prune_to`` — kept as a

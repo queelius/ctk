@@ -7,8 +7,13 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -112,8 +117,8 @@ class JSONLImporter(ImporterPlugin):
 
         if isinstance(data, str):
             lines = data.strip().split("\n")
-            current_conv = []
-            current_metadata = {}
+            current_conv: List[Dict[str, Any]] = []
+            current_metadata: Dict[str, Any] = {}
 
             for line in lines:
                 if not line.strip():
@@ -330,4 +335,3 @@ class JSONLImporter(ImporterPlugin):
             conversations.append(tree)
 
         return conversations
-

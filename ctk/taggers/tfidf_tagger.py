@@ -5,9 +5,9 @@ TF-IDF based auto-tagger - fast and local
 import math
 import re
 from collections import Counter
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set
 
-from ctk.core.models import ConversationTree, Message
+from ctk.core.models import ConversationTree
 from ctk.core.plugin import BasePlugin
 
 
@@ -158,7 +158,9 @@ class TFIDFTagger(BasePlugin):
     DOMAIN_PATTERNS = {
         "python": r"\b(python|pip|django|flask|pandas|numpy|jupyter)\b",
         "javascript": r"\b(javascript|js|node|npm|react|vue|angular)\b",
-        "machine-learning": r"\b(ml|machine learning|neural|network|training|model|dataset|tensor)\b",
+        "machine-learning": (
+            r"\b(ml|machine learning|neural|network|training|model|dataset|tensor)\b"
+        ),
         "ai": r"\b(ai|artificial intelligence|gpt|llm|transformer|attention|embedding)\b",
         "database": r"\b(database|sql|postgresql|mysql|mongodb|redis|query)\b",
         "devops": r"\b(docker|kubernetes|k8s|ci/cd|deployment|container)\b",
@@ -354,7 +356,7 @@ class TFIDFTagger(BasePlugin):
         words = self.tokenize(text)
 
         # Basic stats
-        stats = {
+        stats: Dict[str, Any] = {
             "word_count": len(text.split()),
             "unique_words": len(set(words)),
             "message_count": len(conversation.get_longest_path()),

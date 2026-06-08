@@ -52,6 +52,13 @@ setup(
             "black>=23.0",
             "flake8>=6.0",
             "mypy>=1.0",
+            "pytest-timeout>=2.0.0",
+            "flask>=2.0",
+            "flask-cors>=4.0",
+        ],
+        "rest": [
+            "flask>=2.0",
+            "flask-cors>=4.0",
         ],
     },
     entry_points={

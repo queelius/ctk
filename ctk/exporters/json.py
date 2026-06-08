@@ -47,6 +47,7 @@ class JSONExporter(ExporterPlugin):
             include_metadata: Include conversation metadata
             pretty_print: Pretty-print the JSON output
         """
+        data: Any
         if format_style == "ctk":
             data = self._export_ctk_format(conversations, include_metadata)
         elif format_style == "openai":
@@ -77,7 +78,7 @@ class JSONExporter(ExporterPlugin):
         self, conversations: List[ConversationTree], include_metadata: bool
     ) -> Dict[str, Any]:
         """Export in native CTK format (preserves full tree structure)"""
-        data = {
+        data: Dict[str, Any] = {
             "format": "ctk",
             "version": "2.0.0",
             "exported_at": datetime.now().isoformat(),
@@ -85,7 +86,7 @@ class JSONExporter(ExporterPlugin):
         }
 
         for conv in conversations:
-            conv_data = {
+            conv_data: Dict[str, Any] = {
                 "id": conv.id,
                 "title": conv.title,
                 "messages": {},
@@ -96,8 +97,9 @@ class JSONExporter(ExporterPlugin):
                 conv_data["metadata"] = conv.metadata.to_dict()
 
             # Export all messages with full tree structure
+            messages_map: Dict[str, Any] = conv_data["messages"]
             for msg_id, msg in conv.message_map.items():
-                conv_data["messages"][msg_id] = {
+                messages_map[msg_id] = {
                     "id": msg.id,
                     "role": msg.role.value,
                     "content": msg.content.to_dict() if msg.content else {},
@@ -106,7 +108,8 @@ class JSONExporter(ExporterPlugin):
                     "metadata": msg.metadata,
                 }
 
-            data["conversations"].append(conv_data)
+            conversations_list: List[Any] = data["conversations"]
+            conversations_list.append(conv_data)
 
         return data
 
@@ -123,7 +126,7 @@ class JSONExporter(ExporterPlugin):
                 for i, path in enumerate(paths):
                     conv_data = {
                         "title": (
-                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            f"{conv.title or 'Conversation'} - Path {i + 1}"
                             if len(paths) > 1
                             else conv.title
                         ),
@@ -145,7 +148,7 @@ class JSONExporter(ExporterPlugin):
         self, conversations: List[ConversationTree], path_selection: str
     ) -> Dict[str, Any]:
         """Export in Anthropic format"""
-        data = {"conversations": []}
+        data: Dict[str, Any] = {"conversations": []}
 
         for conv in conversations:
             if path_selection == "all":
@@ -154,7 +157,7 @@ class JSONExporter(ExporterPlugin):
                     conv_data = {
                         "uuid": f"{conv.id}-{i}" if len(paths) > 1 else conv.id,
                         "name": (
-                            f"{conv.title or 'Conversation'} - Path {i+1}"
+                            f"{conv.title or 'Conversation'} - Path {i + 1}"
                             if len(paths) > 1
                             else conv.title
                         ),
@@ -182,7 +185,7 @@ class JSONExporter(ExporterPlugin):
         exported_conversations = []
 
         for conv in conversations:
-            base_data = {"id": conv.id, "title": conv.title}
+            base_data: Dict[str, Any] = {"id": conv.id, "title": conv.title}
 
             if include_metadata:
                 base_data["metadata"] = {
@@ -206,12 +209,13 @@ class JSONExporter(ExporterPlugin):
                 # Include all paths
                 base_data["paths"] = []
                 paths = conv.get_all_paths()
+                path_list: List[Any] = base_data["paths"]
                 for i, path in enumerate(paths):
-                    path_data = {
+                    path_data: Dict[str, Any] = {
                         "path_id": f"path_{i}",
                         "messages": self._messages_to_generic_format(path),
                     }
-                    base_data["paths"].append(path_data)
+                    path_list.append(path_data)
             else:
                 # Single path
                 path = self.select_path(conv, path_selection)
@@ -228,14 +232,14 @@ class JSONExporter(ExporterPlugin):
         formatted_messages = []
 
         for msg in messages:
-            msg_data = {
+            msg_data: Dict[str, Any] = {
                 "role": self._map_role_to_openai(msg.role),
                 "content": msg.content.get_text() if msg.content else "",
             }
 
             # Handle multimodal content
             if msg.content and msg.content.has_media():
-                content_parts = []
+                content_parts: List[Dict[str, Any]] = []
 
                 # Add text
                 if msg.content.text:
@@ -262,9 +266,10 @@ class JSONExporter(ExporterPlugin):
 
             # Handle tool calls
             if msg.content and msg.content.has_tools():
-                msg_data["tool_calls"] = []
+                tool_calls_list: List[Dict[str, Any]] = []
+                msg_data["tool_calls"] = tool_calls_list
                 for tool in msg.content.tool_calls:
-                    msg_data["tool_calls"].append(
+                    tool_calls_list.append(
                         {
                             "id": tool.id,
                             "type": "function",
@@ -286,7 +291,7 @@ class JSONExporter(ExporterPlugin):
         formatted_messages = []
 
         for msg in messages:
-            msg_data = {
+            msg_data: Dict[str, Any] = {
                 "role": self._map_role_to_anthropic(msg.role),
                 "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
             }
@@ -297,7 +302,7 @@ class JSONExporter(ExporterPlugin):
 
             if has_media or has_tools:
                 # Build Anthropic content blocks
-                content_blocks = []
+                content_blocks: List[Dict[str, Any]] = []
 
                 # Add text content if present
                 text = msg.content.get_text() if msg.content else ""

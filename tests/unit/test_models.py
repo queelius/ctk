@@ -3,12 +3,16 @@ Unit tests for core models
 """
 
 from datetime import datetime
-from typing import List
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class TestMessageRole:
@@ -328,3 +332,80 @@ class TestConversationTree:
         assert conv.metadata.model == "gpt-4"
         assert "test" in conv.metadata.tags
         assert conv.metadata.project == "research"
+
+
+class TestMessageContentFromDictRoundTrip:
+    """Round-trip serialisation tests for MessageContent.from_dict()."""
+
+    @pytest.mark.unit
+    def test_from_dict_round_trips_all_media_types(self):
+        """from_dict reconstructs images, audio, video, and documents correctly."""
+        from ctk.core.models import ContentType, MediaContent
+
+        original = MessageContent(
+            text="multimodal message",
+            images=[
+                MediaContent(
+                    type=ContentType.IMAGE,
+                    url="https://example.com/img.png",
+                    mime_type="image/png",
+                    caption="a photo",
+                )
+            ],
+            audio=[
+                MediaContent(
+                    type=ContentType.AUDIO,
+                    path="/tmp/clip.mp3",
+                    mime_type="audio/mpeg",
+                )
+            ],
+            video=[
+                MediaContent(
+                    type=ContentType.VIDEO,
+                    data="base64encodedvideo==",
+                    mime_type="video/mp4",
+                )
+            ],
+            documents=[
+                MediaContent(
+                    type=ContentType.DOCUMENT,
+                    url="https://example.com/doc.pdf",
+                    caption="annual report",
+                )
+            ],
+        )
+
+        serialised = original.to_dict()
+        restored = MessageContent.from_dict(serialised)
+
+        # Text
+        assert restored.text == "multimodal message"
+
+        # Images
+        assert len(restored.images) == 1
+        img = restored.images[0]
+        assert img.type == ContentType.IMAGE
+        assert img.url == "https://example.com/img.png"
+        assert img.mime_type == "image/png"
+        assert img.caption == "a photo"
+
+        # Audio
+        assert len(restored.audio) == 1
+        aud = restored.audio[0]
+        assert aud.type == ContentType.AUDIO
+        assert aud.path == "/tmp/clip.mp3"
+        assert aud.mime_type == "audio/mpeg"
+
+        # Video
+        assert len(restored.video) == 1
+        vid = restored.video[0]
+        assert vid.type == ContentType.VIDEO
+        assert vid.data == "base64encodedvideo=="
+        assert vid.mime_type == "video/mp4"
+
+        # Documents
+        assert len(restored.documents) == 1
+        doc = restored.documents[0]
+        assert doc.type == ContentType.DOCUMENT
+        assert doc.url == "https://example.com/doc.pdf"
+        assert doc.caption == "annual report"

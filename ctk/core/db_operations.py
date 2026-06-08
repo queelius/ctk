@@ -4,20 +4,17 @@ Following Unix philosophy: do one thing well, composable, pipeable
 """
 
 import hashlib
-import json
 import logging
 from collections import defaultdict
-from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-from sqlalchemy import func, text
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
 
 from .database import ConversationDB
-from .db_models import ConversationModel, MessageModel, PathModel, TagModel
+from .db_models import ConversationModel, TagModel
 from .models import ConversationTree
 
 logger = logging.getLogger(__name__)
@@ -64,7 +61,7 @@ class DatabaseOperations:
         output_db: str,
         strategy: MergeStrategy = MergeStrategy.NEWEST,
         dedupe: DuplicateStrategy = DuplicateStrategy.EXACT,
-        progress_callback: Optional[callable] = None,
+        progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Merge multiple databases into one.
@@ -89,8 +86,8 @@ class DatabaseOperations:
 
         # Create output database
         output = ConversationDB(output_db)
-        seen_ids = set()
-        seen_hashes = (
+        seen_ids: Set[str] = set()
+        seen_hashes: Optional[Set[str]] = (
             set()
             if dedupe in [DuplicateStrategy.HASH, DuplicateStrategy.SMART]
             else None
@@ -117,13 +114,14 @@ class DatabaseOperations:
                                 continue
 
                             # Resolve conflict
-                            conv = self._resolve_conflict(
+                            resolved = self._resolve_conflict(
                                 conv, output, duplicate_type, strategy
                             )
-                            if conv is None:
+                            if resolved is None:
                                 continue
 
                             stats["conflicts_resolved"] += 1
+                            conv = resolved
 
                         # Save conversation
                         output.save_conversation(conv)
@@ -437,7 +435,7 @@ class DatabaseOperations:
         Returns:
             Statistics about the split
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "total_conversations": 0,
             "databases_created": 0,
             "split_by": by if not chunks else f"{chunks} chunks",
@@ -573,7 +571,7 @@ class DatabaseOperations:
         self,
         new_conv: ConversationTree,
         output_db: ConversationDB,
-        conflict_type: str,
+        conflict_type: Optional[str],
         strategy: MergeStrategy,
     ) -> Optional[ConversationTree]:
         """Resolve a merge conflict"""
@@ -754,7 +752,7 @@ class DatabaseOperations:
 
         chunk_dbs = []
         for i in range(chunks):
-            output_file = output_dir / f"chunk_{i+1:03d}.db"
+            output_file = output_dir / f"chunk_{i + 1:03d}.db"
             chunk_dbs.append(ConversationDB(str(output_file)))
 
         current_chunk = 0
