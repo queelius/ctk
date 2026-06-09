@@ -1488,6 +1488,7 @@ class TestAnthropicTreeReconstruction:
 
     @pytest.mark.unit
     def test_dangling_parent_uuid_treated_as_root(self):
+        """A parent uuid not present in the export maps to root."""
         conv = {
             "uuid": "c-dangle",
             "name": "Dangle",
@@ -1523,6 +1524,36 @@ class TestAnthropicTreeReconstruction:
         tree = AnthropicImporter().import_data([conv])[0]
         assert tree.message_map["m2"].parent_id == "m1"
         assert len(tree.get_all_paths()) == 1
+
+    @pytest.mark.unit
+    def test_self_parent_treated_as_root(self):
+        """A message claiming itself as parent must not create a self-loop."""
+        conv = {
+            "uuid": "c-self",
+            "name": "Self",
+            "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [_msg("m1", "m1", "self-referencing")],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        assert tree.message_map["m1"].parent_id is None
+        assert tree.root_message_ids == ["m1"]
+        assert len(tree.get_all_paths()) == 1
+
+    @pytest.mark.unit
+    def test_mutual_cycle_is_broken(self):
+        """A->B, B->A in a malformed export must not produce a live cycle."""
+        conv = {
+            "uuid": "c-cycle",
+            "name": "Cycle",
+            "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [_msg("a", "b", "first"), _msg("b", "a", "second")],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        parents = {m.id: m.parent_id for m in tree.message_map.values()}
+        assert None in parents.values()  # at least one edge was broken
+        assert len(tree.get_all_paths()) >= 1  # everything reachable again
 
     @pytest.mark.unit
     def test_attachment_with_empty_file_name_not_added_as_doc(self):

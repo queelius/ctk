@@ -227,31 +227,54 @@ class AnthropicImporter(ImporterPlugin):
             # Process messages - handle both 'messages' and 'chat_messages' fields
             messages = conv_data.get("messages", conv_data.get("chat_messages", []))
 
-            # Tree reconstruction (F1): the 2026+ export carries
-            # parent_message_uuid on every message; honor it. Older exports
+            # Tree reconstruction from parent_message_uuid (F1): the 2026+
+            # export carries it on every message; honor it. Older exports
             # lack it; fall back to linear chaining by iteration order.
-            known_ids = {
+            # Pre-derive ids and parents so cycle-breaking sees the whole
+            # list before any message is inserted.
+            msg_ids = [
                 (m.get("uuid") or m.get("id", f"msg_{i}"))
                 for i, m in enumerate(messages)
-            }
-            linear_parent_id: Optional[str] = None
+            ]
+            known_ids = set(msg_ids)
+            proposed_parent: Dict[str, Optional[str]] = {}
+            linear_parent: Optional[str] = None
+            for mid, m in zip(msg_ids, messages):
+                if "parent_message_uuid" in m:
+                    p = m.get("parent_message_uuid")
+                    if (
+                        not p
+                        or p == ROOT_PARENT_SENTINEL
+                        or p not in known_ids
+                        or p == mid
+                    ):
+                        proposed_parent[mid] = None
+                    else:
+                        proposed_parent[mid] = p
+                else:
+                    proposed_parent[mid] = linear_parent
+                linear_parent = mid
+
+            # Break any remaining cycles (malformed exports): walk each
+            # ancestor chain; null the edge that would close a loop. Nodes
+            # already proven acyclic are skipped via the safe set.
+            safe: set = set()
+            for mid in msg_ids:
+                seen = {mid}
+                cur = proposed_parent.get(mid)
+                while cur is not None and cur not in safe:
+                    if cur in seen:
+                        proposed_parent[mid] = None
+                        break
+                    seen.add(cur)
+                    cur = proposed_parent.get(cur)
+                safe.update(seen)
 
             for idx, msg_data in enumerate(messages):
                 # Generate message ID
                 msg_id = msg_data.get("uuid") or msg_data.get("id", f"msg_{idx}")
 
-                if "parent_message_uuid" in msg_data:
-                    parent_uuid = msg_data.get("parent_message_uuid")
-                    if (
-                        not parent_uuid
-                        or parent_uuid == ROOT_PARENT_SENTINEL
-                        or parent_uuid not in known_ids
-                    ):
-                        parent_id = None
-                    else:
-                        parent_id = parent_uuid
-                else:
-                    parent_id = linear_parent_id
+                parent_id = proposed_parent.get(msg_id)
 
                 # Extract role
                 sender = msg_data.get("sender", msg_data.get("role", "user"))
@@ -317,7 +340,6 @@ class AnthropicImporter(ImporterPlugin):
 
                 # Add to tree
                 tree.add_message(message)
-                linear_parent_id = msg_id
 
             conversations.append(tree)
 
