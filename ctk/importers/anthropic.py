@@ -5,7 +5,7 @@ Anthropic/Claude conversation importer
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ctk.core.models import (
     ContentType,
@@ -20,6 +20,10 @@ from ctk.core.models import (
 )
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
+
+
+# Anthropic's parent uuid for root messages in the 2026+ export format.
+ROOT_PARENT_SENTINEL = "00000000-0000-4000-8000-000000000000"
 
 
 class AnthropicImporter(ImporterPlugin):
@@ -222,11 +226,32 @@ class AnthropicImporter(ImporterPlugin):
 
             # Process messages - handle both 'messages' and 'chat_messages' fields
             messages = conv_data.get("messages", conv_data.get("chat_messages", []))
-            parent_id = None
+
+            # Tree reconstruction (F1): the 2026+ export carries
+            # parent_message_uuid on every message; honor it. Older exports
+            # lack it; fall back to linear chaining by iteration order.
+            known_ids = {
+                (m.get("uuid") or m.get("id", f"msg_{i}"))
+                for i, m in enumerate(messages)
+            }
+            linear_parent_id: Optional[str] = None
 
             for idx, msg_data in enumerate(messages):
                 # Generate message ID
                 msg_id = msg_data.get("uuid") or msg_data.get("id", f"msg_{idx}")
+
+                if "parent_message_uuid" in msg_data:
+                    parent_uuid = msg_data.get("parent_message_uuid")
+                    if (
+                        not parent_uuid
+                        or parent_uuid == ROOT_PARENT_SENTINEL
+                        or parent_uuid not in known_ids
+                    ):
+                        parent_id = None
+                    else:
+                        parent_id = parent_uuid
+                else:
+                    parent_id = linear_parent_id
 
                 # Extract role
                 sender = msg_data.get("sender", msg_data.get("role", "user"))
@@ -290,9 +315,9 @@ class AnthropicImporter(ImporterPlugin):
                     },
                 )
 
-                # Add to tree (linear for now, as Anthropic exports are typically linear)
+                # Add to tree
                 tree.add_message(message)
-                parent_id = msg_id
+                linear_parent_id = msg_id
 
             conversations.append(tree)
 

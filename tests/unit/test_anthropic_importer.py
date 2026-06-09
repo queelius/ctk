@@ -1446,6 +1446,84 @@ class TestAnthropicEdgeCases:
         for i, msg in enumerate(path):
             assert msg.content.text == f"Message {i}"
 
+
+ROOT_SENTINEL = "00000000-0000-4000-8000-000000000000"
+
+
+def _msg(uuid, parent_uuid, text, sender="assistant"):
+    return {
+        "uuid": uuid,
+        "sender": sender,
+        "created_at": "2026-06-09T00:00:01Z",
+        "text": text,
+        "content": [{"type": "text", "text": text}],
+        "parent_message_uuid": parent_uuid,
+    }
+
+
+class TestAnthropicTreeReconstruction:
+    """Tests for parent_message_uuid-based tree reconstruction (2026+ export format)."""
+
+    @pytest.mark.unit
+    def test_parent_message_uuid_builds_real_tree(self):
+        """F1: a message with several children must import as branches, not a chain."""
+        conv = {
+            "uuid": "c-branch",
+            "name": "Branchy",
+            "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [
+                _msg("u1", ROOT_SENTINEL, "question", sender="human"),
+                _msg("a1", "u1", "answer v1"),
+                _msg("a2", "u1", "answer v2"),
+                _msg("a3", "u1", "answer v3"),
+            ],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        assert tree.root_message_ids == ["u1"]
+        assert tree.message_map["a1"].parent_id == "u1"
+        assert tree.message_map["a2"].parent_id == "u1"
+        assert tree.message_map["a3"].parent_id == "u1"
+        assert len(tree.get_all_paths()) == 3
+
+    @pytest.mark.unit
+    def test_dangling_parent_uuid_treated_as_root(self):
+        conv = {
+            "uuid": "c-dangle",
+            "name": "Dangle",
+            "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [_msg("m1", "not-in-this-export", "orphan")],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        assert tree.message_map["m1"].parent_id is None
+
+    @pytest.mark.unit
+    def test_old_format_without_parent_uuid_stays_linear(self):
+        conv = {
+            "uuid": "c-old",
+            "name": "Old",
+            "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [
+                {
+                    "uuid": "m1",
+                    "sender": "human",
+                    "text": "hi",
+                    "created_at": "2026-06-09T00:00:01Z",
+                },
+                {
+                    "uuid": "m2",
+                    "sender": "assistant",
+                    "text": "hello",
+                    "created_at": "2026-06-09T00:00:02Z",
+                },
+            ],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        assert tree.message_map["m2"].parent_id == "m1"
+        assert len(tree.get_all_paths()) == 1
+
     @pytest.mark.unit
     def test_attachment_with_empty_file_name_not_added_as_doc(self):
         """Attachment with empty file_name should not be added as document"""
