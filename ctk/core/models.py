@@ -155,6 +155,36 @@ class ToolCall:
 
 
 @dataclass
+class ReasoningBlock:
+    """A unit of model reasoning (thinking) attached to a message.
+
+    Captured from provider exports (OpenAI 'thoughts' / 'reasoning_recap',
+    Anthropic 'thinking' blocks). ``extra`` holds provider-specific data
+    such as signatures or token budgets.
+    """
+
+    text: str = ""
+    summary: Optional[str] = None
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"text": self.text}
+        if self.summary is not None:
+            data["summary"] = self.summary
+        if self.extra:
+            data["extra"] = self.extra
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ReasoningBlock":
+        return cls(
+            text=data.get("text", ""),
+            summary=data.get("summary"),
+            extra=data.get("extra", {}),
+        )
+
+
+@dataclass
 class MessageContent:
     """Content of a message, supporting text and multimodal content"""
 
@@ -164,6 +194,7 @@ class MessageContent:
     video: List[MediaContent] = field(default_factory=list)
     documents: List[MediaContent] = field(default_factory=list)
     tool_calls: List[ToolCall] = field(default_factory=list)
+    reasoning: List[ReasoningBlock] = field(default_factory=list)
 
     # Legacy fields for compatibility
     type: str = "text"
@@ -231,6 +262,16 @@ class MessageContent:
         """Check if content has tool calls"""
         return bool(self.tool_calls)
 
+    def get_reasoning_text(self) -> str:
+        """Join reasoning blocks into one readable string (summaries as headers)."""
+        chunks = []
+        for block in self.reasoning:
+            if block.summary:
+                chunks.append(f"[{block.summary}]\n{block.text}")
+            else:
+                chunks.append(block.text)
+        return "\n\n".join(chunks)
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         data: Dict[str, Any] = {}
@@ -247,6 +288,8 @@ class MessageContent:
             data["documents"] = [d.to_dict() for d in self.documents]
         if self.tool_calls:
             data["tool_calls"] = [t.to_dict() for t in self.tool_calls]
+        if self.reasoning:
+            data["reasoning"] = [r.to_dict() for r in self.reasoning]
         if self.parts:  # Legacy
             data["parts"] = self.parts
         if self.metadata:
@@ -307,6 +350,10 @@ class MessageContent:
         if "tool_calls" in data:
             for tool_data in data["tool_calls"]:
                 content.tool_calls.append(ToolCall.from_dict(tool_data))
+
+        if "reasoning" in data:
+            for r_data in data["reasoning"]:
+                content.reasoning.append(ReasoningBlock.from_dict(r_data))
 
         return content
 

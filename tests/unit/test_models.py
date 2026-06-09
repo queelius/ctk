@@ -13,6 +13,7 @@ from ctk.core.models import (
     MessageContent,
     MessageRole,
 )
+from ctk.core.models import ReasoningBlock
 
 
 class TestMessageRole:
@@ -409,3 +410,33 @@ class TestMessageContentFromDictRoundTrip:
         assert doc.type == ContentType.DOCUMENT
         assert doc.url == "https://example.com/doc.pdf"
         assert doc.caption == "annual report"
+
+
+def test_reasoning_blocks_round_trip_through_dict():
+    content = MessageContent(text="final answer")
+    content.reasoning.append(
+        ReasoningBlock(text="step one thinking", summary="Plan", extra={"budget": 4096})
+    )
+    content.reasoning.append(ReasoningBlock(text="step two thinking"))
+
+    restored = MessageContent.from_dict(content.to_dict())
+
+    assert len(restored.reasoning) == 2
+    assert restored.reasoning[0].text == "step one thinking"
+    assert restored.reasoning[0].summary == "Plan"
+    assert restored.reasoning[0].extra == {"budget": 4096}
+    assert restored.reasoning[1].summary is None
+    assert restored.text == "final answer"
+
+
+def test_get_reasoning_text_joins_blocks_with_summaries():
+    content = MessageContent()
+    content.reasoning.append(ReasoningBlock(text="alpha", summary="First"))
+    content.reasoning.append(ReasoningBlock(text="beta"))
+    joined = content.get_reasoning_text()
+    assert "First" in joined and "alpha" in joined and "beta" in joined
+
+
+def test_empty_reasoning_not_serialized():
+    content = MessageContent(text="hi")
+    assert "reasoning" not in content.to_dict()
