@@ -16,10 +16,8 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ctk.core.models import (ConversationTree, Message, MessageContent,
-                             MessageRole)
-from ctk.core.plugin import (BasePlugin, ExporterPlugin, ImporterPlugin,
-                             PluginRegistry)
+from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
+from ctk.core.plugin import BasePlugin, ExporterPlugin, ImporterPlugin, PluginRegistry
 
 # ==================== Mock Plugins for Testing ====================
 
@@ -231,6 +229,7 @@ class TestAutoDetection:
         # First importer won't match
         importer1 = Mock(spec=ImporterPlugin)
         importer1.detect_format.return_value = False
+        importer1.detection_priority = 0
 
         # Second will match
         importer2 = MockImporter()

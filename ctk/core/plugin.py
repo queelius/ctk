@@ -283,6 +283,9 @@ class BasePlugin(ABC):
     description: str = ""
     version: str = "1.0.0"
     supported_formats: List[str] = []
+    # Higher wins in auto-detection. Specific-format importers should outrank
+    # greedy validators (e.g. the ctk envelope importer outranks gemini/jsonl).
+    detection_priority: int = 0
 
     @abstractmethod
     def validate(self, data: Any) -> bool:
@@ -518,7 +521,11 @@ class PluginRegistry:
         """Auto-detect appropriate importer for data"""
         self.discover_plugins()
 
-        for name, importer in self.importers.items():
+        ordered = sorted(
+            self.importers.items(),
+            key=lambda kv: (-getattr(kv[1], "detection_priority", 0), kv[0]),
+        )
+        for name, importer in ordered:
             if importer.detect_format(data):
                 return importer
 
