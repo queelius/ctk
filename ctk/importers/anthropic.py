@@ -9,7 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from ctk.core.models import (ContentType, ConversationMetadata,
                              ConversationTree, MediaContent, Message,
-                             MessageContent, MessageRole, ToolCall)
+                             MessageContent, MessageRole, ReasoningBlock,
+                             ToolCall)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -95,6 +96,66 @@ class AnthropicImporter(ImporterPlugin):
 
         return model if model else "Claude"
 
+    def _process_content_blocks(self, blocks: list, content: MessageContent) -> List[str]:
+        """Extract structured data from Anthropic content blocks.
+
+        Returns the text fragments found (used as fallback message text when
+        no top-level text exists). Always runs, even when top-level text is
+        present, so tool calls and reasoning are never dropped (F2).
+        """
+        text_parts: List[str] = []
+        for part in blocks:
+            if isinstance(part, str):
+                text_parts.append(part)
+                continue
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type", "")
+            if part_type == "text":
+                text_parts.append(part.get("text", ""))
+            elif part_type == "image":
+                source = part.get("source", {})
+                if isinstance(source, dict):
+                    if source.get("type") == "base64":
+                        content.add_image(
+                            data=source.get("data"),
+                            mime_type=source.get("media_type", "image/png"),
+                        )
+                    elif "url" in source:
+                        content.add_image(url=source["url"])
+            elif part_type == "tool_use":
+                content.tool_calls.append(
+                    ToolCall(
+                        id=part.get("id", ""),
+                        name=part.get("name", ""),
+                        arguments=part.get("input", {}),
+                    )
+                )
+            elif part_type == "tool_result":
+                tool_id = part.get("tool_use_id", "")
+                for tc in content.tool_calls:
+                    if tc.id == tool_id:
+                        tc.result = part.get("content", "")
+                        tc.status = "completed"
+                        if part.get("is_error"):
+                            tc.status = "failed"
+                            tc.error = str(part.get("content", ""))
+                        break
+            elif part_type in ("thinking", "redacted_thinking"):
+                content.reasoning.append(
+                    ReasoningBlock(
+                        text=part.get("thinking", part.get("data", "")),
+                        extra={k: v for k, v in part.items()
+                               if k not in ("type", "thinking")},
+                    )
+                )
+            elif part_type == "token_budget":
+                content.metadata["token_budget"] = part
+            else:
+                content.metadata["attachments"] = content.metadata.get("attachments", [])
+                content.metadata["attachments"].append(part)
+        return text_parts
+
     def import_data(self, data: Any, **kwargs) -> List[ConversationTree]:
         """Import Anthropic conversation data"""
         if isinstance(data, str):
@@ -160,104 +221,47 @@ class AnthropicImporter(ImporterPlugin):
                 # Extract content
                 content = MessageContent()
 
-                # Handle different content formats
-                if "text" in msg_data:
-                    content.text = msg_data["text"]
+                # Structured pass over content blocks first (never skipped: F2).
+                block_text_parts: List[str] = []
+                raw_blocks = msg_data.get("content")
+                if isinstance(raw_blocks, list):
+                    block_text_parts = self._process_content_blocks(raw_blocks, content)
+                    content.parts = raw_blocks
+                elif isinstance(raw_blocks, str):
+                    block_text_parts = [raw_blocks]
 
-                    # Check for attachments
-                    if "attachments" in msg_data:
-                        for attachment in msg_data["attachments"]:
-                            if isinstance(attachment, dict):
-                                file_name = attachment.get("file_name", "")
-                                file_type = attachment.get("file_type", "")
+                # Top-level text is the export's own rendering and wins when present.
+                top_text = msg_data.get("text")
+                if top_text:
+                    content.text = top_text
+                elif block_text_parts:
+                    content.text = "\n".join(block_text_parts)
 
-                                # Add as image if it looks like an image
-                                if any(
-                                    ext in file_name.lower()
-                                    for ext in [
-                                        ".png",
-                                        ".jpg",
-                                        ".jpeg",
-                                        ".gif",
-                                        ".webp",
-                                    ]
-                                ):
-                                    content.add_image(
-                                        path=file_name, mime_type=file_type
-                                    )
-                                # Add as document otherwise
-                                elif file_name:
-                                    doc = MediaContent(
+                # Attachments (independent of which text source won).
+                if "attachments" in msg_data:
+                    for attachment in msg_data["attachments"]:
+                        if isinstance(attachment, dict):
+                            file_name = attachment.get("file_name", "")
+                            file_type = attachment.get("file_type", "")
+                            if any(
+                                ext in file_name.lower()
+                                for ext in [".png", ".jpg", ".jpeg", ".gif", ".webp"]
+                            ):
+                                content.add_image(path=file_name, mime_type=file_type)
+                            elif file_name:
+                                content.documents.append(
+                                    MediaContent(
                                         type=ContentType.DOCUMENT,
                                         path=file_name,
                                         mime_type=file_type,
                                     )
-                                    content.documents.append(doc)
-
-                    # Add attachment info to text if present
-                    if "attachments" in msg_data and msg_data["attachments"]:
+                                )
+                    if msg_data["attachments"]:
                         attachment_text = "\n\nAttachments: " + ", ".join(
                             a.get("file_name", "Unknown")
                             for a in msg_data["attachments"]
                         )
                         content.text = (content.text or "") + attachment_text
-
-                elif "content" in msg_data:
-                    if isinstance(msg_data["content"], str):
-                        content.text = msg_data["content"]
-                    elif isinstance(msg_data["content"], list):
-                        # Handle multipart content
-                        text_parts = []
-                        for part in msg_data["content"]:
-                            if isinstance(part, str):
-                                text_parts.append(part)
-                            elif isinstance(part, dict):
-                                part_type = part.get("type", "")
-
-                                if part_type == "text":
-                                    text_parts.append(part.get("text", ""))
-                                elif part_type == "image":
-                                    # Handle image content
-                                    source = part.get("source", {})
-                                    if isinstance(source, dict):
-                                        if source.get("type") == "base64":
-                                            content.add_image(
-                                                data=source.get("data"),
-                                                mime_type=source.get(
-                                                    "media_type", "image/png"
-                                                ),
-                                            )
-                                        elif "url" in source:
-                                            content.add_image(url=source["url"])
-                                elif part_type == "tool_use":
-                                    # Handle tool use
-                                    tool_call = ToolCall(
-                                        id=part.get("id", ""),
-                                        name=part.get("name", ""),
-                                        arguments=part.get("input", {}),
-                                    )
-                                    content.tool_calls.append(tool_call)
-                                elif part_type == "tool_result":
-                                    # Handle tool result
-                                    tool_id = part.get("tool_use_id", "")
-                                    # Find the corresponding tool call and update it
-                                    for tc in content.tool_calls:
-                                        if tc.id == tool_id:
-                                            tc.result = part.get("content", "")
-                                            tc.status = "completed"
-                                            if part.get("is_error"):
-                                                tc.status = "failed"
-                                                tc.error = str(part.get("content", ""))
-                                            break
-                                else:
-                                    # Store unknown parts in metadata
-                                    content.metadata["attachments"] = (
-                                        content.metadata.get("attachments", [])
-                                    )
-                                    content.metadata["attachments"].append(part)
-
-                        content.text = "\n".join(text_parts) if text_parts else ""
-                        content.parts = msg_data["content"]
 
                 # Create message
                 message = Message(

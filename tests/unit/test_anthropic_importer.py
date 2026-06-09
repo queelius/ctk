@@ -913,7 +913,7 @@ class TestAnthropicContentParsing:
 
     @pytest.mark.unit
     def test_content_list_empty_text_parts(self):
-        """Content list with no text parts should produce empty string text"""
+        """Content list with no text parts should leave content.text as None (no text to set)"""
         importer = AnthropicImporter()
         data = {
             "uuid": "conv-no-text",
@@ -935,7 +935,9 @@ class TestAnthropicContentParsing:
         }
         conversations = importer.import_data(data)
         msg = conversations[0].message_map["m1"]
-        assert msg.content.text == ""
+        # No top-level text and no text-type blocks: content.text stays None.
+        # The old code produced "" via "\n".join([]) -- that was an artifact, not a contract.
+        assert msg.content.text is None
 
     @pytest.mark.unit
     def test_unknown_part_type_stored_in_metadata(self):
@@ -1553,3 +1555,58 @@ class TestAnthropicEdgeCases:
         # source defaults to {} which is a dict, but has no "type" == "base64"
         # and no "url", so no image is added
         assert len(msg.content.images) == 0
+
+
+class TestAnthropicContentBlockUnification:
+    """F2: top-level text + content blocks must both be processed (not either/or)."""
+
+    @pytest.mark.unit
+    def test_tool_blocks_survive_when_top_level_text_present(self):
+        """F2: real exports carry top-level text AND content blocks; both must import."""
+        conv = {
+            "uuid": "c-tools", "name": "Tools", "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [
+                {
+                    "uuid": "m1", "sender": "assistant", "created_at": "2026-06-09T00:00:01Z",
+                    "text": "I ran the tool.",
+                    "content": [
+                        {"type": "text", "text": "I ran the tool."},
+                        {"type": "tool_use", "id": "tu1", "name": "calculator",
+                         "input": {"expr": "2+2"}},
+                        {"type": "tool_result", "tool_use_id": "tu1", "content": "4"},
+                        {"type": "token_budget", "budget": 8192},
+                    ],
+                },
+            ],
+        }
+        importer = AnthropicImporter()
+        tree = importer.import_data([conv])[0]
+        msg = tree.message_map["m1"]
+        assert msg.content.text == "I ran the tool."
+        assert len(msg.content.tool_calls) == 1
+        assert msg.content.tool_calls[0].name == "calculator"
+        assert msg.content.tool_calls[0].result == "4"
+        assert msg.content.metadata.get("token_budget") == {"type": "token_budget", "budget": 8192}
+
+    @pytest.mark.unit
+    def test_thinking_blocks_become_reasoning(self):
+        conv = {
+            "uuid": "c-think", "name": "Think", "created_at": "2026-06-09T00:00:00Z",
+            "updated_at": "2026-06-09T00:00:00Z",
+            "chat_messages": [
+                {
+                    "uuid": "m1", "sender": "assistant", "created_at": "2026-06-09T00:00:01Z",
+                    "text": "Visible answer.",
+                    "content": [
+                        {"type": "thinking", "thinking": "hidden chain of thought"},
+                        {"type": "text", "text": "Visible answer."},
+                    ],
+                },
+            ],
+        }
+        tree = AnthropicImporter().import_data([conv])[0]
+        msg = tree.message_map["m1"]
+        assert msg.content.text == "Visible answer."
+        assert len(msg.content.reasoning) == 1
+        assert msg.content.reasoning[0].text == "hidden chain of thought"
