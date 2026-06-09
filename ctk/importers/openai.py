@@ -15,9 +15,17 @@ from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
 logger = logging.getLogger(__name__)
-from ctk.core.models import (ContentType, ConversationMetadata,
-                             ConversationTree, MediaContent, Message,
-                             MessageContent, MessageRole, ToolCall)
+from ctk.core.models import (
+    ContentType,
+    ConversationMetadata,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+    ReasoningBlock,
+    ToolCall,
+)
 
 
 class OpenAIImporter(ImporterPlugin):
@@ -351,6 +359,20 @@ class OpenAIImporter(ImporterPlugin):
 
                 if isinstance(content_data, dict):
                     content.type = content_data.get("content_type", "text")
+                    # Reasoning content has no 'parts'; capture it structurally (F4).
+                    if content_data.get("content_type") == "thoughts":
+                        for thought in content_data.get("thoughts", []):
+                            if isinstance(thought, dict):
+                                content.reasoning.append(
+                                    ReasoningBlock(
+                                        text=thought.get("content", ""),
+                                        summary=thought.get("summary"),
+                                    )
+                                )
+                    elif content_data.get("content_type") == "reasoning_recap":
+                        recap = content_data.get("content", "")
+                        if recap:
+                            content.reasoning.append(ReasoningBlock(text=recap))
                     parts = content_data.get("parts", [])
 
                     # Handle different part types

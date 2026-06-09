@@ -1479,3 +1479,69 @@ class TestOpenAIMetadata:
 
         # Model defaults to "ChatGPT" => tag is "chatgpt"
         assert "chatgpt" in tree.metadata.tags
+
+
+# ---------------------------------------------------------------------------
+# Task 4: thoughts / reasoning_recap import (F4)
+# ---------------------------------------------------------------------------
+def _mapping_conv(content_dict):
+    return {
+        "title": "Thoughts test",
+        "create_time": 1,
+        "update_time": 2,
+        "mapping": {
+            "root": {"id": "root", "message": None, "parent": None, "children": ["n1"]},
+            "n1": {
+                "id": "n1",
+                "parent": "root",
+                "children": [],
+                "message": {
+                    "id": "n1",
+                    "author": {"role": "assistant"},
+                    "create_time": 2,
+                    "content": content_dict,
+                    "status": "finished_successfully",
+                    "metadata": {},
+                },
+            },
+        },
+        "current_node": "n1",
+    }
+
+
+@pytest.mark.unit
+def test_thoughts_parts_become_reasoning_blocks():
+    conv = _mapping_conv(
+        {
+            "content_type": "thoughts",
+            "thoughts": [
+                {
+                    "summary": "Plan",
+                    "content": "SECRET-REASONING-XYZ",
+                    "chunks": [],
+                    "finished": True,
+                },
+                {
+                    "summary": "Check",
+                    "content": "more thinking",
+                    "chunks": [],
+                    "finished": True,
+                },
+            ],
+        }
+    )
+    tree = OpenAIImporter().import_data([conv])[0]
+    msg = next(m for m in tree.message_map.values() if m.content.reasoning)
+    assert len(msg.content.reasoning) == 2
+    assert msg.content.reasoning[0].summary == "Plan"
+    assert "SECRET-REASONING-XYZ" in msg.content.get_reasoning_text()
+
+
+@pytest.mark.unit
+def test_reasoning_recap_becomes_reasoning_block():
+    conv = _mapping_conv(
+        {"content_type": "reasoning_recap", "content": "Recapped the reasoning."}
+    )
+    tree = OpenAIImporter().import_data([conv])[0]
+    msg = next(m for m in tree.message_map.values() if m.content.reasoning)
+    assert msg.content.reasoning[0].text == "Recapped the reasoning."
