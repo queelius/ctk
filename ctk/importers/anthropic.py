@@ -5,12 +5,19 @@ Anthropic/Claude conversation importer
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ctk.core.models import (ContentType, ConversationMetadata,
-                             ConversationTree, MediaContent, Message,
-                             MessageContent, MessageRole, ReasoningBlock,
-                             ToolCall)
+from ctk.core.models import (
+    ContentType,
+    ConversationMetadata,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+    ReasoningBlock,
+    ToolCall,
+)
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -96,7 +103,9 @@ class AnthropicImporter(ImporterPlugin):
 
         return model if model else "Claude"
 
-    def _process_content_blocks(self, blocks: list, content: MessageContent) -> List[str]:
+    def _process_content_blocks(
+        self, blocks: list, content: MessageContent
+    ) -> List[str]:
         """Extract structured data from Anthropic content blocks.
 
         Returns the text fragments found (used as fallback message text when
@@ -144,15 +153,20 @@ class AnthropicImporter(ImporterPlugin):
             elif part_type in ("thinking", "redacted_thinking"):
                 content.reasoning.append(
                     ReasoningBlock(
-                        text=part.get("thinking", part.get("data", "")),
-                        extra={k: v for k, v in part.items()
-                               if k not in ("type", "thinking")},
+                        text=part.get("thinking") or part.get("data") or "",
+                        extra={
+                            k: v
+                            for k, v in part.items()
+                            if k not in ("type", "thinking")
+                        },
                     )
                 )
             elif part_type == "token_budget":
                 content.metadata["token_budget"] = part
             else:
-                content.metadata["attachments"] = content.metadata.get("attachments", [])
+                content.metadata["attachments"] = content.metadata.get(
+                    "attachments", []
+                )
                 content.metadata["attachments"].append(part)
         return text_parts
 

@@ -1134,7 +1134,10 @@ class TestAnthropicEdgeCases:
             "chat_messages": [
                 {
                     "uuid": "m1",
-                    "text": "Hello in Japanese: \u3053\u3093\u306b\u3061\u306f \u2603 \u2764 \ud83d\ude00",
+                    "text": (
+                        "Hello in Japanese: \u3053\u3093\u306b\u3061\u306f"
+                        " \u2603 \u2764 \ud83d\ude00"
+                    ),
                     "sender": "human",
                 },
                 {
@@ -1564,16 +1567,24 @@ class TestAnthropicContentBlockUnification:
     def test_tool_blocks_survive_when_top_level_text_present(self):
         """F2: real exports carry top-level text AND content blocks; both must import."""
         conv = {
-            "uuid": "c-tools", "name": "Tools", "created_at": "2026-06-09T00:00:00Z",
+            "uuid": "c-tools",
+            "name": "Tools",
+            "created_at": "2026-06-09T00:00:00Z",
             "updated_at": "2026-06-09T00:00:00Z",
             "chat_messages": [
                 {
-                    "uuid": "m1", "sender": "assistant", "created_at": "2026-06-09T00:00:01Z",
+                    "uuid": "m1",
+                    "sender": "assistant",
+                    "created_at": "2026-06-09T00:00:01Z",
                     "text": "I ran the tool.",
                     "content": [
                         {"type": "text", "text": "I ran the tool."},
-                        {"type": "tool_use", "id": "tu1", "name": "calculator",
-                         "input": {"expr": "2+2"}},
+                        {
+                            "type": "tool_use",
+                            "id": "tu1",
+                            "name": "calculator",
+                            "input": {"expr": "2+2"},
+                        },
                         {"type": "tool_result", "tool_use_id": "tu1", "content": "4"},
                         {"type": "token_budget", "budget": 8192},
                     ],
@@ -1587,16 +1598,23 @@ class TestAnthropicContentBlockUnification:
         assert len(msg.content.tool_calls) == 1
         assert msg.content.tool_calls[0].name == "calculator"
         assert msg.content.tool_calls[0].result == "4"
-        assert msg.content.metadata.get("token_budget") == {"type": "token_budget", "budget": 8192}
+        assert msg.content.metadata.get("token_budget") == {
+            "type": "token_budget",
+            "budget": 8192,
+        }
 
     @pytest.mark.unit
     def test_thinking_blocks_become_reasoning(self):
         conv = {
-            "uuid": "c-think", "name": "Think", "created_at": "2026-06-09T00:00:00Z",
+            "uuid": "c-think",
+            "name": "Think",
+            "created_at": "2026-06-09T00:00:00Z",
             "updated_at": "2026-06-09T00:00:00Z",
             "chat_messages": [
                 {
-                    "uuid": "m1", "sender": "assistant", "created_at": "2026-06-09T00:00:01Z",
+                    "uuid": "m1",
+                    "sender": "assistant",
+                    "created_at": "2026-06-09T00:00:01Z",
                     "text": "Visible answer.",
                     "content": [
                         {"type": "thinking", "thinking": "hidden chain of thought"},
