@@ -521,6 +521,7 @@ class PluginRegistry:
         """Auto-detect appropriate importer for data"""
         self.discover_plugins()
 
+        # getattr fallback: Mock(spec=...) instances in tests don't inherit class attrs.
         ordered = sorted(
             self.importers.items(),
             key=lambda kv: (-getattr(kv[1], "detection_priority", 0), kv[0]),
