@@ -266,7 +266,7 @@ class MessageContent:
         """Join reasoning blocks into one readable string (summaries as headers)."""
         chunks = []
         for block in self.reasoning:
-            if block.summary:
+            if block.summary is not None:
                 chunks.append(f"[{block.summary}]\n{block.text}")
             else:
                 chunks.append(block.text)
