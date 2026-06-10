@@ -39,7 +39,14 @@ def _content_fingerprint(messages_data: list) -> str:
 
 
 class JSONLImporter(ImporterPlugin):
-    """Import JSONL conversation format (used by local LLMs and fine-tuning)"""
+    """Import JSONL conversation format (used by local LLMs and fine-tuning)
+
+    Since 2.16.0, conversation ids without an explicit "id" field are derived
+    from a SHA-256 fingerprint of the (role, content) sequence, so re-importing
+    the same file is idempotent. Conversations imported before 2.16.0 carry
+    random-suffix ids (jsonl_<idx>_<uuid8>); one historical duplicate per such
+    conversation may remain and can be removed with "ctk db dedupe".
+    """
 
     name = "jsonl"
     description = "Import JSONL conversation format"
