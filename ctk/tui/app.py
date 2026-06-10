@@ -589,11 +589,12 @@ class CTKApp(App):
 
                 for event in self.provider.stream_turn(history, tools=tools):
                     if _cancelled():
-                        self.post_message(
-                            ChatAssistantText(
-                                turn_text, final=True, reasoning=turn_reasoning
+                        if turn_text or turn_reasoning:
+                            self.post_message(
+                                ChatAssistantText(
+                                    turn_text, final=True, reasoning=turn_reasoning
+                                )
                             )
-                        )
                         self.post_message(ChatDone(cancelled=True))
                         return
                     if event.kind == "text":
@@ -834,15 +835,17 @@ class CTKApp(App):
         # the sidebar cursor-move event does not trigger _open_selected to
         # rebuild the main pane (which would destroy the live streaming
         # widgets that are still visible at this point).
-        if self._current_tree is not None:
-            self._safe_save(self._current_tree)
-        if self.sidebar is not None:
-            self.sidebar.refresh_list()
-        self._turn_active = False
-        self._active_worker = None
-        self._streaming_bubble = None
-        self._streaming_buffer = ""
-        self._thinking_block = None
+        try:
+            if self._current_tree is not None:
+                self._safe_save(self._current_tree)
+            if self.sidebar is not None:
+                self.sidebar.refresh_list()
+        finally:
+            self._turn_active = False
+            self._active_worker = None
+            self._streaming_bubble = None
+            self._streaming_buffer = ""
+            self._thinking_block = None
         if event.error:
             self.notify(event.error, severity="error")
         self._refresh_status()

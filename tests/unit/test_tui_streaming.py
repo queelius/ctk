@@ -245,3 +245,38 @@ async def test_escape_cancels_inflight_turn(tmp_path):
             assert cancelled_nodes, "a (cancelled) marker must be appended"
     finally:
         db.close()
+
+
+@pytest.mark.asyncio
+async def test_cancel_before_first_event_persists_no_empty_message(tmp_path):
+    class StallProvider(ScriptedProvider):
+        def stream_turn(self, messages, tools=None, **kwargs):
+            import time as _t
+
+            for i in range(200):
+                _t.sleep(0.2)
+                yield StreamEvent(kind="reasoning", text=f"late{i}")
+            yield StreamEvent(kind="done", finish_reason="stop")
+
+    db = ConversationDB(str(tmp_path / "db"))
+    app = CTKApp(db=db, provider=StallProvider([]), enable_tools=True)
+    try:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            user_msg = app._append_user_message("ping")
+            app._turn_active = True
+            app.main.set_streaming(True)
+            app._active_worker = app._chat_worker_with_tools(user_msg.id)
+            # Yield to the event loop so the worker task is scheduled before
+            # we cancel.  Without this the asyncio task is cancelled before
+            # run_in_executor is awaited and the thread never starts.
+            await pilot.pause(0.02)
+            app.action_cancel_turn_or_dismiss()  # cancel before first event
+            for _ in range(100):
+                await pilot.pause(0.05)
+                if not app._turn_active:
+                    break
+            assert app._turn_active is False
+            assert _assistant_messages(app) == []  # no empty message persisted
+    finally:
+        db.close()
