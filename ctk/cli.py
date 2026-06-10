@@ -34,12 +34,66 @@ def _err(message):
     print(message, file=sys.stderr)
 
 
+def _read_zip_export(zip_path) -> "tuple[str, Optional[str]]":
+    """Read a provider export archive without fully extracting it.
+
+    Returns ``(json_text, media_dir)``: the contents of the archive's
+    conversations.json (root or single top-level directory), and a temp
+    directory holding extracted media members when the archive contains any
+    (ChatGPT zips), else None. The caller owns cleanup of media_dir.
+    Traversal-unsafe members (absolute paths or '..') are skipped.
+    """
+    import shutil
+    import tempfile
+    import zipfile
+    from pathlib import PurePosixPath
+
+    def _is_safe(name: str) -> bool:
+        p = PurePosixPath(name)
+        return not p.is_absolute() and ".." not in p.parts
+
+    with zipfile.ZipFile(zip_path) as zf:
+        names = [n for n in zf.namelist() if _is_safe(n) and not n.endswith("/")]
+        json_members = [
+            n for n in names if PurePosixPath(n).name == "conversations.json"
+        ]
+        if not json_members:
+            raise ValueError(
+                f"Archive {zip_path} does not contain a conversations.json"
+            )
+        # Prefer the shallowest match (root, else single top-level directory).
+        member = min(json_members, key=lambda n: len(PurePosixPath(n).parts))
+        root_prefix = str(PurePosixPath(member).parent)
+        data = zf.read(member).decode("utf-8")
+
+        media_members = [n for n in names if not n.lower().endswith(".json")]
+        media_dir = None
+        if media_members:
+            media_dir = tempfile.mkdtemp(prefix="ctk-zip-")
+            base = Path(media_dir).resolve()
+            for n in media_members:
+                rel = PurePosixPath(n)
+                if root_prefix not in (".", ""):
+                    try:
+                        rel = rel.relative_to(root_prefix)
+                    except ValueError:
+                        pass
+                target = (base / Path(*rel.parts)).resolve()
+                if base not in target.parents and target != base:
+                    continue  # belt and suspenders against traversal
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(n) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+        return data, media_dir
+
+
 def cmd_import(args):
     """Import conversations from file or auto-search"""
     registry.discover_plugins()
 
     # Handle auto-search for specific formats
     auto_search_formats = ["copilot", "claude_code", "cursor"]
+    zip_media_dir = None
 
     # Check if we should auto-search
     if args.input == "auto" and args.format in auto_search_formats:
@@ -93,8 +147,17 @@ def cmd_import(args):
             _err(f"Error: Invalid input path: {e}")
             return 1
 
-        # Handle directory imports (e.g., OpenAI export directories)
-        if input_path.is_dir():
+        # Handle zip archives, directory imports, or plain files
+        zip_media_dir = None
+        if input_path.suffix.lower() == ".zip":
+            import zipfile
+
+            try:
+                data, zip_media_dir = _read_zip_export(input_path)
+            except (ValueError, OSError, zipfile.BadZipFile) as e:
+                _err(f"Error: Cannot read archive: {e}")
+                return 1
+        elif input_path.is_dir():
             # Look for standard data files in the directory
             possible_files = ["conversations.json", "data.json", "export.json"]
             data_file = None
@@ -156,7 +219,9 @@ def cmd_import(args):
 
         # If importing OpenAI format, pass source_dir for image resolution
         if is_openai_format:
-            if input_path.is_dir():
+            if zip_media_dir:
+                import_kwargs["source_dir"] = zip_media_dir
+            elif input_path.is_dir():
                 import_kwargs["source_dir"] = str(input_path)
             else:
                 # Input is a file, use parent directory as source_dir
@@ -228,6 +293,11 @@ def cmd_import(args):
 
             traceback.print_exc()
         return 1
+    finally:
+        if zip_media_dir:
+            import shutil
+
+            shutil.rmtree(zip_media_dir, ignore_errors=True)
 
 
 def cmd_export(args):
@@ -1155,7 +1225,9 @@ def execute_ask_tool(
                 return f"Conversation {conv_id} not found"
 
             title = tree.title or "Untitled"
-            return f"Tree for {title}:\n(Use TUI shell mode for full tree visualization)"
+            return (
+                f"Tree for {title}:\n(Use TUI shell mode for full tree visualization)"
+            )
 
         elif tool_name == "delete_conversation":
             conv_id = tool_args.get("conversation_id", "")
