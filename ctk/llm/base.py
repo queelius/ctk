@@ -64,6 +64,10 @@ class ChatResponse:
     usage: Optional[Dict[str, int]] = None  # tokens used
     metadata: Optional[Dict[str, Any]] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None  # Tool calls requested by LLM
+    # Chain-of-thought from "thinking" models. Some OpenAI-compatible servers
+    # (e.g. ollama) return the answer here with an empty ``content``; ``content``
+    # then falls back to this so the reply is never silently blank.
+    reasoning: Optional[str] = None
 
 
 class LLMProvider(ABC):

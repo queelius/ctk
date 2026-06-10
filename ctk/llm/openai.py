@@ -16,12 +16,19 @@ import json
 import logging
 from typing import Any, Dict, Iterator, List, Optional
 
-from ctk.core.constants import (DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT,
-                                MODEL_LIST_TIMEOUT)
-from ctk.llm.base import (AuthenticationError, ChatResponse,
-                          ContextLengthError, LLMProvider, LLMProviderError,
-                          Message, MessageRole, ModelInfo, ModelNotFoundError,
-                          RateLimitError)
+from ctk.core.constants import DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT, MODEL_LIST_TIMEOUT
+from ctk.llm.base import (
+    AuthenticationError,
+    ChatResponse,
+    ContextLengthError,
+    LLMProvider,
+    LLMProviderError,
+    Message,
+    MessageRole,
+    ModelInfo,
+    ModelNotFoundError,
+    RateLimitError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +51,9 @@ class OpenAIProvider(LLMProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.api_key = config.get("api_key")
-        self.base_url = (config.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+        self.base_url = (config.get("base_url") or "https://api.openai.com/v1").rstrip(
+            "/"
+        )
         self.organization = config.get("organization")
         self.timeout = config.get("timeout", DEFAULT_TIMEOUT)
 
@@ -74,10 +83,14 @@ class OpenAIProvider(LLMProvider):
     def _translate_exception(self, exc: Exception) -> LLMProviderError:
         """Map an openai SDK exception onto ctk's error taxonomy."""
         # Import inside the method so `openai` stays a lazy dependency.
-        from openai import (APIConnectionError, APITimeoutError,
-                            AuthenticationError as OpenAIAuthError,
-                            BadRequestError, NotFoundError, RateLimitError as
-                            OpenAIRateLimitError)
+        from openai import (
+            APIConnectionError,
+            APITimeoutError,
+            AuthenticationError as OpenAIAuthError,
+            BadRequestError,
+            NotFoundError,
+            RateLimitError as OpenAIRateLimitError,
+        )
 
         if isinstance(exc, OpenAIAuthError):
             return AuthenticationError(f"Authentication failed: {exc}")
@@ -153,6 +166,11 @@ class OpenAIProvider(LLMProvider):
         choice = response.choices[0]
         message = choice.message
 
+        # Thinking models (e.g. gemma via ollama) can return the answer in a
+        # ``reasoning`` field with an empty ``content``. Capture it and fall
+        # back to it so the reply is never silently blank.
+        reasoning = getattr(message, "reasoning", None) or None
+
         tool_calls: Optional[List[Dict[str, Any]]] = None
         if getattr(message, "tool_calls", None):
             tool_calls = []
@@ -161,9 +179,7 @@ class OpenAIProvider(LLMProvider):
                 try:
                     arguments = json.loads(tc.function.arguments or "{}")
                 except json.JSONDecodeError as exc:
-                    logger.warning(
-                        "Tool-call arguments were not valid JSON: %s", exc
-                    )
+                    logger.warning("Tool-call arguments were not valid JSON: %s", exc)
                     arguments = {}
                 tool_calls.append(
                     {
@@ -182,12 +198,13 @@ class OpenAIProvider(LLMProvider):
             }
 
         return ChatResponse(
-            content=message.content or "",
+            content=message.content or reasoning or "",
             model=response.model,
             finish_reason=choice.finish_reason,
             usage=usage,
             metadata={"provider": "openai", "id": response.id},
             tool_calls=tool_calls,
+            reasoning=reasoning,
         )
 
     def stream_chat(
@@ -206,7 +223,11 @@ class OpenAIProvider(LLMProvider):
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
-                piece = getattr(delta, "content", None)
+                # Fall back to reasoning deltas for thinking models that stream
+                # their answer there with empty content.
+                piece = getattr(delta, "content", None) or getattr(
+                    delta, "reasoning", None
+                )
                 if piece:
                     yield piece
         except Exception as exc:
@@ -288,9 +309,7 @@ class OpenAIProvider(LLMProvider):
         decide whether to even attempt a chat.
         """
         try:
-            self._client.with_options(
-                timeout=HEALTH_CHECK_TIMEOUT
-            ).models.list()
+            self._client.with_options(timeout=HEALTH_CHECK_TIMEOUT).models.list()
             return True
         except Exception as exc:
             logger.debug("OpenAI endpoint unavailable: %s", exc)
@@ -299,9 +318,7 @@ class OpenAIProvider(LLMProvider):
     def supports_tool_calling(self) -> bool:
         return True
 
-    def format_tools_for_api(
-        self, tools: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def format_tools_for_api(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         formatted: List[Dict[str, Any]] = []
         for tool in tools:
             formatted.append(

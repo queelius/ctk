@@ -13,9 +13,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ctk.llm.base import (AuthenticationError, ChatResponse,
-                          ContextLengthError, LLMProviderError, Message,
-                          MessageRole, ModelNotFoundError, RateLimitError)
+from ctk.llm.base import (
+    AuthenticationError,
+    ChatResponse,
+    ContextLengthError,
+    LLMProviderError,
+    Message,
+    MessageRole,
+    ModelNotFoundError,
+    RateLimitError,
+)
 from ctk.llm.openai import OpenAIProvider
 
 
@@ -33,14 +40,15 @@ def _make_chat_response(
     tool_calls=None,
     model: str = "gpt-3.5-turbo",
     response_id: str = "resp-1",
+    reasoning=None,
 ):
     """Build a stand-in for an openai ChatCompletion response object."""
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    message = SimpleNamespace(
+        content=content, tool_calls=tool_calls, reasoning=reasoning
+    )
     choice = SimpleNamespace(message=message, finish_reason=finish_reason)
     usage = SimpleNamespace(prompt_tokens=5, completion_tokens=7, total_tokens=12)
-    return SimpleNamespace(
-        choices=[choice], model=model, usage=usage, id=response_id
-    )
+    return SimpleNamespace(choices=[choice], model=model, usage=usage, id=response_id)
 
 
 def _make_models_response(ids):
@@ -52,7 +60,16 @@ def _make_models_response(ids):
 def _make_chat_stream(chunks):
     """Yield mock streaming chunks mirroring the openai SDK shape."""
     for piece in chunks:
-        delta = SimpleNamespace(content=piece)
+        delta = SimpleNamespace(content=piece, reasoning=None)
+        choice = SimpleNamespace(delta=delta, finish_reason=None)
+        yield SimpleNamespace(choices=[choice])
+
+
+def _make_reasoning_stream(chunks):
+    """Yield streaming chunks whose text arrives in the reasoning delta, not
+    content (thinking models served via ollama's OpenAI-compatible API)."""
+    for piece in chunks:
+        delta = SimpleNamespace(content=None, reasoning=piece)
         choice = SimpleNamespace(delta=delta, finish_reason=None)
         yield SimpleNamespace(choices=[choice])
 
@@ -122,9 +139,7 @@ class TestOpenAIProviderChat:
     def test_extracts_tool_calls(self, mock_openai):
         tool_call = SimpleNamespace(
             id="tc-1",
-            function=SimpleNamespace(
-                name="get_weather", arguments='{"city": "SF"}'
-            ),
+            function=SimpleNamespace(name="get_weather", arguments='{"city": "SF"}'),
         )
         mock_openai.chat.completions.create.return_value = _make_chat_response(
             "", tool_calls=[tool_call]
@@ -151,9 +166,7 @@ class TestOpenAIProviderChat:
 
         # We log and fall back to {} rather than raising, so the caller
         # always gets a structured tool_calls list.
-        assert response.tool_calls == [
-            {"id": "tc-1", "name": "x", "arguments": {}}
-        ]
+        assert response.tool_calls == [{"id": "tc-1", "name": "x", "arguments": {}}]
 
 
 # ---------------------------------------------------------------------------
@@ -317,3 +330,49 @@ class TestOpenAIProviderToolFormat:
         assert msg.metadata == {"tool_call_id": "tc-1"}
         # Dict results are JSON-encoded in the message content.
         assert "72" in msg.content
+
+
+# ---------------------------------------------------------------------------
+# Reasoning capture (thinking models)
+# ---------------------------------------------------------------------------
+
+
+class TestOpenAIProviderReasoning:
+    """Thinking models (e.g. gemma served via ollama) can return an empty
+    ``content`` with the answer in a ``reasoning`` field. ctk must capture it
+    and fall back to it so the reply is not silently blank."""
+
+    def test_reasoning_used_when_content_empty(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_chat_response(
+            "", reasoning="THINKING-ANSWER"
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+        response = provider.chat([Message(role=MessageRole.USER, content="hi")])
+        assert response.content == "THINKING-ANSWER"
+        assert response.reasoning == "THINKING-ANSWER"
+
+    def test_content_preferred_over_reasoning(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_chat_response(
+            "FINAL", reasoning="thinking"
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+        response = provider.chat([Message(role=MessageRole.USER, content="hi")])
+        assert response.content == "FINAL"
+        assert response.reasoning == "thinking"
+
+    def test_reasoning_none_when_absent(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_chat_response("hi")
+        provider = OpenAIProvider({"api_key": "k"})
+        response = provider.chat([Message(role=MessageRole.USER, content="hi")])
+        assert response.reasoning is None
+        assert response.content == "hi"
+
+    def test_stream_yields_reasoning_when_no_content(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = _make_reasoning_stream(
+            ["thin", "king"]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+        chunks = list(
+            provider.stream_chat([Message(role=MessageRole.USER, content="hi")])
+        )
+        assert chunks == ["thin", "king"]
