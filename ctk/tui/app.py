@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class _StreamToken(TextualMessage):
+class StreamToken(TextualMessage):
     """One streamed assistant token (no-tools fast path only)."""
 
     def __init__(self, text: str) -> None:
@@ -67,7 +67,7 @@ class _StreamToken(TextualMessage):
         self.text = text
 
 
-class _StreamDone(TextualMessage):
+class StreamDone(TextualMessage):
     """A streaming response finished (or errored)."""
 
     def __init__(self, error: Optional[str] = None) -> None:
@@ -75,7 +75,7 @@ class _StreamDone(TextualMessage):
         self.error = error
 
 
-class _ChatAssistantText(TextualMessage):
+class ChatAssistantText(TextualMessage):
     """A complete assistant text block from a non-streaming response.
 
     Used in the tool-calling path where we can't stream because we need
@@ -89,7 +89,7 @@ class _ChatAssistantText(TextualMessage):
         self.final = final
 
 
-class _ChatToolCall(TextualMessage):
+class ChatToolCall(TextualMessage):
     """A tool call about to execute or just completed.
 
     ``status`` is one of ``"started"``, ``"ok"``, ``"error"``. The
@@ -111,7 +111,7 @@ class _ChatToolCall(TextualMessage):
         self.result = result
 
 
-class _ChatDone(TextualMessage):
+class ChatDone(TextualMessage):
     """The whole assistant turn (including any tool loops) finished."""
 
     def __init__(self, error: Optional[str] = None) -> None:
@@ -485,11 +485,11 @@ class CTKApp(App):
             assert self.provider is not None
             for chunk in self.provider.stream_chat(history):
                 if chunk:
-                    self.post_message(_StreamToken(chunk))
+                    self.post_message(StreamToken(chunk))
         except Exception as exc:  # pragma: no cover — surfaces any provider error
-            self.post_message(_StreamDone(error=str(exc)))
+            self.post_message(StreamDone(error=str(exc)))
             return
-        self.post_message(_StreamDone())
+        self.post_message(StreamDone())
 
     # ------------------------------------------------------------------
     # Tool-aware chat path
@@ -539,31 +539,31 @@ class CTKApp(App):
                 tool_calls = response.tool_calls or []
 
                 if content:
-                    self.post_message(_ChatAssistantText(content, final=not tool_calls))
+                    self.post_message(ChatAssistantText(content, final=not tool_calls))
                     history.append(
                         LLMMessage(role=LLMMessageRole.ASSISTANT, content=content)
                     )
 
                 if not tool_calls:
-                    self.post_message(_ChatDone())
+                    self.post_message(ChatDone())
                     return
 
                 for tc in tool_calls:
                     name = tc["name"]
                     args = tc.get("arguments") or {}
                     self.post_message(
-                        _ChatToolCall(name=name, args=args, status="started")
+                        ChatToolCall(name=name, args=args, status="started")
                     )
                     try:
                         result = self._execute_tool(name, args)
                         self.post_message(
-                            _ChatToolCall(
+                            ChatToolCall(
                                 name=name, args=args, status="ok", result=result
                             )
                         )
                     except Exception as exc:
                         self.post_message(
-                            _ChatToolCall(
+                            ChatToolCall(
                                 name=name,
                                 args=args,
                                 status="error",
@@ -583,7 +583,7 @@ class CTKApp(App):
             # Bailed out of the loop without a tool-call-free turn — tell
             # the user so they don't think the model is still thinking.
             self.post_message(
-                _ChatDone(
+                ChatDone(
                     error=(
                         f"Tool loop exceeded {self._MAX_TOOL_TURNS} turns; "
                         "stopping. The model may be stuck calling tools."
@@ -591,7 +591,7 @@ class CTKApp(App):
                 )
             )
         except Exception as exc:  # pragma: no cover
-            self.post_message(_ChatDone(error=str(exc)))
+            self.post_message(ChatDone(error=str(exc)))
 
     # Tool names belonging to the ctk.network virtual MCP. Routed to
     # ctk.core.network_tools.execute_network_tool instead of the legacy
@@ -625,7 +625,7 @@ class CTKApp(App):
 
     # ----- UI thread handlers for chat-with-tools messages -------------
 
-    def on_chat_assistant_text(self, event: _ChatAssistantText) -> None:
+    def on_chat_assistant_text(self, event: ChatAssistantText) -> None:
         """Mount an assistant text bubble for a non-streaming turn.
 
         Persistence is intentionally NOT done here — ``on_chat_done``
@@ -655,7 +655,7 @@ class CTKApp(App):
             )
             self.main.messages.append_message(assistant_msg)
 
-    def on_chat_tool_call(self, event: _ChatToolCall) -> None:
+    def on_chat_tool_call(self, event: ChatToolCall) -> None:
         """Render a tool call panel inline in the message stream."""
         if self.main is None:
             return
@@ -675,7 +675,7 @@ class CTKApp(App):
         self.main.messages.mount(Static(text, classes="message-tool"))
         self.main.messages.scroll_end(animate=False)
 
-    def on_chat_done(self, event: _ChatDone) -> None:
+    def on_chat_done(self, event: ChatDone) -> None:
         if self.main is not None:
             self.main.set_streaming(False)
         self._turn_active = False
@@ -687,14 +687,14 @@ class CTKApp(App):
             self.sidebar.refresh_list()
         self._refresh_status()
 
-    def on_stream_token(self, event: _StreamToken) -> None:
+    def on_stream_token(self, event: StreamToken) -> None:
         # Custom Textual messages dispatch to ``on_<snake_case_name>``.
         if self._streaming_bubble is None:
             return
         self._streaming_buffer += event.text
         self._update_streaming_bubble(self._streaming_buffer)
 
-    def on_stream_done(self, event: _StreamDone) -> None:
+    def on_stream_done(self, event: StreamDone) -> None:
         assert self.main is not None
         self.main.set_streaming(False)
         self._turn_active = False
