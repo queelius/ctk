@@ -182,122 +182,122 @@ def cmd_import(args):
             with open(input_path, "r") as f:
                 data = f.read()
 
-        # Import conversations - get importer first (explicit or auto-detect)
-        if args.format:
-            importer = registry.get_importer(args.format)
-            if not importer:
-                _err(f"Error: Unknown format: {args.format}")
-                print(f"Available formats: {', '.join(registry.list_importers())}")
-                return 1
+        try:
+            # Import conversations - get importer first (explicit or auto-detect)
+            if args.format:
+                importer = registry.get_importer(args.format)
+                if not importer:
+                    _err(f"Error: Unknown format: {args.format}")
+                    print(f"Available formats: {', '.join(registry.list_importers())}")
+                    return 1
 
-            # Only try to parse as JSON if it's NOT a JSONL format
-            if args.format not in ["jsonl", "local", "llama", "mistral", "alpaca"]:
-                try:
-                    data = json.loads(data)
-                except (json.JSONDecodeError, ValueError, TypeError):
-                    pass  # Keep as string if not JSON
-        else:
-            # Auto-detect format
-            try:
-                data_parsed = json.loads(data)
-            except json.JSONDecodeError:
-                data_parsed = data
-
-            importer = registry.auto_detect_importer(data_parsed)
-            if not importer:
-                _err("Error: Could not auto-detect format")
-                return 1
-            data = data_parsed
-
-        # Prepare import kwargs (for both explicit and auto-detected formats)
-        import_kwargs = {}
-
-        # Detect if this is an OpenAI format importer
-        is_openai_format = (
-            args.format and args.format in ["openai", "chatgpt", "gpt"]
-        ) or (importer.name in ["openai", "chatgpt", "gpt"])
-
-        # If importing OpenAI format, pass source_dir for image resolution
-        if is_openai_format:
-            if zip_media_dir:
-                import_kwargs["source_dir"] = zip_media_dir
-            elif input_path.is_dir():
-                import_kwargs["source_dir"] = str(input_path)
+                # Only try to parse as JSON if it's NOT a JSONL format
+                if args.format not in ["jsonl", "local", "llama", "mistral", "alpaca"]:
+                    try:
+                        data = json.loads(data)
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        pass  # Keep as string if not JSON
             else:
-                # Input is a file, use parent directory as source_dir
-                import_kwargs["source_dir"] = str(input_path.parent)
+                # Auto-detect format
+                try:
+                    data_parsed = json.loads(data)
+                except json.JSONDecodeError:
+                    data_parsed = data
 
-        # If saving to database, pass media_dir for image storage
-        if args.db:
-            try:
-                db_temp = ConversationDB(args.db)
-                if hasattr(db_temp, "media_dir"):
-                    import_kwargs["media_dir"] = str(db_temp.media_dir)
-            except (ValueError, PermissionError, OSError) as e:
-                _err(f"Error: Cannot open database: {e}")
-                return 1
+                importer = registry.auto_detect_importer(data_parsed)
+                if not importer:
+                    _err("Error: Could not auto-detect format")
+                    return 1
+                data = data_parsed
 
-        # Import with kwargs
-        conversations = importer.import_data(data, **import_kwargs)
+            # Prepare import kwargs (for both explicit and auto-detected formats)
+            import_kwargs = {}
 
-    try:
-        print(f"Imported {len(conversations)} conversation(s)")
+            # Detect if this is an OpenAI format importer
+            is_openai_format = (
+                args.format and args.format in ["openai", "chatgpt", "gpt"]
+            ) or (importer.name in ["openai", "chatgpt", "gpt"])
 
-        # If no conversations were imported, treat as an error
-        # (unless explicitly told to ignore this via a flag)
-        if not conversations:
-            print("Warning: No valid conversations found in the input file")
-            if not args.db and not args.output:
-                # No output destination, this is definitely an error
-                return 1
+            # If importing OpenAI format, pass source_dir for image resolution
+            if is_openai_format:
+                if zip_media_dir:
+                    import_kwargs["source_dir"] = zip_media_dir
+                elif input_path.is_dir():
+                    import_kwargs["source_dir"] = str(input_path)
+                else:
+                    # Input is a file, use parent directory as source_dir
+                    import_kwargs["source_dir"] = str(input_path.parent)
 
-        # Save to database if requested
-        if args.db:
-            try:
-                db = ConversationDB(args.db)
-            except (ValueError, Exception) as e:
-                _err(f"Error: Cannot open database: {e}")
-                return 1
+            # If saving to database, pass media_dir for image storage
+            if args.db:
+                try:
+                    db_temp = ConversationDB(args.db)
+                    if hasattr(db_temp, "media_dir"):
+                        import_kwargs["media_dir"] = str(db_temp.media_dir)
+                except (ValueError, PermissionError, OSError) as e:
+                    _err(f"Error: Cannot open database: {e}")
+                    return 1
 
-            with db:
-                for conv in conversations:
-                    # Add tags from command line
-                    if args.tags:
-                        conv.metadata.tags.extend(args.tags.split(","))
+            # Import with kwargs
+            conversations = importer.import_data(data, **import_kwargs)
 
-                    conv_id = db.save_conversation(conv)
-                    print(f"  Saved: {conv.title or 'Untitled'} ({conv_id})")
+            print(f"Imported {len(conversations)} conversation(s)")
 
-        # Export to file if requested
-        if args.output:
-            output_format = args.output_format or "jsonl"
-            exporter = registry.get_exporter(output_format)
-            if not exporter:
-                _err(f"Error: Unknown export format: {output_format}")
-                return 1
+            # If no conversations were imported, treat as an error
+            # (unless explicitly told to ignore this via a flag)
+            if not conversations:
+                print("Warning: No valid conversations found in the input file")
+                if not args.db and not args.output:
+                    # No output destination, this is definitely an error
+                    return 1
 
-            export_kwargs = {
-                "sanitize": args.sanitize,
-                "path_selection": args.path_selection,
-            }
+            # Save to database if requested
+            if args.db:
+                try:
+                    db = ConversationDB(args.db)
+                except (ValueError, Exception) as e:
+                    _err(f"Error: Cannot open database: {e}")
+                    return 1
 
-            exporter.export_to_file(conversations, args.output, **export_kwargs)
-            print(f"Exported to {args.output} in {output_format} format")
+                with db:
+                    for conv in conversations:
+                        # Add tags from command line
+                        if args.tags:
+                            conv.metadata.tags.extend(args.tags.split(","))
 
-        return 0
+                        conv_id = db.save_conversation(conv)
+                        print(f"  Saved: {conv.title or 'Untitled'} ({conv_id})")
 
-    except Exception as e:
-        print(f"Error importing file: {e}")
-        if args.verbose:
-            import traceback
+            # Export to file if requested
+            if args.output:
+                output_format = args.output_format or "jsonl"
+                exporter = registry.get_exporter(output_format)
+                if not exporter:
+                    _err(f"Error: Unknown export format: {output_format}")
+                    return 1
 
-            traceback.print_exc()
-        return 1
-    finally:
-        if zip_media_dir:
-            import shutil
+                export_kwargs = {
+                    "sanitize": args.sanitize,
+                    "path_selection": args.path_selection,
+                }
 
-            shutil.rmtree(zip_media_dir, ignore_errors=True)
+                exporter.export_to_file(conversations, args.output, **export_kwargs)
+                print(f"Exported to {args.output} in {output_format} format")
+
+            return 0
+
+        except Exception as e:
+            print(f"Error importing file: {e}")
+            if args.verbose:
+                import traceback
+
+                traceback.print_exc()
+            return 1
+        finally:
+            if zip_media_dir:
+                import shutil
+
+                shutil.rmtree(zip_media_dir, ignore_errors=True)
 
 
 def cmd_export(args):
