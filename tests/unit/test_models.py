@@ -419,7 +419,9 @@ class TestReasoningBlock:
     def test_reasoning_blocks_round_trip_through_dict(self):
         content = MessageContent(text="final answer")
         content.reasoning.append(
-            ReasoningBlock(text="step one thinking", summary="Plan", extra={"budget": 4096})
+            ReasoningBlock(
+                text="step one thinking", summary="Plan", extra={"budget": 4096}
+            )
         )
         content.reasoning.append(ReasoningBlock(text="step two thinking"))
 

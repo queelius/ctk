@@ -1,4 +1,5 @@
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -52,10 +53,14 @@ def test_chatgpt_style_zip_extracts_only_media(tmp_path):
         },
     )
     data, media_dir = _read_zip_export(zp)
-    assert "mapping" in data
-    assert media_dir is not None
-    assert (Path(media_dir) / "dalle-generations" / "img.webp").exists()
-    assert not (Path(media_dir) / "conversations.json").exists()
+    try:
+        assert "mapping" in data
+        assert media_dir is not None
+        assert (Path(media_dir) / "dalle-generations" / "img.webp").exists()
+        assert not (Path(media_dir) / "conversations.json").exists()
+    finally:
+        if media_dir is not None:
+            shutil.rmtree(media_dir, ignore_errors=True)
 
 
 def test_zip_traversal_members_are_skipped(tmp_path):
@@ -68,11 +73,15 @@ def test_zip_traversal_members_are_skipped(tmp_path):
         },
     )
     data, media_dir = _read_zip_export(zp)
-    assert json.loads(data)[0]["uuid"] == "z1"
-    if media_dir is not None:
-        extracted = [str(p) for p in Path(media_dir).rglob("*")]
-        assert not any("evil" in p for p in extracted)
-    assert not (tmp_path / "evil.bin").exists()
+    try:
+        assert json.loads(data)[0]["uuid"] == "z1"
+        if media_dir is not None:
+            extracted = [str(p) for p in Path(media_dir).rglob("*")]
+            assert not any("evil" in p for p in extracted)
+        assert not (tmp_path / "evil.bin").exists()
+    finally:
+        if media_dir is not None:
+            shutil.rmtree(media_dir, ignore_errors=True)
 
 
 def test_zip_in_single_top_level_directory(tmp_path):

@@ -279,9 +279,14 @@ class MarkdownExporter(ExporterPlugin):
             output.write("\n\n")
 
             # Reasoning (clearly marked, quoted, before the visible reply)
-            if msg.content and msg.content.reasoning:
+            if (
+                msg.content
+                and msg.content.reasoning
+                and msg.content.get_reasoning_text()
+            ):
+                reasoning_text = msg.content.get_reasoning_text()
                 output.write("> **Reasoning**\n")
-                for line in msg.content.get_reasoning_text().splitlines():
+                for line in reasoning_text.splitlines():
                     output.write(f"> {line}\n")
                 output.write("\n")
 

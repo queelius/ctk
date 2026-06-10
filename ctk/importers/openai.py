@@ -371,7 +371,7 @@ class OpenAIImporter(ImporterPlugin):
                                 )
                     elif content_data.get("content_type") == "reasoning_recap":
                         recap = content_data.get("content", "")
-                        if recap:
+                        if recap and isinstance(recap, str):
                             content.reasoning.append(ReasoningBlock(text=recap))
                     parts = content_data.get("parts", [])
 

@@ -315,7 +315,7 @@ class MessageContent:
                 content.images.append(
                     MediaContent(
                         type=ContentType.IMAGE,
-                        **{k: v for k, v in img_data.items() if k != "type"}
+                        **{k: v for k, v in img_data.items() if k != "type"},
                     )
                 )
 
@@ -324,7 +324,7 @@ class MessageContent:
                 content.audio.append(
                     MediaContent(
                         type=ContentType.AUDIO,
-                        **{k: v for k, v in item.items() if k != "type"}
+                        **{k: v for k, v in item.items() if k != "type"},
                     )
                 )
 
@@ -333,7 +333,7 @@ class MessageContent:
                 content.video.append(
                     MediaContent(
                         type=ContentType.VIDEO,
-                        **{k: v for k, v in item.items() if k != "type"}
+                        **{k: v for k, v in item.items() if k != "type"},
                     )
                 )
 
@@ -342,7 +342,7 @@ class MessageContent:
                 content.documents.append(
                     MediaContent(
                         type=ContentType.DOCUMENT,
-                        **{k: v for k, v in item.items() if k != "type"}
+                        **{k: v for k, v in item.items() if k != "type"},
                     )
                 )
 
