@@ -19,6 +19,7 @@ from ctk.core.models import MessageRole
 from ctk.llm.base import ChatResponse
 from ctk.llm.base import Message as LLMMessage
 from ctk.llm.base import MessageRole as LLMMessageRole
+from ctk.llm.base import StreamEvent
 from ctk.tui import app as app_module
 from ctk.tui.app import CTKApp
 
@@ -82,6 +83,11 @@ class _FakeProvider:
 
     def stream_chat(self, messages, **kwargs):
         yield "PONG-REPLY"
+
+    def stream_turn(self, messages, tools=None, **kwargs):
+        # Worker now consumes stream_turn; yield a minimal scripted turn.
+        yield StreamEvent(kind="text", text="PONG-REPLY")
+        yield StreamEvent(kind="done", finish_reason="stop")
 
     def format_tool_result_message(self, name, result, tool_call_id=None):
         return LLMMessage(role=LLMMessageRole.USER, content=str(result))

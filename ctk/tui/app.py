@@ -19,6 +19,7 @@ Design notes:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -38,11 +39,12 @@ from ctk.core.models import (
     Message,
     MessageContent,
     MessageRole,
+    ReasoningBlock,
 )
 from ctk.llm.base import LLMProvider
 from ctk.llm.base import Message as LLMMessage
 from ctk.llm.base import MessageRole as LLMMessageRole
-from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble
+from ctk.tui.main_pane import ChatInput, MainPane, MessageBubble, ThinkingBlock
 from ctk.tui.modals import ConfirmModal, FilePathModal, SystemPromptModal
 from ctk.tui.sidebar import ConversationList
 
@@ -76,17 +78,19 @@ class StreamDone(TextualMessage):
 
 
 class ChatAssistantText(TextualMessage):
-    """A complete assistant text block from a non-streaming response.
+    """A complete assistant text block from a streaming turn.
 
-    Used in the tool-calling path where we can't stream because we need
-    the full response to extract tool_calls. ``final`` indicates whether
-    this is the last assistant turn (no further tool calls coming).
+    Emitted once per turn to finalize: persists text and reasoning into
+    the tree. ``final`` indicates whether this is the last assistant turn
+    (no further tool calls coming). ``reasoning`` carries the accumulated
+    chain-of-thought for the turn (empty string when none).
     """
 
-    def __init__(self, text: str, final: bool) -> None:
+    def __init__(self, text: str, final: bool, reasoning: str = "") -> None:
         super().__init__()
         self.text = text
         self.final = final
+        self.reasoning = reasoning
 
 
 class ChatToolCall(TextualMessage):
@@ -114,9 +118,26 @@ class ChatToolCall(TextualMessage):
 class ChatDone(TextualMessage):
     """The whole assistant turn (including any tool loops) finished."""
 
-    def __init__(self, error: Optional[str] = None) -> None:
+    def __init__(self, error: Optional[str] = None, cancelled: bool = False) -> None:
         super().__init__()
         self.error = error
+        self.cancelled = cancelled
+
+
+class ReasoningToken(TextualMessage):
+    """One streamed reasoning (thinking) delta in the tool path."""
+
+    def __init__(self, text: str) -> None:
+        super().__init__()
+        self.text = text
+
+
+class TurnStarted(TextualMessage):
+    """A model turn began (first turn or re-entry after tool execution)."""
+
+    def __init__(self, turn_index: int) -> None:
+        super().__init__()
+        self.turn_index = turn_index
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -175,7 +196,7 @@ class CTKApp(App):
     BINDINGS = [
         Binding("q", "quit", "quit"),
         Binding("slash", "focus_search", "search"),
-        Binding("escape", "dismiss_search", "cancel search", show=False),
+        Binding("escape", "cancel_turn_or_dismiss", "cancel", show=False),
         Binding("ctrl+r", "refresh", "refresh"),
         Binding("ctrl+s", "toggle_star", "star"),
         Binding("ctrl+n", "new_conversation", "new chat"),
@@ -219,6 +240,11 @@ class CTKApp(App):
         # Set when an assistant turn (text or text+tools) is in flight,
         # so we can ignore double-submits and reflect the state in the UI.
         self._turn_active: bool = False
+        self._active_worker: Optional[Any] = None
+        self._thinking_block: Optional[ThinkingBlock] = None
+        self._turn_indicator: Optional[Static] = None
+        self._turn_indicator_timer: Optional[Any] = None
+        self._turn_started_at: float = 0.0
 
     def set_provider(self, provider: Optional[LLMProvider]) -> None:
         """Point the app at ``provider`` and re-derive tool-support state.
@@ -293,6 +319,16 @@ class CTKApp(App):
         conv_id = self.sidebar.selected_conversation_id()
         if not conv_id:
             return
+        # Skip rebuilding the main pane when the sidebar cursor moves back to
+        # the conversation already displayed (e.g. after sidebar.refresh_list()
+        # called from on_chat_done). Rebuilding would destroy live streaming
+        # widgets (ThinkingBlock, live bubble) that are still visible.
+        # Explicit selection (on_data_table_row_selected) goes through here
+        # too, but selecting the same conversation twice is a no-op in
+        # practice. Direct calls to main.messages.show_conversation() (fork,
+        # branch, system prompt, etc.) bypass this path and always rebuild.
+        if self._current_tree is not None and conv_id == self._current_tree.id:
+            return
         tree = self.db.load_conversation(conv_id)
         if tree is None:
             self.main.messages.show_empty("(conversation not found)")
@@ -320,6 +356,13 @@ class CTKApp(App):
         assert self._search_input is not None
         self._search_input.add_class("visible")
         self._search_input.focus()
+
+    def action_cancel_turn_or_dismiss(self) -> None:
+        """Escape: cancel an in-flight turn, else dismiss the search overlay."""
+        if self._turn_active and self._active_worker is not None:
+            self._active_worker.cancel()
+            return
+        self.action_dismiss_search()
 
     def action_dismiss_search(self) -> None:
         assert self._search_input is not None
@@ -374,12 +417,13 @@ class CTKApp(App):
         self.main.set_streaming(True)
 
         if self.enable_tools:
-            # Tool-aware path: non-streaming, executes any tool calls, loops.
-            self._chat_worker_with_tools(user_msg.id)
+            self._active_worker = self._chat_worker_with_tools(user_msg.id)
         else:
             # Fast path: stream tokens straight into a single bubble.
             self._start_streaming_bubble(user_msg.id)
-            self._stream_worker(self._llm_history_for(self._current_tree))
+            self._active_worker = self._stream_worker(
+                self._llm_history_for(self._current_tree)
+            )
 
     def _render_system_note(self, text: str) -> None:
         """Mount a slash-command result inline as a system-style note.
@@ -495,11 +539,9 @@ class CTKApp(App):
     # Tool-aware chat path
     # ------------------------------------------------------------------
     #
-    # When tools are enabled we can't stream — the openai SDK only
-    # surfaces tool_calls on the final non-streaming response, and
-    # reassembling them from streaming deltas is fiddly. The worker
-    # below uses the blocking ``provider.chat()`` and loops until the
-    # model returns a turn with no tool calls.
+    # Tools are enabled: consume stream_turn events (text, reasoning,
+    # tool_calls) live. Tool calls execute in the worker thread; the
+    # loop re-enters streaming for the next turn.
     #
     # All tool execution happens inside the worker thread (calling
     # ``execute_ask_tool`` which is synchronous). The UI gets discrete
@@ -525,30 +567,65 @@ class CTKApp(App):
         re-loading the tree per loop iteration would let the modal
         race with the model and produce incoherent histories.
         """
+        from textual.worker import get_current_worker
+
         from ctk.core.tools import get_ask_tools  # lazy: tests don't need it
+
+        worker = get_current_worker()
+
+        def _cancelled() -> bool:
+            return worker is not None and worker.is_cancelled
 
         try:
             assert self.provider is not None
-
             history = self._llm_history_for(self._current_tree)
             tools = get_ask_tools(include_pass_through=False)
 
-            for _turn in range(self._MAX_TOOL_TURNS):
-                response = self.provider.chat(history, tools=tools)
-                content = response.content or ""
-                tool_calls = response.tool_calls or []
+            for turn in range(self._MAX_TOOL_TURNS):
+                self.post_message(TurnStarted(turn))
+                turn_text = ""
+                turn_reasoning = ""
+                tool_calls: List[Dict[str, Any]] = []
 
-                if content:
-                    self.post_message(ChatAssistantText(content, final=not tool_calls))
-                    history.append(
-                        LLMMessage(role=LLMMessageRole.ASSISTANT, content=content)
+                for event in self.provider.stream_turn(history, tools=tools):
+                    if _cancelled():
+                        self.post_message(
+                            ChatAssistantText(
+                                turn_text, final=True, reasoning=turn_reasoning
+                            )
+                        )
+                        self.post_message(ChatDone(cancelled=True))
+                        return
+                    if event.kind == "text":
+                        turn_text += event.text
+                        self.post_message(StreamToken(event.text))
+                    elif event.kind == "reasoning":
+                        turn_reasoning += event.text
+                        self.post_message(ReasoningToken(event.text))
+                    elif event.kind == "tool_calls":
+                        tool_calls = event.tool_calls or []
+
+                if turn_text or turn_reasoning:
+                    self.post_message(
+                        ChatAssistantText(
+                            turn_text,
+                            final=not tool_calls,
+                            reasoning=turn_reasoning,
+                        )
                     )
+                    if turn_text:
+                        history.append(
+                            LLMMessage(role=LLMMessageRole.ASSISTANT, content=turn_text)
+                        )
 
                 if not tool_calls:
                     self.post_message(ChatDone())
                     return
 
                 for tc in tool_calls:
+                    if _cancelled():
+                        self.post_message(ChatDone(cancelled=True))
+                        return
                     name = tc["name"]
                     args = tc.get("arguments") or {}
                     self.post_message(
@@ -571,17 +648,12 @@ class CTKApp(App):
                             )
                         )
                         result = f"Tool error: {exc}"
-
-                    # Feed the result back to the model so the next loop
-                    # iteration can react to it.
                     history.append(
                         self.provider.format_tool_result_message(
                             name, result, tool_call_id=tc.get("id")
                         )
                     )
 
-            # Bailed out of the loop without a tool-call-free turn — tell
-            # the user so they don't think the model is still thinking.
             self.post_message(
                 ChatDone(
                     error=(
@@ -625,38 +697,105 @@ class CTKApp(App):
 
     # ----- UI thread handlers for chat-with-tools messages -------------
 
-    def on_chat_assistant_text(self, event: ChatAssistantText) -> None:
-        """Mount an assistant text bubble for a non-streaming turn.
+    def on_turn_started(self, event: TurnStarted) -> None:
+        self._show_turn_indicator()
 
-        Persistence is intentionally NOT done here — ``on_chat_done``
-        owns the single save call so a final-turn message doesn't get
-        written twice (once here on ``event.final``, once again in
-        ``on_chat_done``). Whether this turn is final affects nothing
-        in this handler today; kept on the message type for callers
-        who may need it later.
-        """
+    def _show_turn_indicator(self) -> None:
+        if self.main is None or self._turn_indicator is not None:
+            return
+        self._turn_started_at = time.monotonic()
+        self._turn_indicator = Static(
+            Text("thinking... (0s)"), classes="turn-indicator"
+        )
+        self.main.messages.mount(self._turn_indicator)
+        self.main.messages.scroll_end(animate=False)
+        self._turn_indicator_timer = self.set_interval(1.0, self._tick_turn_indicator)
+
+    def _tick_turn_indicator(self) -> None:
+        if self._turn_indicator is None:
+            return
+        elapsed = int(time.monotonic() - self._turn_started_at)
+        self._turn_indicator.update(Text(f"thinking... ({elapsed}s)"))
+
+    def _clear_turn_indicator(self) -> None:
+        if self._turn_indicator_timer is not None:
+            self._turn_indicator_timer.stop()
+            self._turn_indicator_timer = None
+        if self._turn_indicator is not None:
+            self._turn_indicator.remove()
+            self._turn_indicator = None
+
+    def on_reasoning_token(self, event: ReasoningToken) -> None:
         if self.main is None:
             return
-        if self._current_tree is not None:
-            parent_id = None
-            path = self._current_tree.get_longest_path()
-            if path:
-                parent_id = path[-1].id
-            assistant_msg = Message(
-                id=str(uuid.uuid4()),
-                role=MessageRole.ASSISTANT,
-                content=MessageContent(text=event.text),
-                parent_id=parent_id,
-                timestamp=datetime.now(),
-            )
-            self._current_tree.add_message(assistant_msg)
-            self.main.messages.mount(
-                Static(Text("bot", style="bold green"), classes="message-role")
-            )
-            self.main.messages.append_message(assistant_msg)
+        self._clear_turn_indicator()
+        if self._thinking_block is None:
+            self._thinking_block = ThinkingBlock()
+            self.main.messages.mount(self._thinking_block)
+        self._thinking_block.append_reasoning(event.text)
+        self.main.messages.scroll_end(animate=False)
+
+    def _fold_thinking(self) -> None:
+        if self._thinking_block is not None and not self._thinking_block.folded:
+            self._thinking_block.fold()
+
+    def _ensure_live_bubble(self) -> None:
+        """Lazy visual bubble for streamed text in the tool path.
+
+        Unlike _start_streaming_bubble (the no-tools path), this mounts a
+        purely visual bubble: the tree Message is created at turn end by
+        on_chat_assistant_text, with reasoning attached.
+        """
+        assert self.main is not None
+        bubble_msg = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.ASSISTANT,
+            content=MessageContent(text=""),
+            parent_id=None,
+            timestamp=datetime.now(),
+        )
+        self._streaming_buffer = ""
+        bubble = MessageBubble(bubble_msg)
+        self._streaming_bubble = bubble
+        self.main.messages.mount(
+            Static(Text("bot", style="bold green"), classes="message-role")
+        )
+        self.main.messages.mount(bubble)
+        self.main.messages.scroll_end(animate=False)
+
+    def on_chat_assistant_text(self, event: ChatAssistantText) -> None:
+        """Finalize one turn: persist text + reasoning into the tree.
+
+        The visual bubble already exists (streamed live); reasoning-only
+        turns have no bubble and keep their expanded ThinkingBlock as the
+        visible reply.
+        """
+        if self.main is None or self._current_tree is None:
+            return
+        parent_id = None
+        path = self._current_tree.get_longest_path()
+        if path:
+            parent_id = path[-1].id
+        content = MessageContent(text=event.text or event.reasoning or "")
+        if event.reasoning:
+            content.reasoning.append(ReasoningBlock(text=event.reasoning))
+        assistant_msg = Message(
+            id=str(uuid.uuid4()),
+            role=MessageRole.ASSISTANT,
+            content=content,
+            parent_id=parent_id,
+            timestamp=datetime.now(),
+        )
+        self._current_tree.add_message(assistant_msg)
+        # Reset per-turn live widgets so the next turn creates fresh ones.
+        self._streaming_bubble = None
+        self._streaming_buffer = ""
+        self._thinking_block = None
 
     def on_chat_tool_call(self, event: ChatToolCall) -> None:
         """Render a tool call panel inline in the message stream."""
+        self._clear_turn_indicator()
+        self._fold_thinking()
         if self.main is None:
             return
         text = Text()
@@ -666,7 +805,7 @@ class CTKApp(App):
             text.append(f"({_short_args(event.args)})", style="dim")
         elif event.status == "ok":
             text.append("✓  ", style="bold green")
-            text.append(f"{event.name} → ", style="bold cyan")
+            text.append(f"{event.name} -> ", style="bold cyan")
             text.append(_truncate(event.result or "", 200), style="")
         else:  # error
             text.append("✗  ", style="bold red")
@@ -676,21 +815,47 @@ class CTKApp(App):
         self.main.messages.scroll_end(animate=False)
 
     def on_chat_done(self, event: ChatDone) -> None:
+        self._clear_turn_indicator()
         if self.main is not None:
+            if event.cancelled:
+                self.main.messages.mount(
+                    Static(
+                        Text("(cancelled)", style="dim italic"),
+                        classes="message-system",
+                    )
+                )
+            if event.error:
+                self.main.messages.mount(
+                    Static(Text(f"error: {event.error}"), classes="message-error")
+                )
+                self.main.messages.scroll_end(animate=False)
             self.main.set_streaming(False)
-        self._turn_active = False
-        if event.error:
-            self.notify(event.error, severity="error")
+        # Save and refresh the sidebar BEFORE clearing _turn_active so that
+        # the sidebar cursor-move event does not trigger _open_selected to
+        # rebuild the main pane (which would destroy the live streaming
+        # widgets that are still visible at this point).
         if self._current_tree is not None:
             self._safe_save(self._current_tree)
         if self.sidebar is not None:
             self.sidebar.refresh_list()
+        self._turn_active = False
+        self._active_worker = None
+        self._streaming_bubble = None
+        self._streaming_buffer = ""
+        self._thinking_block = None
+        if event.error:
+            self.notify(event.error, severity="error")
         self._refresh_status()
 
     def on_stream_token(self, event: StreamToken) -> None:
         # Custom Textual messages dispatch to ``on_<snake_case_name>``.
+        # In the tool path, the bubble is created lazily on the first token.
+        self._clear_turn_indicator()
+        self._fold_thinking()
         if self._streaming_bubble is None:
-            return
+            if not self._turn_active or self.main is None:
+                return
+            self._ensure_live_bubble()
         self._streaming_buffer += event.text
         self._update_streaming_bubble(self._streaming_buffer)
 
