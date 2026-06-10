@@ -2,6 +2,7 @@ import json
 import shutil
 import zipfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from ctk.cli import _read_zip_export
 
@@ -93,3 +94,34 @@ def test_zip_in_single_top_level_directory(tmp_path):
     )
     data, _ = _read_zip_export(zp)
     assert json.loads(data)[0]["uuid"] == "z1"
+
+
+def test_import_auto_copilot_saves_conversations(tmp_path, monkeypatch):
+    """The auto-search branch must reach the shared save tail (regression:
+    the zip refactor orphaned it, silently saving nothing)."""
+    from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
+
+    tree = ConversationTree(id="cop-1", title="Copilot conv")
+    tree.add_message(
+        Message(id="m1", role=MessageRole.USER, content=MessageContent(text="hi"), parent_id=None)
+    )
+
+    fake_importer = MagicMock()
+    fake_importer.import_data.return_value = [tree]
+
+    with patch("ctk.importers.copilot.CopilotImporter.find_copilot_data",
+               return_value=["/fake/path"]), \
+         patch("ctk.importers.copilot.CopilotImporter", return_value=fake_importer) as MockCls:
+        MockCls.find_copilot_data = MagicMock(return_value=["/fake/path"])
+        with patch("sys.argv", ["ctk", "import", "auto", "--format", "copilot",
+                                "--db", str(tmp_path / "db")]):
+            from ctk.cli import main
+            rc = main()
+
+    assert rc == 0, f"Expected rc=0, got rc={rc!r}"
+
+    from ctk.core.database import ConversationDB
+    db = ConversationDB(str(tmp_path / "db"))
+    saved = db.list_conversations(limit=10)
+    db.close()
+    assert len(saved) == 1, f"Expected 1 saved conversation, got {len(saved)}"

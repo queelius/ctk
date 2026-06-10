@@ -87,6 +87,58 @@ def _read_zip_export(zip_path) -> "tuple[str, Optional[str]]":
         return data, media_dir
 
 
+def _finish_import(conversations, args) -> int:
+    """Shared tail: print count, save to DB, optionally export, return exit code.
+
+    Called by both the auto-search branch and the file-import branch of
+    cmd_import so the logic is never duplicated.
+    """
+    print(f"Imported {len(conversations)} conversation(s)")
+
+    # If no conversations were imported, treat as an error
+    # (unless explicitly told to ignore this via a flag)
+    if not conversations:
+        print("Warning: No valid conversations found in the input file")
+        if not args.db and not args.output:
+            # No output destination, this is definitely an error
+            return 1
+
+    # Save to database if requested
+    if args.db:
+        try:
+            db = ConversationDB(args.db)
+        except (ValueError, Exception) as e:
+            _err(f"Error: Cannot open database: {e}")
+            return 1
+
+        with db:
+            for conv in conversations:
+                # Add tags from command line
+                if args.tags:
+                    conv.metadata.tags.extend(args.tags.split(","))
+
+                conv_id = db.save_conversation(conv)
+                print(f"  Saved: {conv.title or 'Untitled'} ({conv_id})")
+
+    # Export to file if requested
+    if args.output:
+        output_format = args.output_format or "jsonl"
+        exporter = registry.get_exporter(output_format)
+        if not exporter:
+            _err(f"Error: Unknown export format: {output_format}")
+            return 1
+
+        export_kwargs = {
+            "sanitize": args.sanitize,
+            "path_selection": args.path_selection,
+        }
+
+        exporter.export_to_file(conversations, args.output, **export_kwargs)
+        print(f"Exported to {args.output} in {output_format} format")
+
+    return 0
+
+
 def cmd_import(args):
     """Import conversations from file or auto-search"""
     registry.discover_plugins()
@@ -132,6 +184,8 @@ def cmd_import(args):
         else:
             print(f"Auto-search not yet implemented for {args.format}")
             return 1
+
+        return _finish_import(conversations, args)
 
     else:
         # Normal file import - validate input path (allow both files and directories)
@@ -241,50 +295,7 @@ def cmd_import(args):
             # Import with kwargs
             conversations = importer.import_data(data, **import_kwargs)
 
-            print(f"Imported {len(conversations)} conversation(s)")
-
-            # If no conversations were imported, treat as an error
-            # (unless explicitly told to ignore this via a flag)
-            if not conversations:
-                print("Warning: No valid conversations found in the input file")
-                if not args.db and not args.output:
-                    # No output destination, this is definitely an error
-                    return 1
-
-            # Save to database if requested
-            if args.db:
-                try:
-                    db = ConversationDB(args.db)
-                except (ValueError, Exception) as e:
-                    _err(f"Error: Cannot open database: {e}")
-                    return 1
-
-                with db:
-                    for conv in conversations:
-                        # Add tags from command line
-                        if args.tags:
-                            conv.metadata.tags.extend(args.tags.split(","))
-
-                        conv_id = db.save_conversation(conv)
-                        print(f"  Saved: {conv.title or 'Untitled'} ({conv_id})")
-
-            # Export to file if requested
-            if args.output:
-                output_format = args.output_format or "jsonl"
-                exporter = registry.get_exporter(output_format)
-                if not exporter:
-                    _err(f"Error: Unknown export format: {output_format}")
-                    return 1
-
-                export_kwargs = {
-                    "sanitize": args.sanitize,
-                    "path_selection": args.path_selection,
-                }
-
-                exporter.export_to_file(conversations, args.output, **export_kwargs)
-                print(f"Exported to {args.output} in {output_format} format")
-
-            return 0
+            return _finish_import(conversations, args)
 
         except Exception as e:
             print(f"Error importing file: {e}")
