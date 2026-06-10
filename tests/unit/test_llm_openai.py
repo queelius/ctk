@@ -187,6 +187,20 @@ class TestOpenAIProviderStreamChat:
 
         assert chunks == ["Hel", "lo", "!"]
 
+    def test_stream_chat_is_thin_adapter_over_stream_turn(self, mock_openai):
+        mock_openai.chat.completions.create.return_value = iter(
+            [
+                _chunk(reasoning="th"),
+                _chunk(content="Hi"),
+                _chunk(finish_reason="stop"),
+            ]
+        )
+        provider = OpenAIProvider({"api_key": "k"})
+        chunks = list(
+            provider.stream_chat([Message(role=MessageRole.USER, content="hi")])
+        )
+        assert chunks == ["th", "Hi"]
+
 
 # ---------------------------------------------------------------------------
 # Error translation

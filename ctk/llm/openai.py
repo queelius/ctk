@@ -215,24 +215,13 @@ class OpenAIProvider(LLMProvider):
         max_tokens: Optional[int] = None,
         **kwargs: Any,
     ) -> Iterator[str]:
-        payload = self._build_payload(
-            messages, temperature, max_tokens, stream=True, **kwargs
-        )
-        try:
-            stream = self._client.chat.completions.create(**payload)
-            for chunk in stream:
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                # Fall back to reasoning deltas for thinking models that stream
-                # their answer there with empty content.
-                piece = getattr(delta, "content", None) or getattr(
-                    delta, "reasoning", None
-                )
-                if piece:
-                    yield piece
-        except Exception as exc:
-            raise self._translate_exception(exc) from exc
+        # Thin adapter over stream_turn: text plus reasoning fallback, so
+        # thinking models are never silently blank (2.16.2 behavior).
+        for event in self.stream_turn(
+            messages, temperature=temperature, max_tokens=max_tokens, **kwargs
+        ):
+            if event.kind in ("text", "reasoning") and event.text:
+                yield event.text
 
     def stream_turn(
         self,
