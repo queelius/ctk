@@ -2,8 +2,8 @@
 JSONL format importer (common for local LLMs and fine-tuning)
 """
 
+import hashlib
 import json
-import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +16,26 @@ from ctk.core.models import (
 )
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
+
+
+def _content_fingerprint(messages_data: list) -> str:
+    """Deterministic id fragment from the (role, content) sequence.
+
+    Identical content yields an identical conversation id, so re-importing
+    the same file upserts instead of duplicating. Volatile fields (timestamps,
+    import counters) stay out of the hash.
+    """
+    hasher = hashlib.sha256()
+    for msg in messages_data:
+        role = str(msg.get("role", ""))
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            content = json.dumps(content, sort_keys=True, default=str)
+        hasher.update(role.encode("utf-8"))
+        hasher.update(b"\x1f")
+        hasher.update(content.encode("utf-8"))
+        hasher.update(b"\x1e")
+    return hasher.hexdigest()[:16]
 
 
 class JSONLImporter(ImporterPlugin):
@@ -224,8 +244,12 @@ class JSONLImporter(ImporterPlugin):
             if not messages_data:
                 continue
 
-            # Create conversation ID (use provided ID if available, otherwise generate)
-            conv_id = conv_metadata.get("id", f"jsonl_{idx}_{uuid.uuid4().hex[:8]}")
+            # Create conversation ID (use provided ID if available, otherwise derive
+            # from content hash so re-importing the same file upserts rather than
+            # duplicating — see design doc F6).
+            conv_id = conv_metadata.get(
+                "id", f"jsonl_{_content_fingerprint(messages_data)}"
+            )
 
             # Try to generate a title from the first user message or metadata
             title = conv_metadata.get("title", "Untitled Conversation")
@@ -268,8 +292,9 @@ class JSONLImporter(ImporterPlugin):
             parent_id = None
 
             for msg_idx, msg_data in enumerate(messages_data):
-                # Generate message ID
-                msg_id = f"msg_{msg_idx}_{uuid.uuid4().hex[:8]}"
+                # Deterministic and globally unique (message PK is global):
+                # scoped by the content-derived conversation id.
+                msg_id = f"{conv_id}_msg_{msg_idx}"
 
                 # Extract role
                 role_str = msg_data.get("role", "user")

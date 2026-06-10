@@ -789,11 +789,23 @@ class TestJSONLImportData:
 
     @pytest.mark.unit
     def test_conv_id_generated_when_not_provided(self):
-        """Conversation ID is auto-generated when no 'id' in metadata."""
+        """Conversation ID is content-derived (not uuid) when no 'id' in metadata.
+
+        Updated from the old uuid-suffix assertion (jsonl_0_<random>) to the new
+        content-hash contract (jsonl_<16-char-hex>).  The old test pinned the bug
+        where re-import always created a duplicate; the new contract is idempotent.
+        """
         data = [{"role": "user", "content": "Hello"}]
         trees = self.importer.import_data(data)
         tree = trees[0]
-        assert tree.id.startswith("jsonl_0_")
+        # id starts with the fixed prefix and is followed by a 16-char hex digest
+        assert tree.id.startswith("jsonl_")
+        hex_part = tree.id[len("jsonl_") :]
+        assert len(hex_part) == 16
+        assert all(c in "0123456789abcdef" for c in hex_part)
+        # Reimporting produces the same id (idempotent)
+        trees2 = self.importer.import_data(data)
+        assert trees2[0].id == tree.id
 
     @pytest.mark.unit
     def test_model_in_metadata_overrides_detection(self):
@@ -1073,3 +1085,37 @@ class TestJSONLEdgeCases:
         trees = self.importer.import_data(data)
         tree = trees[0]
         assert "my-model" in tree.metadata.tags
+
+
+# ---------------------------------------------------------------------------
+# TestJSONLDeterministicIds
+# ---------------------------------------------------------------------------
+class TestJSONLDeterministicIds:
+    """Content-derived deterministic ids enable idempotent re-import."""
+
+    @pytest.mark.unit
+    def test_reimporting_same_jsonl_yields_same_ids(self):
+        """Re-importing identical JSONL produces the same conversation and message ids."""
+        raw = (
+            '{"messages": [{"role": "user", "content": "hi"},'
+            ' {"role": "assistant", "content": "yo"}]}\n'
+        )
+        importer = JSONLImporter()
+        first = importer.import_data(raw)
+        second = importer.import_data(raw)
+        assert first[0].id == second[0].id
+        assert sorted(first[0].message_map) == sorted(second[0].message_map)
+
+    @pytest.mark.unit
+    def test_different_content_yields_different_ids(self):
+        """Different message content produces different conversation ids."""
+        importer = JSONLImporter()
+        a = importer.import_data('{"messages": [{"role": "user", "content": "aaa"}]}\n')
+        b = importer.import_data('{"messages": [{"role": "user", "content": "bbb"}]}\n')
+        assert a[0].id != b[0].id
+
+    @pytest.mark.unit
+    def test_explicit_id_still_wins(self):
+        """An explicit 'id' field in metadata takes precedence over the hash."""
+        raw = '{"id": "mine", "messages": [{"role": "user", "content": "hi"}]}\n'
+        assert JSONLImporter().import_data(raw)[0].id == "mine"
