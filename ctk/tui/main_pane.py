@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from typing import List, Optional, Union
 
 from rich.markdown import Markdown
 from rich.text import Text
+from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, TextArea
 
@@ -87,6 +89,64 @@ class BranchIndicator(Static):
         text.append(f" of {total}  ", style="dim")
         text.append("[ ] to switch", style="dim italic")
         return text
+
+
+class ThinkingBlock(Static):
+    """Collapsible chain-of-thought for one assistant turn.
+
+    Streams reasoning deltas live while expanded; ``fold()`` collapses it to a
+    one-line summary once the answer (or a tool call) begins. Focus + Enter
+    toggles. Reasoning-only turns are left expanded by the app, because the
+    reasoning is the de facto reply.
+    """
+
+    can_focus = True
+
+    BINDINGS = [Binding("enter", "expand_collapse", "thinking", show=False)]
+
+    def __init__(self) -> None:
+        super().__init__("", classes="message-thinking")
+        self._reasoning_text = ""
+        self._elapsed_s: float = 0.0
+        self._started = time.monotonic()
+        self._folded = False
+
+    @property
+    def reasoning_text(self) -> str:
+        return self._reasoning_text
+
+    @property
+    def folded(self) -> bool:
+        return self._folded
+
+    def append_reasoning(self, text: str) -> None:
+        self._reasoning_text += text
+        if not self._folded:
+            self._refresh_view()
+
+    def fold(self) -> None:
+        self._elapsed_s = time.monotonic() - self._started
+        self._folded = True
+        self._refresh_view()
+
+    def action_expand_collapse(self) -> None:
+        self._folded = not self._folded
+        self._refresh_view()
+
+    def _refresh_view(self) -> None:
+        if self._folded:
+            content: Union[Text, str] = Text(
+                f"thought for {self._elapsed_s:.1f}s  (Enter to expand)",
+                style="dim italic",
+            )
+        else:
+            content = Text(self._reasoning_text, style="dim")
+        try:
+            self.update(content)
+        except RuntimeError:
+            # Widget is not mounted in a running app (e.g. unit tests);
+            # state is updated but the visual refresh is deferred.
+            pass
 
 
 class MessageView(VerticalScroll):

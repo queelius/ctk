@@ -97,6 +97,30 @@ Screen {
     color: $text-muted;
 }
 
+.message-thinking {
+    color: $text-muted;
+    margin: 0 2 0 4;
+    padding: 0 1;
+    border-left: solid $secondary;
+}
+
+.message-thinking:focus {
+    border-left: thick $accent;
+}
+
+.message-error {
+    color: $error;
+    margin: 0 2 0 4;
+    padding: 0 1;
+    border-left: thick $error;
+}
+
+.turn-indicator {
+    color: $text-muted;
+    margin: 0 2 0 4;
+    text-style: italic;
+}
+
 .branch-indicator {
     height: 1;
     margin: 0 0 1 2;
