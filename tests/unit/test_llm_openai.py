@@ -376,3 +376,128 @@ class TestOpenAIProviderReasoning:
             provider.stream_chat([Message(role=MessageRole.USER, content="hi")])
         )
         assert chunks == ["thin", "king"]
+
+
+# ---------------------------------------------------------------------------
+# stream_turn() (unified streaming with tools)
+# ---------------------------------------------------------------------------
+
+
+def _chunk(content=None, reasoning=None, tool_calls=None, finish_reason=None):
+    delta = SimpleNamespace(content=content, reasoning=reasoning, tool_calls=tool_calls)
+    choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
+    return SimpleNamespace(choices=[choice])
+
+
+def _tc_frag(index, id=None, name=None, arguments=None):
+    fn = SimpleNamespace(name=name, arguments=arguments)
+    return SimpleNamespace(index=index, id=id, function=fn)
+
+
+class TestOpenAIProviderStreamTurn:
+    def _events(self, mock_openai, chunks, tools=None):
+        mock_openai.chat.completions.create.return_value = iter(chunks)
+        provider = OpenAIProvider({"api_key": "k"})
+        return list(
+            provider.stream_turn(
+                [Message(role=MessageRole.USER, content="hi")], tools=tools
+            )
+        )
+
+    def test_text_and_reasoning_deltas_become_events(self, mock_openai):
+        events = self._events(
+            mock_openai,
+            [
+                _chunk(reasoning="thin"),
+                _chunk(reasoning="king"),
+                _chunk(content="Hel"),
+                _chunk(content="lo"),
+                _chunk(finish_reason="stop"),
+            ],
+        )
+        kinds = [(e.kind, e.text) for e in events[:-1]]
+        assert kinds == [
+            ("reasoning", "thin"),
+            ("reasoning", "king"),
+            ("text", "Hel"),
+            ("text", "lo"),
+        ]
+        assert events[-1].kind == "done"
+        assert events[-1].finish_reason == "stop"
+
+    def test_fragmented_tool_call_arguments_are_assembled(self, mock_openai):
+        # Real OpenAI fragments the argument string across deltas, same index.
+        events = self._events(
+            mock_openai,
+            [
+                _chunk(
+                    tool_calls=[_tc_frag(0, id="tc-1", name="search", arguments="")]
+                ),
+                _chunk(tool_calls=[_tc_frag(0, arguments='{"q": "')]),
+                _chunk(tool_calls=[_tc_frag(0, arguments='x"}')]),
+                _chunk(finish_reason="tool_calls"),
+            ],
+            tools=[{"name": "search", "description": "d", "input_schema": {}}],
+        )
+        tool_events = [e for e in events if e.kind == "tool_calls"]
+        assert len(tool_events) == 1
+        assert tool_events[0].tool_calls == [
+            {"id": "tc-1", "name": "search", "arguments": {"q": "x"}}
+        ]
+        assert events[-1].kind == "done"
+        assert events[-1].finish_reason == "tool_calls"
+
+    def test_single_shot_tool_call_delta_works(self, mock_openai):
+        # ollama delivers one complete delta (verified against the real server).
+        events = self._events(
+            mock_openai,
+            [
+                _chunk(reasoning="hmm"),
+                _chunk(
+                    tool_calls=[
+                        _tc_frag(
+                            0,
+                            id="call_1",
+                            name="get_weather",
+                            arguments='{"city":"Paris"}',
+                        )
+                    ]
+                ),
+                _chunk(finish_reason="tool_calls"),
+            ],
+            tools=[{"name": "get_weather", "description": "d", "input_schema": {}}],
+        )
+        tool_events = [e for e in events if e.kind == "tool_calls"]
+        assert tool_events[0].tool_calls == [
+            {"id": "call_1", "name": "get_weather", "arguments": {"city": "Paris"}}
+        ]
+
+    def test_bad_tool_json_degrades_to_empty_dict(self, mock_openai):
+        events = self._events(
+            mock_openai,
+            [
+                _chunk(
+                    tool_calls=[_tc_frag(0, id="t", name="x", arguments="not json")]
+                ),
+                _chunk(finish_reason="tool_calls"),
+            ],
+            tools=[{"name": "x", "description": "d", "input_schema": {}}],
+        )
+        tool_events = [e for e in events if e.kind == "tool_calls"]
+        assert tool_events[0].tool_calls == [{"id": "t", "name": "x", "arguments": {}}]
+
+    def test_base_provider_default_raises(self):
+        from ctk.llm.base import LLMProvider
+
+        class Bare(LLMProvider):
+            def chat(self, messages, **kw):  # pragma: no cover
+                raise NotImplementedError
+
+            def stream_chat(self, messages, **kw):  # pragma: no cover
+                raise NotImplementedError
+
+            def get_models(self):  # pragma: no cover
+                return []
+
+        with pytest.raises(NotImplementedError):
+            list(Bare({}).stream_turn([]))

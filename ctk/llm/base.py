@@ -70,6 +70,22 @@ class ChatResponse:
     reasoning: Optional[str] = None
 
 
+@dataclass
+class StreamEvent:
+    """One event from a unified streaming turn (``LLMProvider.stream_turn``).
+
+    kind: "text" | "reasoning" | "tool_calls" | "done".
+    ``text`` carries the delta for text/reasoning kinds. ``tool_calls`` is the
+    fully assembled list (id/name/arguments) emitted once, before "done", when
+    the model requested tools. ``finish_reason`` is set on "done".
+    """
+
+    kind: str
+    text: str = ""
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    finish_reason: Optional[str] = None
+
+
 class LLMProvider(ABC):
     """
     Base class for all LLM providers.
@@ -141,6 +157,22 @@ class LLMProvider(ABC):
             LLMProviderError: On API errors, network issues, etc.
         """
         pass
+
+    def stream_turn(
+        self,
+        messages: List[Message],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Iterator["StreamEvent"]:
+        """Stream a full turn (text, reasoning, and tool calls) as events.
+
+        Default raises so concrete providers opt in explicitly.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement stream_turn"
+        )
 
     @abstractmethod
     def get_models(self) -> List[ModelInfo]:

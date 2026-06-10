@@ -28,6 +28,7 @@ from ctk.llm.base import (
     ModelInfo,
     ModelNotFoundError,
     RateLimitError,
+    StreamEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -230,6 +231,76 @@ class OpenAIProvider(LLMProvider):
                 )
                 if piece:
                     yield piece
+        except Exception as exc:
+            raise self._translate_exception(exc) from exc
+
+    def stream_turn(
+        self,
+        messages: List[Message],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs: Any,
+    ) -> Iterator[StreamEvent]:
+        """Stream one turn as StreamEvents, tools included.
+
+        Accumulates tool_call deltas keyed by index: real OpenAI fragments the
+        argument string across chunks; ollama sends one complete delta. Both
+        reduce to string concatenation per index.
+        """
+        payload = self._build_payload(
+            messages, temperature, max_tokens, stream=True, tools=tools, **kwargs
+        )
+        try:
+            stream = self._client.chat.completions.create(**payload)
+            pending: Dict[int, Dict[str, Any]] = {}
+            finish_reason: Optional[str] = None
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                piece = getattr(delta, "content", None)
+                if piece:
+                    yield StreamEvent(kind="text", text=piece)
+                thought = getattr(delta, "reasoning", None)
+                if thought:
+                    yield StreamEvent(kind="reasoning", text=thought)
+                for frag in getattr(delta, "tool_calls", None) or []:
+                    idx = getattr(frag, "index", 0) or 0
+                    slot = pending.setdefault(
+                        idx, {"id": None, "name": None, "arguments": ""}
+                    )
+                    if getattr(frag, "id", None):
+                        slot["id"] = frag.id
+                    fn = getattr(frag, "function", None)
+                    if fn is not None:
+                        if getattr(fn, "name", None):
+                            slot["name"] = fn.name
+                        if getattr(fn, "arguments", None):
+                            slot["arguments"] += fn.arguments
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
+            if pending:
+                assembled = []
+                for idx in sorted(pending):
+                    slot = pending[idx]
+                    try:
+                        arguments = json.loads(slot["arguments"] or "{}")
+                    except json.JSONDecodeError as exc:
+                        logger.warning(
+                            "Tool-call arguments were not valid JSON: %s", exc
+                        )
+                        arguments = {}
+                    assembled.append(
+                        {
+                            "id": slot["id"] or "",
+                            "name": slot["name"] or "",
+                            "arguments": arguments,
+                        }
+                    )
+                yield StreamEvent(kind="tool_calls", tool_calls=assembled)
+            yield StreamEvent(kind="done", finish_reason=finish_reason)
         except Exception as exc:
             raise self._translate_exception(exc) from exc
 
