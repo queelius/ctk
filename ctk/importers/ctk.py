@@ -3,11 +3,14 @@ exporter's 'ctk' format_style). Preserves ids, tree structure, media, tool
 calls, and reasoning exactly."""
 
 import json
+import logging
 import uuid
 from typing import Any, List
 
 from ctk.core.models import ConversationMetadata, ConversationTree, Message
 from ctk.core.plugin import ImporterPlugin
+
+logger = logging.getLogger(__name__)
 
 
 class CTKImporter(ImporterPlugin):
@@ -49,22 +52,34 @@ class CTKImporter(ImporterPlugin):
 
         conversations: List[ConversationTree] = []
         for conv_data in data.get("conversations", []):
-            metadata = (
-                ConversationMetadata.from_dict(conv_data["metadata"])
-                if isinstance(conv_data.get("metadata"), dict)
-                else ConversationMetadata()
-            )
-            tree = ConversationTree(
-                id=conv_data.get("id", str(uuid.uuid4())),
-                title=conv_data.get("title"),
-                metadata=metadata,
-            )
-            # Faithful inverse: populate the map and roots directly rather
-            # than via add_message, which would overwrite metadata.updated_at
-            # and re-derive roots (see CLAUDE.md gotchas).
-            for msg_id, msg_dict in conv_data.get("messages", {}).items():
-                tree.message_map[msg_id] = Message.from_dict(msg_dict)
-            tree.root_message_ids = list(conv_data.get("root_message_ids", []))
-            conversations.append(tree)
+            if not isinstance(conv_data, dict):
+                logger.warning(
+                    "CTKImporter: skipping non-dict conversation entry (%s)",
+                    type(conv_data).__name__,
+                )
+                continue
+            try:
+                metadata = (
+                    ConversationMetadata.from_dict(conv_data["metadata"])
+                    if isinstance(conv_data.get("metadata"), dict)
+                    else ConversationMetadata()
+                )
+                tree = ConversationTree(
+                    id=conv_data.get("id", str(uuid.uuid4())),
+                    title=conv_data.get("title"),
+                    metadata=metadata,
+                )
+                # Faithful inverse: populate the map and roots directly rather
+                # than via add_message, which would overwrite metadata.updated_at
+                # and re-derive roots (see CLAUDE.md gotchas).
+                for msg_id, msg_dict in conv_data.get("messages", {}).items():
+                    tree.message_map[msg_id] = Message.from_dict(msg_dict)
+                tree.root_message_ids = list(conv_data.get("root_message_ids", []))
+                conversations.append(tree)
+            except (KeyError, ValueError, TypeError, AttributeError) as exc:
+                logger.warning(
+                    "CTKImporter: skipping malformed conversation entry: %s", exc
+                )
+                continue
 
         return conversations

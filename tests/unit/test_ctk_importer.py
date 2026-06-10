@@ -93,3 +93,28 @@ class TestCTKImporterRoundTrip:
         importer = registry.get_importer("ctk")
         assert importer.validate(raw)
         assert len(importer.import_data(raw)) == 1
+
+
+class TestCTKImporterRobustness:
+    """Tests that CTKImporter skips bad entries and keeps valid ones."""
+
+    @pytest.mark.unit
+    def test_non_dict_entries_skipped_valid_ones_survive(self):
+        valid = json.loads(_export_ctk(_rich_tree()))["conversations"][0]
+        envelope = {"format": "ctk", "conversations": ["garbage", None, valid, 42]}
+        importer = registry.get_importer("ctk")
+        trees = importer.import_data(envelope)
+        assert len(trees) == 1
+        assert trees[0].id == "rt-1"
+
+    @pytest.mark.unit
+    def test_malformed_message_timestamp_skips_only_that_conversation(self):
+        valid = json.loads(_export_ctk(_rich_tree()))["conversations"][0]
+        broken = json.loads(json.dumps(valid))
+        broken["id"] = "broken-1"
+        first_msg = next(iter(broken["messages"].values()))
+        first_msg["timestamp"] = "not-a-date"
+        envelope = {"format": "ctk", "conversations": [broken, valid]}
+        importer = registry.get_importer("ctk")
+        trees = importer.import_data(envelope)
+        assert [t.id for t in trees] == ["rt-1"]
