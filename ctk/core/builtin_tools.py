@@ -678,10 +678,11 @@ USE THIS TOOL WHEN: user says "what models", "show models", "which models were u
     ),
     BuiltinTool(
         name="get_recent_conversations",
-        description="""Get the N most recently updated conversations.
-
-USE THIS TOOL WHEN: user says "recent conversations", "latest chats",
-"what did I work on recently".""",
+        description=(
+            "Get the N most recently updated conversations.\n\n"
+            'USE THIS TOOL WHEN: user says "recent conversations", "latest chats",'
+            ' "what did I work on recently".'
+        ),
         input_schema={
             "type": "object",
             "properties": {
@@ -697,12 +698,12 @@ USE THIS TOOL WHEN: user says "recent conversations", "latest chats",
     ),
     BuiltinTool(
         name="list_conversations",
-        description="""List conversations with optional filters.
-
-USE THIS TOOL WHEN: user asks to "list conversations", "show all chats",
-"list starred", "show pinned", "what's archived".
-
-Returns a formatted table of conversations matching the criteria.""",
+        description=(
+            "List conversations with optional filters.\n\n"
+            'USE THIS TOOL WHEN: user asks to "list conversations", "show all chats",'
+            ' "list starred", "show pinned", "what\'s archived".\n\n'
+            "Returns a formatted table of conversations matching the criteria."
+        ),
         input_schema={
             "type": "object",
             "properties": {

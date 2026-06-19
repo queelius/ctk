@@ -169,3 +169,25 @@ def test_get_statistics_smoke(tmp_path):
         assert result.startswith("Database Statistics:"), repr(result)
     finally:
         db.close()
+
+
+def test_migrated_builtin_schemas_match_registry():
+    """Every migrated BuiltinTool must be byte-identical to its TOOLS_REGISTRY entry.
+
+    During the strangler phase, this catches description/schema drift across all
+    migration batches. At Task 9, TOOLS_REGISTRY is removed and a golden digest
+    test takes over this role.
+    """
+    import ctk.core.builtin_tools as bt
+    from ctk.core.tools_registry import TOOLS_REGISTRY
+
+    registry = {t["name"]: t for t in TOOLS_REGISTRY}
+    mismatches = []
+    for tool in bt._BUILTIN_TOOLS:
+        ref = registry.get(tool.name)
+        assert ref is not None, f"{tool.name} not in TOOLS_REGISTRY"
+        if tool.description != ref["description"]:
+            mismatches.append(f"{tool.name}: description differs")
+        if tool.input_schema != ref["input_schema"]:
+            mismatches.append(f"{tool.name}: input_schema differs")
+    assert not mismatches, mismatches
