@@ -1261,7 +1261,7 @@ USE THIS TOOL WHEN: user says "what models", "show models", "which models were u
             "required": ["conversation_id"],
         },
         handler=_do_get_conversation,
-        pass_through=False,
+        pass_through=True,
     ),
     BuiltinTool(
         name="show_conversation_content",
@@ -1422,6 +1422,28 @@ def _rebuild_handlers() -> None:
     _HANDLERS.update({t.name: t for t in _BUILTIN_TOOLS})
 
 
+def _register_builtin_provider() -> None:
+    """Register the ``ctk.builtin`` provider from the live tool list.
+
+    The schemas are derived from ``BuiltinTool.as_schema_dict()`` so the
+    LLM-facing tool list and the executable handlers can never drift: they
+    are two views of the same ``_BUILTIN_TOOLS`` definitions.
+    """
+    from ctk.core.tools_registry import ToolProvider, register_provider
+
+    registry = [t.as_schema_dict() for t in _BUILTIN_TOOLS]
+    register_provider(
+        ToolProvider(
+            name="ctk.builtin",
+            description=(
+                "Built-in CTK tools for searching, fetching, and updating "
+                "conversations in the local database."
+            ),
+            tools=registry,
+        )
+    )
+
+
 def builtin_tool_names() -> set:
     return set(_HANDLERS)
 
@@ -1449,3 +1471,4 @@ def execute_builtin_tool(
 
 
 _rebuild_handlers()
+_register_builtin_provider()

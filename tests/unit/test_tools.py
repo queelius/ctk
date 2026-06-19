@@ -8,8 +8,8 @@ Covers:
 
 import pytest
 
-from ctk.core.tools import get_ask_tools, is_pass_through_tool
-from ctk.core.tools_registry import PASS_THROUGH_TOOLS, TOOLS_REGISTRY
+from ctk.core.tools import (get_ask_tools, is_pass_through_tool,
+                            pass_through_tools)
 
 
 # ==================== get_ask_tools ====================
@@ -136,10 +136,10 @@ class TestGetAskTools:
         assert "get_conversation" in names
 
     @pytest.mark.unit
-    def test_count_at_least_registry_size(self):
-        """Tool count should be at least as large as TOOLS_REGISTRY (builtin always loaded)."""
+    def test_count_at_least_builtin_size(self):
+        """Tool count should be at least the 26 builtin tools (always loaded)."""
         tools = get_ask_tools()
-        assert len(tools) >= len(TOOLS_REGISTRY)
+        assert len(tools) >= 26
 
 
 # ==================== is_pass_through_tool ====================
@@ -150,11 +150,22 @@ class TestIsPassThroughTool:
 
     @pytest.mark.unit
     def test_known_pass_through_returns_true(self):
-        """Tools in PASS_THROUGH_TOOLS should return True."""
-        for name in PASS_THROUGH_TOOLS:
+        """Tools in the derived pass-through set should return True."""
+        for name in pass_through_tools():
             assert (
                 is_pass_through_tool(name) is True
             ), f"Expected {name!r} to be a pass-through tool"
+
+    @pytest.mark.unit
+    def test_pass_through_set_is_the_five_known_tools(self):
+        """The derived pass-through set must equal the five documented tools."""
+        assert pass_through_tools() == {
+            "search_conversations",
+            "get_conversation",
+            "get_statistics",
+            "execute_shell_command",
+            "list_conversations",
+        }
 
     @pytest.mark.unit
     def test_unknown_tool_returns_false(self):

@@ -1,4 +1,5 @@
 import pytest
+import ctk.core.builtin_tools  # noqa: F401  -- import registers the ctk.builtin provider
 import ctk.core.network_tools  # noqa: F401  -- import registers the ctk.network provider
 from ctk.core.tools_registry import provider_for_tool
 

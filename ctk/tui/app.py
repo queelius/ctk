@@ -1408,15 +1408,22 @@ class CTKApp(App):
 def _register_builtin_providers() -> None:
     """Import modules that register virtual MCP providers on import.
 
-    Today: ``ctk.network`` provider via ``ctk.core.network_tools``.
-    The ``ctk.builtin`` provider is registered when ``tools_registry``
-    itself is imported (it's the default), so no work is needed there.
+    Today: ``ctk.builtin`` provider via ``ctk.core.builtin_tools`` and
+    ``ctk.network`` provider via ``ctk.core.network_tools``. Each module
+    calls ``register_provider`` at import time, so importing it here is
+    enough to wire the provider into the registry.
 
     Kept as an explicit function (not just an import side-effect at
     module top of app.py) so the order is obvious: providers are
     registered before the TUI mounts and before the chat worker
     queries the registry. New providers added here.
     """
+    try:
+        import ctk.core.builtin_tools  # noqa: F401  (import for side effect)
+    except Exception as exc:  # pragma: no cover
+        # A failing provider import shouldn't prevent the TUI from
+        # opening; the user just loses access to those tools.
+        logger.warning("Could not register ctk.builtin provider: %s", exc)
     try:
         import ctk.core.network_tools  # noqa: F401  (import for side effect)
     except Exception as exc:  # pragma: no cover

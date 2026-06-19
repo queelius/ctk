@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+import ctk.core.builtin_tools  # noqa: F401  -- import registers the ctk.builtin provider
 from ctk.core.tools_registry import iter_providers
 
 pytestmark = pytest.mark.unit

@@ -82,14 +82,14 @@ The previous per-conversation, per-library, per-view, chat REPL, and ad-hoc netw
 
 ### Tools / MCP providers (`ctk/core/tools_registry.py`)
 
-Everything the LLM can do is a tool, and every tool comes from a named provider, modeled on MCP servers:
+Everything the LLM can do is a tool, and every tool comes from a named provider, modeled on MCP servers. `ctk/core/tools_registry.py` holds only the provider-agnostic machinery (`ToolProvider`, `register_provider`, `iter_providers`, `provider_for_tool`, `all_tools`); the tool definitions live in their defining modules and register on import.
 
-- `ctk.builtin` is search/list/get/update/star/etc. Full registry in `ctk/core/tools_registry.py`.
+- `ctk.builtin` is search/list/get/update/star/etc. Defined in `ctk/core/builtin_tools.py`, which registers the provider on import.
 - `ctk.network` is `find_similar_conversations`, `list_neighbors` (queries the persisted `SimilarityModel` table). Defined in `ctk/core/network_tools.py`.
 
 `/mcp` in the TUI lists all providers and their tools. The TUI's chat worker fetches the flat tool list via `ctk.core.tools.get_ask_tools()` which calls `tools_registry.all_tools()` across providers. Adding a new provider: define it in a module that calls `register_provider(...)`, then ensure something imports the module before the TUI starts (e.g., from `ctk/tui/app.py:_register_builtin_providers`).
 
-Tool execution is dispatched in `CTKApp._execute_tool` based on tool name: network tools route to `network_tools.execute_network_tool`, builtin tools to `cli.execute_ask_tool` (legacy dispatcher; will move to a dedicated module in a follow-up).
+Tool execution is dispatched in `CTKApp._execute_tool` based on tool name: network tools route to `network_tools.execute_network_tool`, builtin tools to `ctk/core/builtin_tools.py`. Each builtin tool is a self-dispatching `BuiltinTool` (schema + handler co-located, mirroring `network_tools.py`); `execute_builtin_tool(db, name, args, ...)` dict-dispatches to the handler and returns a `ToolResult` (`text`, plus optional `data`/`rich_renderable` for a future renderer). Importing the module registers the `ctk.builtin` provider via `register_provider`, so the LLM-facing schemas and the executable handlers are two views of one `_BUILTIN_TOOLS` list and cannot drift. `cli.execute_ask_tool` is now a thin shim that adds the debug prints and forwards to `execute_builtin_tool` (the 832-line legacy if/elif dispatcher and `TOOLS_REGISTRY` are gone). `is_pass_through_tool` derives the pass-through set from the registered tools' `pass_through` flag rather than a hardcoded list.
 
 ### Plugin System (`ctk/core/plugin.py`)
 
