@@ -438,6 +438,18 @@ class ConversationMetadata:
             "summary": self.summary,
         }
 
+    def to_blob(self) -> Dict[str, Any]:
+        """The persistence overflow store: only fields with no dedicated column.
+
+        Column-backed fields (source, model, project, slug, summary, timestamps,
+        starred/pinned/archived, version, format, tags) are the single source of
+        truth and are NOT duplicated here. to_dict() stays full for export.
+        """
+        blob: Dict[str, Any] = {}
+        if self.custom_data:
+            blob["custom_data"] = self.custom_data
+        return blob
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ConversationMetadata":
         """Create from dictionary"""

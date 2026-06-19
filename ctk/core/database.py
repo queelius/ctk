@@ -659,8 +659,8 @@ class ConversationDB:
                     )
             conv_model.slug = conversation.metadata.slug
 
-            # Store full metadata as JSON
-            conv_model.metadata_json = conversation.metadata.to_dict()
+            # Store overflow metadata as JSON (columns are the single source of truth)
+            conv_model.metadata_json = conversation.metadata.to_blob()
 
             # Handle tags
             self._update_tags(session, conv_model, conversation.metadata.tags)
@@ -803,7 +803,9 @@ class ConversationDB:
             # Create ConversationTree
             metadata = ConversationMetadata.from_dict(conv_model.metadata_json or {})
 
-            # Override with direct fields
+            # Columns are the single source of truth; override any blob values
+            metadata.version = conv_model.version or metadata.version
+            metadata.format = conv_model.format or metadata.format
             metadata.source = conv_model.source
             metadata.model = conv_model.model
             metadata.project = conv_model.project
