@@ -63,7 +63,7 @@ class ConversationModel(Base):
 
     # Basic fields
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    slug: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
+    slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now()

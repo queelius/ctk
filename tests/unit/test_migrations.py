@@ -118,6 +118,29 @@ def test_legacy_db_save_round_trips_after_upgrade(tmp_path):
         db.close()
 
 
+def test_indexes_serve_slug_and_listing(tmp_path):
+    db = ConversationDB(str(tmp_path))
+    try:
+        with db.engine.connect() as conn:
+            slug_plan = conn.execute(
+                text("EXPLAIN QUERY PLAN SELECT id FROM conversations WHERE slug = 'x'")
+            ).fetchall()
+            slug_text = " ".join(str(r) for r in slug_plan)
+            assert "idx_conv_slug" in slug_text, slug_text
+
+            list_plan = conn.execute(
+                text(
+                    "EXPLAIN QUERY PLAN SELECT id FROM conversations "
+                    "WHERE archived_at IS NULL ORDER BY updated_at DESC, id LIMIT 51"
+                )
+            ).fetchall()
+            list_text = " ".join(str(r) for r in list_plan)
+            assert "idx_conv_list" in list_text, list_text
+            assert "USE TEMP B-TREE" not in list_text.upper(), list_text
+    finally:
+        db.close()
+
+
 def test_failed_migration_raises_and_does_not_advance_version(tmp_path, monkeypatch):
     import ctk.core.migrations as m
 

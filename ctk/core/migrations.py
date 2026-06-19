@@ -46,7 +46,7 @@ def _m2_keyset_list_index(conn: Connection) -> None:
     conn.execute(
         text(
             "CREATE INDEX IF NOT EXISTS idx_conv_list "
-            "ON conversations(updated_at DESC, id) WHERE archived_at IS NULL"
+            "ON conversations(archived_at, updated_at DESC, id) WHERE archived_at IS NULL"
         )
     )
 
