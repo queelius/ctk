@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import ctk
+from ctk.core.config import get_config
 from ctk.core.database import ConversationDB
+from ctk.core.db_discovery import discover_ctk_databases
 from ctk.core.input_validation import (
     ValidationError,
     validate_conversation_id,
@@ -1846,9 +1848,13 @@ def _resolve_tui_db_path(args, parser=None):
     sometimes named the SQLite file directly, so we tolerate both
     shapes. Shared between ``ctk`` (no subcommand) and ``ctk tui`` so
     both fall back to the configured default identically.
+
+    When the configured default is missing or nothing is configured, a
+    shallow CWD scan via ``discover_ctk_databases`` is offered to the
+    user interactively (TTY only) before falling through to the existing
+    error message and exit code.
     """
     import os
-    from ctk.core.config import get_config
 
     db_path = getattr(args, "db", None)
     if not db_path:
@@ -1859,6 +1865,11 @@ def _resolve_tui_db_path(args, parser=None):
             if os.path.isfile(db_path) and db_path.endswith(".db"):
                 db_path = os.path.dirname(db_path) or "."
             if not os.path.exists(db_path):
+                default_dir = db_path
+                candidates = discover_ctk_databases(os.getcwd())
+                chosen = _offer_database_choice(candidates, default_dir)
+                if chosen:
+                    return chosen
                 print(
                     f"Configured database does not exist: {db_path}\n"
                     "Either create it with `ctk db init`, import a "
@@ -1867,6 +1878,11 @@ def _resolve_tui_db_path(args, parser=None):
                 )
                 return 1
     if not db_path:
+        default_dir = os.path.expanduser("~/.ctk")
+        candidates = discover_ctk_databases(os.getcwd())
+        chosen = _offer_database_choice(candidates, default_dir)
+        if chosen:
+            return chosen
         print(
             "No database configured. Either:\n"
             "  • pass --db <path> to open one explicitly,\n"

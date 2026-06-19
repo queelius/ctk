@@ -47,7 +47,7 @@ class TestCLICommandBehaviors:
         args.model = None
         args.base_url = None
 
-        with patch("ctk.core.config.get_config") as mock_get_config, patch(
+        with patch("ctk.cli.get_config") as mock_get_config, patch(
             "ctk.tui.app.run"
         ) as mock_run:
             mock_get_config.return_value.config = {
@@ -76,7 +76,9 @@ class TestCLICommandBehaviors:
         args.model = None
         args.base_url = None
 
-        with patch("ctk.core.config.get_config") as mock_get_config:
+        with patch("ctk.cli.get_config") as mock_get_config, patch(
+            "ctk.cli._offer_database_choice", return_value=None
+        ):
             mock_get_config.return_value.config = {"database": {}}
             result = cmd_tui(args)
         assert result == 1
