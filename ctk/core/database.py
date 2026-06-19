@@ -465,6 +465,30 @@ class ConversationDB:
         """Return the cached FTS5 availability flag."""
         return self._has_fts
 
+    _FTS_SPECIAL: set = set('*():+-"{}^')
+
+    def _escape_fts_query(self, query_text: str) -> str:
+        """
+        Escape a raw user query so it is safe to pass to FTS5 MATCH.
+
+        If the query already uses explicit FTS operators (AND/OR/NOT/NEAR) or
+        contains a double-quote (indicating the caller already quoted it), return
+        it unchanged. Otherwise, if any FTS5 special character is present, wrap
+        the entire query in double quotes to force a literal phrase match (escaping
+        embedded double-quotes by doubling them).
+        """
+        if not query_text:
+            return query_text
+        upper = query_text.upper()
+        if any(op in upper for op in (" AND ", " OR ", " NOT ", " NEAR")):
+            return query_text
+        if '"' in query_text:
+            return query_text
+        if any(ch in self._FTS_SPECIAL for ch in query_text):
+            escaped = query_text.replace('"', '""')
+            return f'"{escaped}"'
+        return query_text
+
     def _prepare_fts_query(self, query_text: str) -> str:
         """
         Prepare a user query string for FTS5 MATCH syntax.
@@ -474,6 +498,7 @@ class ConversationDB:
         - Phrases in quotes: "exact match" -> "exact match"
         - Multiple words: python debugging -> python OR debugging
         - AND/OR operators preserved
+        - Special characters: wrapped in quotes via _escape_fts_query
         """
         if not query_text:
             return ""
@@ -489,10 +514,10 @@ class ConversationDB:
         # Convert simple word list to OR query for broader matching
         words = query_text.split()
         if len(words) > 1:
-            # Use OR for multiple words (more inclusive)
-            return " OR ".join(words)
+            # Each word needs escaping independently before joining with OR
+            return " OR ".join(self._escape_fts_query(w) for w in words)
 
-        return query_text
+        return self._escape_fts_query(query_text)
 
     def _search_fts5(
         self,
@@ -1319,7 +1344,7 @@ class ConversationDB:
         """
         # Try FTS5 search first if text query provided
         fts_ids = None
-        if query_text and self._has_fts5():
+        if query_text and self._has_fts:
             try:
                 search_limit = (limit or DEFAULT_SEARCH_LIMIT) + SEARCH_BUFFER
                 fts_ids = self._search_fts5(
@@ -1329,7 +1354,11 @@ class ConversationDB:
                     limit=search_limit,
                 )
                 if not fts_ids:
-                    return  # No FTS5 matches
+                    # Zero FTS hits: fall through to LIKE so tokenization
+                    # differences do not produce false "no results". Only a
+                    # non-empty query that yields zero FTS ids triggers this;
+                    # the empty-query case never enters this branch.
+                    fts_ids = None
             except Exception as e:
                 logger.debug(f"FTS5 search failed, falling back to LIKE: {e}")
                 fts_ids = None
@@ -1526,7 +1555,7 @@ class ConversationDB:
 
         # Try FTS5 search first if text query provided and FTS5 available
         fts_ids = None
-        if query_text and self._has_fts5():
+        if query_text and self._has_fts:
             try:
                 # FTS5 yields a bounded candidate pool. In cursor mode
                 # that caps total reachable text-search results at
@@ -1540,14 +1569,11 @@ class ConversationDB:
                     limit=limit + offset + SEARCH_BUFFER,
                 )
                 if not fts_ids:
-                    # No FTS5 matches - return empty rather than falling back to LIKE
-                    # This is intentional: FTS5 should be authoritative when available.
-                    # Honor cursor-mode contract: empty PaginatedResult, not bare list.
-                    if use_cursor:
-                        return PaginatedResult(
-                            items=[], next_cursor=None, has_more=False
-                        )
-                    return []
+                    # Zero FTS hits: fall through to LIKE so tokenization
+                    # differences do not produce false "no results". Only a
+                    # non-empty query that yields zero FTS ids triggers this;
+                    # the empty-query case never enters this branch.
+                    fts_ids = None
             except Exception as e:
                 logger.debug(f"FTS5 search failed, falling back to LIKE: {e}")
                 fts_ids = None
