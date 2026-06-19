@@ -31,7 +31,6 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "sqlalchemy>=2.0.0",
-        "alembic>=1.13.0",
         "pydantic>=2.0.0",
         "requests>=2.31.0",
         "rich>=13.0.0",
