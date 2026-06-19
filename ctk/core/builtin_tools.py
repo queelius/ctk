@@ -687,6 +687,67 @@ def _do_export_conversation(ctx: ToolContext) -> ToolResult:
         )
 
 
+def _do_execute_shell_command(ctx: ToolContext) -> ToolResult:
+    command = ctx.args.get("command", "")
+    if not command:
+        return ToolResult.message("Error: No command provided")
+
+    if ctx.shell_executor is None:
+        return ToolResult.message(
+            "Error: Shell command execution not available in this context."
+            " Use the TUI shell mode."
+        )
+
+    # Execute the command via the provided executor
+    try:
+        result = ctx.shell_executor(command)
+        if hasattr(result, "output"):
+            # CommandResult object
+            if result.success:
+                return ToolResult.message(
+                    result.output
+                    if result.output
+                    else "(command executed successfully)"
+                )
+            else:
+                return ToolResult.message(
+                    f"Error: {result.error}" if result.error else "Command failed"
+                )
+        else:
+            return ToolResult.message(str(result))
+    except Exception as e:
+        return ToolResult.message(f"Error executing command: {e}")
+
+
+def _do_show_conversation_tree(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    # Use shell command if executor available
+    if ctx.shell_executor:
+        result = ctx.shell_executor(f"tree {conv_id}")
+        if hasattr(result, "output"):
+            return ToolResult.message(
+                result.output if result.success else f"Error: {result.error}"
+            )
+        return ToolResult.message(str(result))
+
+    # Fallback to direct implementation
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    title = tree.title or "Untitled"
+    return ToolResult.message(
+        f"Tree for {title}:\n(Use TUI shell mode for full tree visualization)"
+    )
+
+
 _BUILTIN_TOOLS: List[BuiltinTool] = [
     BuiltinTool(
         name="star_conversation",
@@ -1094,7 +1155,7 @@ USE THIS TOOL WHEN: user says "duplicate", "copy conversation", "clone this"."""
     BuiltinTool(
         name="list_plugins",
         description=(
-            'List available importer and exporter plugins.\n\n'
+            "List available importer and exporter plugins.\n\n"
             'USE THIS TOOL WHEN: user asks "what plugins", "list importers",'
             ' "list exporters", "supported formats".'
         ),
@@ -1123,6 +1184,52 @@ USE THIS TOOL WHEN: user says "export to markdown", "save as json", "export conv
             "required": ["conversation_id"],
         },
         handler=_do_export_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="execute_shell_command",
+        description=(
+            "Execute a CTK shell command (cd, ls, find, cat, tree, star, etc.).\n\n"
+            "DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.\n\n"
+            "USE THIS TOOL WHEN: user wants to navigate (cd, ls), view content (cat, tree),"
+            " or organize (star, pin, archive).\n\n"
+            "Commands: cd, ls, pwd, find, cat, tree, paths, star, unstar, pin, unpin,"
+            " archive, unarchive, title, show"
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": (
+                        "Shell command to execute (e.g., 'ls /starred', 'find -name python')"
+                    ),
+                }
+            },
+            "required": ["command"],
+        },
+        handler=_do_execute_shell_command,
+        pass_through=True,
+    ),
+    BuiltinTool(
+        name="show_conversation_tree",
+        description=(
+            "Show the tree structure of a conversation"
+            " (useful for branching conversations).\n\n"
+            'USE THIS TOOL WHEN: user says "show the tree", "show branches",'
+            ' "conversation structure".'
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_show_conversation_tree,
         pass_through=False,
     ),
 ]

@@ -293,6 +293,91 @@ def test_list_plugins_smoke(tmp_path):
         db.close()
 
 
+def test_execute_shell_command_with_fake_executor(tmp_path):
+    """R5 guard: execute_shell_command surfaces .output from a fake executor."""
+    from collections import namedtuple
+
+    FakeResult = namedtuple("FakeResult", ["output", "success", "error"])
+
+    def fake_executor(cmd):
+        return FakeResult(output=f"ran: {cmd}", success=True, error="")
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        result = execute_builtin_tool(
+            db, "execute_shell_command", {"command": "ls"}, shell_executor=fake_executor
+        )
+        assert result == "ran: ls", repr(result)
+    finally:
+        db.close()
+
+
+def test_execute_shell_command_none_executor_returns_not_available(tmp_path):
+    """R5 guard: execute_shell_command with shell_executor=None returns the exact sentinel."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        result = execute_builtin_tool(
+            db, "execute_shell_command", {"command": "ls"}, shell_executor=None
+        )
+        assert result == (
+            "Error: Shell command execution not available in this context."
+            " Use the TUI shell mode."
+        ), repr(result)
+    finally:
+        db.close()
+
+
+def test_show_conversation_tree_prefers_executor(tmp_path):
+    """R5 guard: show_conversation_tree prefers shell_executor when present."""
+    from collections import namedtuple
+
+    FakeResult = namedtuple("FakeResult", ["output", "success", "error"])
+
+    def fake_executor(cmd):
+        return FakeResult(output=f"tree-output:{cmd}", success=True, error="")
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        result = execute_builtin_tool(
+            db,
+            "show_conversation_tree",
+            {"conversation_id": "abc123"},
+            shell_executor=fake_executor,
+        )
+        assert result == "tree-output:tree abc123", repr(result)
+    finally:
+        db.close()
+
+
+def test_show_conversation_tree_stub_fallback(tmp_path):
+    """R5 guard: show_conversation_tree falls back to stub when shell_executor=None."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        conv_id = "aaaabbbb-0000-0000-0000-000000000000"
+        tree = ConversationTree(id=conv_id, title="My Chat")
+        tree.add_message(
+            Message(
+                id="m1",
+                role=MessageRole.USER,
+                content=MessageContent(text="hello"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        result = execute_builtin_tool(
+            db,
+            "show_conversation_tree",
+            {"conversation_id": conv_id},
+            shell_executor=None,
+        )
+        assert result == (
+            "Tree for My Chat:\n(Use TUI shell mode for full tree visualization)"
+        ), repr(result)
+    finally:
+        db.close()
+
+
 def test_migrated_builtin_schemas_match_registry():
     """Every migrated BuiltinTool must be byte-identical to its TOOLS_REGISTRY entry.
 
