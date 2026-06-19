@@ -141,6 +141,43 @@ def test_indexes_serve_slug_and_listing(tmp_path):
         db.close()
 
 
+def test_migration_4_converges_stale_list_index(tmp_path):
+    """DB at user_version 3 with the old idx_conv_list shape gets converged by migration 4."""
+    # Step 1: create a fully-migrated DB (ends at user_version 4 normally).
+    db = ConversationDB(str(tmp_path))
+    db.close()
+
+    # Step 2: rewind it to look like a DB at user_version 3 with the old index shape.
+    dbfile = str(tmp_path / "conversations.db")
+    conn = sqlite3.connect(dbfile)
+    conn.execute("DROP INDEX IF EXISTS idx_conv_list")
+    conn.execute(
+        "CREATE INDEX idx_conv_list "
+        "ON conversations(updated_at DESC, id) WHERE archived_at IS NULL"
+    )
+    conn.execute("PRAGMA user_version = 3")
+    conn.commit()
+    conn.close()
+
+    # Step 3: reopen; migration 4 must fire and rebuild the index.
+    db2 = ConversationDB(str(tmp_path))
+    try:
+        with db2.engine.connect() as c:
+            row = c.execute(
+                text(
+                    "SELECT sql FROM sqlite_master "
+                    "WHERE type='index' AND name='idx_conv_list'"
+                )
+            ).fetchone()
+        assert row is not None, "idx_conv_list index not found after migration 4"
+        index_sql = row[0]
+        assert (
+            "archived_at" in index_sql
+        ), f"migration 4 did not rebuild idx_conv_list with archived_at; got: {index_sql}"
+    finally:
+        db2.close()
+
+
 def test_failed_migration_raises_and_does_not_advance_version(tmp_path, monkeypatch):
     import ctk.core.migrations as m
 

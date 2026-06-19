@@ -46,7 +46,18 @@ def _m2_keyset_list_index(conn: Connection) -> None:
     conn.execute(
         text(
             "CREATE INDEX IF NOT EXISTS idx_conv_list "
-            "ON conversations(archived_at, updated_at DESC, id) WHERE archived_at IS NULL"
+            "ON conversations(updated_at DESC, id) WHERE archived_at IS NULL"
+        )
+    )
+
+
+def _m4_rebuild_list_index(conn: Connection) -> None:
+    conn.execute(text("DROP INDEX IF EXISTS idx_conv_list"))
+    conn.execute(
+        text(
+            "CREATE INDEX idx_conv_list "
+            "ON conversations(archived_at, updated_at DESC, id) "
+            "WHERE archived_at IS NULL"
         )
     )
 
@@ -68,6 +79,7 @@ MIGRATIONS: List[Migration] = [
     Migration(1, "slug_summary_index", _m1_slug_summary_index),
     Migration(2, "keyset_list_index", _m2_keyset_list_index),
     Migration(3, "is_branching_column", _m3_is_branching),
+    Migration(4, "rebuild_list_index", _m4_rebuild_list_index),
 ]
 
 
