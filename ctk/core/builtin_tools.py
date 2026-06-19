@@ -271,6 +271,160 @@ def _do_auto_tag_conversation(ctx: ToolContext) -> ToolResult:
     )
 
 
+def _do_get_statistics(ctx: ToolContext) -> ToolResult:
+    stats = ctx.db.get_statistics()
+
+    result_str = "Database Statistics:\n\n"
+    result_str += f"Total conversations: {stats.get('total_conversations', 0)}\n"
+    result_str += f"Total messages: {stats.get('total_messages', 0)}\n"
+
+    if stats.get("by_source"):
+        result_str += "\nBy source:\n"
+        for source, count in stats["by_source"].items():
+            result_str += f"  - {source}: {count}\n"
+
+    if stats.get("by_model"):
+        result_str += "\nTop models:\n"
+        for model, count in list(stats["by_model"].items())[:5]:
+            result_str += f"  - {model}: {count}\n"
+
+    return ToolResult.message(result_str)
+
+
+def _do_list_sources(ctx: ToolContext) -> ToolResult:
+    stats = ctx.db.get_statistics()
+    sources_data = stats.get("by_source", {})
+
+    if not sources_data:
+        return ToolResult.message("No sources found in database.")
+
+    result_str = "Sources in database:\n\n"
+    sorted_sources = sorted(sources_data.items(), key=lambda x: x[1], reverse=True)
+    for source, count in sorted_sources:
+        result_str += f"  {source}: {count} conversation(s)\n"
+
+    result_str += f"\nTotal: {len(sources_data)} sources"
+    return ToolResult.message(result_str)
+
+
+def _do_list_models(ctx: ToolContext) -> ToolResult:
+    stats = ctx.db.get_statistics()
+    models_data = stats.get("by_model", {})
+
+    if not models_data:
+        return ToolResult.message("No models found in database.")
+
+    result_str = "Models in database:\n\n"
+    sorted_models = sorted(models_data.items(), key=lambda x: x[1], reverse=True)
+    for model, count in sorted_models[:20]:  # Limit to top 20
+        result_str += f"  {model}: {count} conversation(s)\n"
+
+    if len(models_data) > 20:
+        result_str += f"\n  ... and {len(models_data) - 20} more models"
+
+    result_str += f"\nTotal: {len(models_data)} unique models"
+    return ToolResult.message(result_str)
+
+
+def _do_get_recent_conversations(ctx: ToolContext) -> ToolResult:
+    limit = ctx.args.get("limit", 10)
+    if not isinstance(limit, int):
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 10
+
+    conversations = ctx.db.list_conversations(limit=limit)
+
+    if not conversations:
+        return ToolResult.message("No conversations found.")
+
+    result_str = f"Recent conversations (last {len(conversations)}):\n\n"
+    for i, conv in enumerate(conversations, 1):
+        conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+        flags = ""
+        if conv_dict.get("starred_at"):
+            flags += "⭐"
+        if conv_dict.get("pinned_at"):
+            flags += "📌"
+
+        title = conv_dict.get("title", "Untitled")[:50]
+        updated = conv_dict.get("updated_at", "Unknown")[:19]
+
+        result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
+        result_str += f"   Updated: {updated}\n"
+
+    result_str += "\nType `show <id>` to view any conversation."
+    return ToolResult.message(result_str)
+
+
+def _do_list_conversations(ctx: ToolContext) -> ToolResult:
+    # Get filter parameters
+    starred = ctx.args.get("starred")
+    pinned = ctx.args.get("pinned")
+    archived = ctx.args.get("archived")
+    limit = ctx.args.get("limit", 20)
+    source = ctx.args.get("source")
+    model = ctx.args.get("model")
+
+    if not isinstance(limit, int):
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 20
+
+    # Build kwargs for list_conversations
+    kwargs: Dict[str, Any] = {"limit": limit}
+    if starred is not None:
+        kwargs["starred"] = starred
+    if pinned is not None:
+        kwargs["pinned"] = pinned
+    if archived is not None:
+        kwargs["archived"] = archived
+    if source:
+        kwargs["source"] = source
+    if model:
+        kwargs["model"] = model
+
+    conversations = ctx.db.list_conversations(**kwargs)
+
+    if not conversations:
+        filters_desc = []
+        if starred:
+            filters_desc.append("starred")
+        if pinned:
+            filters_desc.append("pinned")
+        if archived:
+            filters_desc.append("archived")
+        if source:
+            filters_desc.append(f"source={source}")
+        if model:
+            filters_desc.append(f"model={model}")
+        filter_str = f" ({', '.join(filters_desc)})" if filters_desc else ""
+        return ToolResult.message(f"No conversations found{filter_str}.")
+
+    result_str = f"Conversations ({len(conversations)} results):\n\n"
+    for i, conv in enumerate(conversations, 1):
+        conv_dict = conv.to_dict() if hasattr(conv, "to_dict") else conv
+        flags = ""
+        if conv_dict.get("starred_at"):
+            flags += "⭐"
+        if conv_dict.get("pinned_at"):
+            flags += "📌"
+        if conv_dict.get("archived_at"):
+            flags += "📦"
+
+        title = conv_dict.get("title", "Untitled")[:50]
+        source_str = conv_dict.get("metadata", {}).get("source", "") or ""
+        model_str = conv_dict.get("metadata", {}).get("model", "") or ""
+
+        result_str += f"{i}. {flags}{conv_dict['id'][:8]}... {title}\n"
+        if source_str or model_str:
+            result_str += f"   {source_str} | {model_str}\n"
+
+    return ToolResult.message(result_str)
+
+
 _BUILTIN_TOOLS: List[BuiltinTool] = [
     BuiltinTool(
         name="star_conversation",
@@ -492,6 +646,92 @@ Uses LLM to analyze conversation content and suggest relevant tags.""",
         },
         handler=_do_auto_tag_conversation,
         pass_through=False,
+    ),
+    BuiltinTool(
+        name="get_statistics",
+        description="""Get database statistics (counts, sources, models).
+
+DO NOT USE THIS TOOL FOR: greetings, chitchat, or general questions.
+
+USE THIS TOOL WHEN: user asks "how many conversations", "what are the stats", "show statistics".""",
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_do_get_statistics,
+        pass_through=True,
+    ),
+    BuiltinTool(
+        name="list_sources",
+        description="""List all conversation sources (openai, anthropic, etc.) with counts.
+
+USE THIS TOOL WHEN: user says "what sources", "show sources", "where are conversations from".""",
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_do_list_sources,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="list_models",
+        description="""List all models used in conversations with counts.
+
+USE THIS TOOL WHEN: user says "what models", "show models", "which models were used".""",
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_do_list_models,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="get_recent_conversations",
+        description="""Get the N most recently updated conversations.
+
+USE THIS TOOL WHEN: user says "recent conversations", "latest chats",
+"what did I work on recently".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of conversations to return (default: 10)",
+                }
+            },
+            "required": [],
+        },
+        handler=_do_get_recent_conversations,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="list_conversations",
+        description="""List conversations with optional filters.
+
+USE THIS TOOL WHEN: user asks to "list conversations", "show all chats",
+"list starred", "show pinned", "what's archived".
+
+Returns a formatted table of conversations matching the criteria.""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "starred": {
+                    "type": "boolean",
+                    "description": "Filter to starred conversations only",
+                },
+                "pinned": {
+                    "type": "boolean",
+                    "description": "Filter to pinned conversations only",
+                },
+                "archived": {
+                    "type": "boolean",
+                    "description": "Filter to archived conversations only",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results (default: 20)",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Filter by source (e.g., 'anthropic', 'openai')",
+                },
+                "model": {"type": "string", "description": "Filter by model name"},
+            },
+            "required": [],
+        },
+        handler=_do_list_conversations,
+        pass_through=True,
     ),
 ]
 _HANDLERS: Dict[str, BuiltinTool] = {}

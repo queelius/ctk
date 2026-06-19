@@ -100,3 +100,72 @@ def test_tag_tools_in_builtin_tool_names():
         "auto_tag_conversation",
     ):
         assert tool in names, f"{tool!r} not found in builtin_tool_names()"
+
+
+def _seed_db(db):
+    """Helper: save two conversations and return them."""
+    import uuid
+
+    trees = []
+    for title in ("Alpha conversation", "Beta conversation"):
+        tree = ConversationTree(id=str(uuid.uuid4()), title=title)
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="hello"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+        trees.append(tree)
+    return trees
+
+
+def test_listing_tools_in_builtin_tool_names():
+    """All 5 listing tools are registered."""
+    names = builtin_tool_names()
+    for tool in (
+        "get_statistics",
+        "list_sources",
+        "list_models",
+        "get_recent_conversations",
+        "list_conversations",
+    ):
+        assert tool in names, f"{tool!r} not found in builtin_tool_names()"
+
+
+def test_list_conversations_seeded_smoke(tmp_path):
+    """list_conversations returns prefix 'Conversations (' and no error prefix."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_db(db)
+        result = execute_builtin_tool(db, "list_conversations", {})
+        assert not result.startswith("Error executing"), result
+        assert result.startswith("Conversations ("), repr(result)
+    finally:
+        db.close()
+
+
+def test_get_recent_conversations_seeded_smoke(tmp_path):
+    """get_recent_conversations returns prefix 'Recent conversations' and no error prefix."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_db(db)
+        result = execute_builtin_tool(db, "get_recent_conversations", {})
+        assert not result.startswith("Error executing"), result
+        assert result.startswith("Recent conversations"), repr(result)
+    finally:
+        db.close()
+
+
+def test_get_statistics_smoke(tmp_path):
+    """get_statistics returns prefix 'Database Statistics:'."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_db(db)
+        result = execute_builtin_tool(db, "get_statistics", {})
+        assert not result.startswith("Error executing"), result
+        assert result.startswith("Database Statistics:"), repr(result)
+    finally:
+        db.close()
