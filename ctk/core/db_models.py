@@ -88,6 +88,10 @@ class ConversationModel(Base):
     pinned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # Denormalized branch flag: True when the tree has more than one root-to-leaf path.
+    # Maintained at save time; replaces the write-only PathModel path-count subquery.
+    is_branching: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+
     # Full metadata as JSON (catch-all)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
@@ -231,7 +235,11 @@ class TagModel(Base):
 
 
 class PathModel(Base):
-    """SQLAlchemy model for conversation paths (branches)"""
+    """SQLAlchemy model for conversation paths (branches).
+
+    DEPRECATED: no longer written as of 2.17.x; use ConversationModel.is_branching instead.
+    Table definition retained for two-phase retirement; will be dropped in a later release.
+    """
 
     __tablename__ = "paths"
 

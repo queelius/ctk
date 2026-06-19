@@ -51,9 +51,23 @@ def _m2_keyset_list_index(conn: Connection) -> None:
     )
 
 
+def _m3_is_branching(conn: Connection) -> None:
+    cols = _columns(conn, "conversations")
+    if "is_branching" not in cols:
+        conn.execute(
+            text("ALTER TABLE conversations ADD COLUMN is_branching BOOLEAN DEFAULT 0")
+        )
+    conn.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS idx_conv_is_branching ON conversations(is_branching)"
+        )
+    )
+
+
 MIGRATIONS: List[Migration] = [
     Migration(1, "slug_summary_index", _m1_slug_summary_index),
     Migration(2, "keyset_list_index", _m2_keyset_list_index),
+    Migration(3, "is_branching_column", _m3_is_branching),
 ]
 
 

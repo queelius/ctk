@@ -38,7 +38,6 @@ from .db_models import (
     EmbeddingModel,
     EmbeddingSessionModel,
     MessageModel,
-    PathModel,
     RoleEnum,
     SimilarityModel,
     TagModel,
@@ -642,11 +641,8 @@ class ConversationDB:
             if existing:
                 # Update existing conversation
                 conv_model = existing
-                # Clear existing messages and paths for full refresh
+                # Clear existing messages for full refresh
                 session.query(MessageModel).filter_by(
-                    conversation_id=conversation.id
-                ).delete()
-                session.query(PathModel).filter_by(
                     conversation_id=conversation.id
                 ).delete()
             else:
@@ -722,22 +718,8 @@ class ConversationDB:
                     )
                     session.add(msg_model)
 
-            # Save paths with updated message IDs
-            paths = conversation.get_all_paths()
-            for idx, path in enumerate(paths):
-                # Map message IDs to their unique database IDs (using '::' delimiter)
-                unique_message_ids = [f"{conversation.id}::{msg.id}" for msg in path]
-                path_model = PathModel(
-                    conversation_id=conversation.id,
-                    name=f"path_{idx}",
-                    message_ids_json=unique_message_ids,
-                    is_primary=(idx == 0),  # First path is primary
-                    length=len(path),
-                    leaf_message_id=(
-                        f"{conversation.id}::{path[-1].id}" if path else None
-                    ),
-                )
-                session.add(path_model)
+            # Set denormalized branch flag (True when tree has more than one root-to-leaf path)
+            conv_model.is_branching = len(conversation.get_all_paths()) > 1
 
             session.commit()
             msg_count = len(conversation.message_map)
@@ -1053,6 +1035,7 @@ class ConversationDB:
         archived: Optional[bool] = None,
         starred: Optional[bool] = None,
         pinned: Optional[bool] = None,
+        has_branches: Optional[bool] = None,
         include_archived: bool = False,
         cursor: Optional[str] = None,
         page_size: int = 50,
@@ -1079,6 +1062,7 @@ class ConversationDB:
             archived: If True, show only archived; if False, only non-archived; if None, both
             starred: If True, show only starred; if False, only non-starred; if None, both
             pinned: If True, show only pinned; if False, only non-pinned; if None, both
+            has_branches: If True, only branching; if False, only linear; if None, no filter
             include_archived: If True, include archived conversations (default: exclude)
             cursor: Pagination cursor (empty string = first page, None = offset mode)
             page_size: Number of results per page (used with cursor mode)
@@ -1116,6 +1100,13 @@ class ConversationDB:
                 tags=tags,
                 include_archived=include_archived,
             )
+
+            # Branching filter: use denormalized is_branching column (set at save time)
+            if has_branches is not None:
+                if has_branches:
+                    query = query.filter(ConversationModel.is_branching.is_(True))
+                else:
+                    query = query.filter(ConversationModel.is_branching.is_(False))
 
             # GROUP BY for the message-count aggregate.
             query = query.group_by(ConversationModel.id)
@@ -1690,31 +1681,12 @@ class ConversationDB:
             if max_messages is not None:
                 query = query.having(func.count(MessageModel.id) <= max_messages)
 
-            # Branching filter (requires subquery)
+            # Branching filter: use denormalized is_branching column (set at save time)
             if has_branches is not None:
-                branch_subquery = (
-                    session.query(
-                        PathModel.conversation_id,
-                        func.count(PathModel.id).label("path_count"),
-                    )
-                    .group_by(PathModel.conversation_id)
-                    .subquery()
-                )
-
-                query = query.outerjoin(
-                    branch_subquery,
-                    ConversationModel.id == branch_subquery.c.conversation_id,
-                )
-
                 if has_branches:
-                    query = query.filter(branch_subquery.c.path_count > 1)
+                    query = query.filter(ConversationModel.is_branching.is_(True))
                 else:
-                    query = query.filter(
-                        or_(
-                            branch_subquery.c.path_count == 1,
-                            branch_subquery.c.path_count.is_(None),
-                        )
-                    )
+                    query = query.filter(ConversationModel.is_branching.is_(False))
 
             # Resolve order field
             order_field = {
