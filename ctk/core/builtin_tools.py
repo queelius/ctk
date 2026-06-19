@@ -179,6 +179,98 @@ def _do_delete_conversation(ctx: ToolContext) -> ToolResult:
     return ToolResult.message(f"Deleted conversation '{title}' ({conv_id[:8]}...)")
 
 
+def _do_tag_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    tags = ctx.args.get("tags", [])
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+    if not tags:
+        return ToolResult.message("Error: tags required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    # Add tags
+    existing_tags = tree.metadata.tags if tree.metadata and tree.metadata.tags else []
+    new_tags = [t for t in tags if t not in existing_tags]
+    tree.metadata.tags = existing_tags + new_tags
+    ctx.db.save_conversation(tree)
+
+    return ToolResult.message(f"Added tags to {conv_id[:8]}...: {', '.join(new_tags)}")
+
+
+def _do_list_tags(ctx: ToolContext) -> ToolResult:
+    # Get all tags with counts
+    stats = ctx.db.get_statistics()
+    tags_data = stats.get("by_tag", {})
+
+    if not tags_data:
+        return ToolResult.message("No tags found in database.")
+
+    result_str = "Tags in database:\n\n"
+    # Sort by count descending
+    sorted_tags = sorted(tags_data.items(), key=lambda x: x[1], reverse=True)
+    for tag, count in sorted_tags:
+        result_str += f"  {tag}: {count} conversation(s)\n"
+
+    result_str += f"\nTotal: {len(tags_data)} unique tags"
+    return ToolResult.message(result_str)
+
+
+def _do_remove_tag(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    tag = ctx.args.get("tag", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+    if not tag:
+        return ToolResult.message("Error: tag required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    if not tree.metadata or not tree.metadata.tags:
+        return ToolResult.message("Conversation has no tags")
+
+    if tag not in tree.metadata.tags:
+        return ToolResult.message(f"Tag '{tag}' not found on conversation")
+
+    tree.metadata.tags = [t for t in tree.metadata.tags if t != tag]
+    ctx.db.save_conversation(tree)
+    return ToolResult.message(f"Removed tag '{tag}' from {conv_id[:8]}...")
+
+
+def _do_auto_tag_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id_arg = ctx.args.get("conversation_id", "")
+    if not conv_id_arg:
+        return ToolResult.message("Error: conversation_id required")
+    conv_id = _resolve_conversation_id(ctx.db, conv_id_arg)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(f"Conversation not found: {conv_id_arg}")
+
+    conversation = ctx.db.load_conversation(conv_id)
+    if not conversation:
+        return ToolResult.message(f"Conversation not found: {conv_id}")
+
+    # Auto-tagging requires LLM - check if we have one in context
+    # This is a simplified version - the full implementation would use the TUI's provider
+    # For now, return a message suggesting manual tagging
+    return ToolResult.message(
+        f"Auto-tagging requires an LLM provider."
+        f" Use `ctk auto-tag {conv_id[:8]}` from the command line,"
+        " or manually add tags with `tag_conversation`."
+    )
+
+
 _BUILTIN_TOOLS: List[BuiltinTool] = [
     BuiltinTool(
         name="star_conversation",
@@ -328,6 +420,77 @@ IMPORTANT: Ask for confirmation before deleting.""",
             "required": ["conversation_id"],
         },
         handler=_do_delete_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="tag_conversation",
+        description="""Add tags to a conversation for categorization.
+
+USE THIS TOOL WHEN: user says "tag this as...", "add tag...", "categorize as...".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags to add to the conversation",
+                },
+            },
+            "required": ["conversation_id", "tags"],
+        },
+        handler=_do_tag_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="list_tags",
+        description="""List all tags in the database with counts.
+
+USE THIS TOOL WHEN: user says "show all tags", "what tags exist", "list tags".""",
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_do_list_tags,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="remove_tag",
+        description="""Remove a tag from a conversation.
+
+USE THIS TOOL WHEN: user says "remove tag", "untag", "delete tag from...".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID",
+                },
+                "tag": {"type": "string", "description": "Tag to remove"},
+            },
+            "required": ["conversation_id", "tag"],
+        },
+        handler=_do_remove_tag,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="auto_tag_conversation",
+        description="""Automatically tag a conversation using LLM analysis.
+
+USE THIS TOOL WHEN: user says "auto-tag", "suggest tags", "analyze and tag".
+
+Uses LLM to analyze conversation content and suggest relevant tags.""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or prefix of conversation ID",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_auto_tag_conversation,
         pass_through=False,
     ),
 ]
