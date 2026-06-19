@@ -67,7 +67,270 @@ def _resolve_conversation_id(db: ConversationDB, conv_id: str) -> str:
     return full
 
 
-_BUILTIN_TOOLS: List[BuiltinTool] = []
+def _do_star_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    # Resolve prefix
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.star_conversation(conv_id)
+    return ToolResult.message(f"Starred conversation {conv_id[:8]}...")
+
+
+def _do_unstar_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.star_conversation(conv_id, star=False)
+    return ToolResult.message(f"Unstarred conversation {conv_id[:8]}...")
+
+
+def _do_pin_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.pin_conversation(conv_id)
+    return ToolResult.message(f"Pinned conversation {conv_id[:8]}...")
+
+
+def _do_unpin_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.pin_conversation(conv_id, pin=False)
+    return ToolResult.message(f"Unpinned conversation {conv_id[:8]}...")
+
+
+def _do_archive_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.archive_conversation(conv_id)
+    return ToolResult.message(f"Archived conversation {conv_id[:8]}...")
+
+
+def _do_unarchive_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.archive_conversation(conv_id, archive=False)
+    return ToolResult.message(f"Unarchived conversation {conv_id[:8]}...")
+
+
+def _do_rename_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    title = ctx.args.get("title", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+    if not title:
+        return ToolResult.message("Error: title required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    ctx.db.update_conversation_metadata(conv_id, title=title)
+    return ToolResult.message(f"Renamed conversation {conv_id[:8]}... to '{title}'")
+
+
+def _do_delete_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    # Get title before deletion for confirmation message
+    tree = ctx.db.load_conversation(conv_id)
+    title = tree.title if tree else "Unknown"
+
+    ctx.db.delete_conversation(conv_id)
+    return ToolResult.message(f"Deleted conversation '{title}' ({conv_id[:8]}...)")
+
+
+_BUILTIN_TOOLS: List[BuiltinTool] = [
+    BuiltinTool(
+        name="star_conversation",
+        description="""Star a conversation to mark it as important.
+
+USE THIS TOOL WHEN: user says "star this", "mark as important", "favorite this conversation".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to star",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_star_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="unstar_conversation",
+        description="""Remove star from a conversation.
+
+USE THIS TOOL WHEN: user says "unstar this", "remove from favorites".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to unstar",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_unstar_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="pin_conversation",
+        description="""Pin a conversation to keep it at the top.
+
+USE THIS TOOL WHEN: user says "pin this", "keep at top".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to pin",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_pin_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="unpin_conversation",
+        description="""Remove pin from a conversation.
+
+USE THIS TOOL WHEN: user says "unpin this".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to unpin",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_unpin_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="archive_conversation",
+        description="""Archive a conversation to hide it from default listings.
+
+USE THIS TOOL WHEN: user says "archive this", "hide this conversation".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to archive",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_archive_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="unarchive_conversation",
+        description="""Unarchive a conversation to make it visible again.
+
+USE THIS TOOL WHEN: user says "unarchive this", "restore this conversation".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to unarchive",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_unarchive_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="rename_conversation",
+        description="""Rename a conversation by setting its title.
+
+USE THIS TOOL WHEN: user says "rename this to...", "change title to...", "call this...".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to rename",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "New title for the conversation",
+                },
+            },
+            "required": ["conversation_id", "title"],
+        },
+        handler=_do_rename_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="delete_conversation",
+        description="""Delete a conversation from the database. This is IRREVERSIBLE.
+
+USE THIS TOOL WHEN: user explicitly says "delete this conversation", "remove this chat".
+
+IMPORTANT: Ask for confirmation before deleting.""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to delete",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_delete_conversation,
+        pass_through=False,
+    ),
+]
 _HANDLERS: Dict[str, BuiltinTool] = {}
 
 
