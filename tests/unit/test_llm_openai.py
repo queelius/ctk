@@ -515,3 +515,48 @@ class TestOpenAIProviderStreamTurn:
 
         with pytest.raises(NotImplementedError):
             list(Bare({}).stream_turn([]))
+
+
+# ---------------------------------------------------------------------------
+# _format_message coercion (Task 1: C-W0a)
+# ---------------------------------------------------------------------------
+
+
+import json  # noqa: E402 (placed here to keep the section self-contained)
+
+
+def _provider_fm():
+    """Build an OpenAIProvider without making any network calls.
+
+    _format_message is a pure helper so no live endpoint is needed.
+    The openai.OpenAI constructor is patched out.
+    """
+    with patch("openai.OpenAI", return_value=MagicMock()):
+        return OpenAIProvider(
+            {"model": "test-model", "base_url": "http://localhost:0/v1", "api_key": "x"}
+        )
+
+
+class _ContentObj:
+    def get_text(self):
+        return "hello from object"
+
+
+def test_format_message_coerces_get_text_content():
+    p = _provider_fm()
+    out = p._format_message(Message(role=MessageRole.USER, content=_ContentObj()))
+    assert out["content"] == "hello from object"
+    json.dumps(out)  # must be JSON-serializable
+
+
+def test_format_message_coerces_non_string_content():
+    p = _provider_fm()
+    out = p._format_message(Message(role=MessageRole.USER, content=12345))
+    assert out["content"] == "12345"
+    json.dumps(out)
+
+
+def test_format_message_passes_plain_string():
+    p = _provider_fm()
+    out = p._format_message(Message(role=MessageRole.ASSISTANT, content="plain"))
+    assert out["content"] == "plain"

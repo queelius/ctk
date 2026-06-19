@@ -348,9 +348,16 @@ class OpenAIProvider(LLMProvider):
         return 4_096
 
     def _format_message(self, msg: Message) -> Dict[str, Any]:
+        content = msg.content
+        if hasattr(content, "get_text"):
+            content = content.get_text()
+        elif content is None:
+            content = ""
+        elif not isinstance(content, str):
+            content = str(content)
         formatted: Dict[str, Any] = {
             "role": msg.role.value,
-            "content": msg.content,
+            "content": content,
         }
         # Tool role messages need a tool_call_id to correlate with the
         # assistant's prior tool request.
