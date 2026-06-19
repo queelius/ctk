@@ -125,6 +125,10 @@ Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrappi
 - `ctk/core/input_validation.py`: `validate_conversation_id()`, `validate_file_path()`
 - `ctk/core/constants.py`: timeouts, limits, widths
 
+### Schema Migrations (`ctk/core/migrations.py`)
+
+Schema changes go through the versioned `PRAGMA user_version` migration runner (since 2.18.0). To add a new migration, append a `Migration` object to the `MIGRATIONS` list in `ctk/core/migrations.py` -- never edit a shipped entry. Each migration has a `version` int, a human-readable `description`, and an `up` SQL string. `run_migrations(conn)` is called at DB open time and is a no-op when the schema is already current. Conversation metadata columns (`title`, `source`, `tags`, `starred`, `pinned`, `archived`) are the single source of truth; the `metadata_json` blob holds only `custom_data`.
+
 ## Project Layout Beyond `ctk/`
 
 - `docs/` is a MkDocs site (`mkdocs.yml`). Build with `mkdocs serve` for local preview. Note: `docs/index.md` is currently a stale copy of the pre-2.12 README and should be regenerated from the current README before publishing.
