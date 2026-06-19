@@ -242,6 +242,57 @@ def test_get_conversation_prefix_smoke(tmp_path):
         db.close()
 
 
+def test_task6_tools_in_builtin_tool_names():
+    """Both Task-6 tools are registered in builtin_tool_names()."""
+    names = builtin_tool_names()
+    for tool in ("duplicate_conversation", "list_plugins"):
+        assert tool in names, f"{tool!r} not found in builtin_tool_names()"
+
+
+def test_duplicate_conversation_smoke(tmp_path):
+    """duplicate_conversation creates a copy and returns 'Created copy:' prefix."""
+    import uuid
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        conv_id = str(uuid.uuid4())
+        tree = ConversationTree(id=conv_id, title="Original")
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="hello"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        before = db.get_statistics().get("total_conversations", 0)
+        result = execute_builtin_tool(
+            db,
+            "duplicate_conversation",
+            {"conversation_id": conv_id[:8], "new_title": "Copy X"},
+        )
+        after = db.get_statistics().get("total_conversations", 0)
+
+        assert not result.startswith("Error executing"), result
+        assert result.startswith("Created copy:"), repr(result)
+        assert after == before + 1, f"expected {before + 1} conversations, got {after}"
+    finally:
+        db.close()
+
+
+def test_list_plugins_smoke(tmp_path):
+    """list_plugins returns 'Available Plugins:' prefix and no error prefix."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        result = execute_builtin_tool(db, "list_plugins", {})
+        assert not result.startswith("Error executing"), result
+        assert result.startswith("Available Plugins:"), repr(result)
+    finally:
+        db.close()
+
+
 def test_migrated_builtin_schemas_match_registry():
     """Every migrated BuiltinTool must be byte-identical to its TOOLS_REGISTRY entry.
 

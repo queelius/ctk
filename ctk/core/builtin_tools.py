@@ -543,6 +543,81 @@ def _do_list_conversation_paths(ctx: ToolContext) -> ToolResult:
     return ToolResult.message(result_str)
 
 
+def _do_duplicate_conversation(ctx: ToolContext) -> ToolResult:
+    import copy
+    import uuid
+
+    conv_id = ctx.args.get("conversation_id", "")
+    new_title = ctx.args.get("new_title", None)
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    # Create a deep copy with new ID
+    new_tree = copy.deepcopy(tree)
+    new_tree.id = str(uuid.uuid4())
+    new_tree.title = new_title or f"Copy of {tree.title}"
+
+    # Update message IDs
+    old_to_new = {}
+    for old_id, msg in list(new_tree.message_map.items()):
+        new_id = str(uuid.uuid4())
+        old_to_new[old_id] = new_id
+        msg.id = new_id
+
+    # Update message_map keys and parent references
+    new_message_map = {}
+    for old_id, msg in new_tree.message_map.items():
+        new_id = old_to_new.get(old_id, old_id)
+        if msg.parent_id and msg.parent_id in old_to_new:
+            msg.parent_id = old_to_new[msg.parent_id]
+        new_message_map[new_id] = msg
+    new_tree.message_map = new_message_map
+
+    # Update root_message_ids
+    new_tree.root_message_ids = [
+        old_to_new.get(rid, rid) for rid in new_tree.root_message_ids
+    ]
+
+    ctx.db.save_conversation(new_tree)
+    return ToolResult.message(
+        f"Created copy: '{new_tree.title}' ({new_tree.id[:8]}...)"
+    )
+
+
+def _do_list_plugins(ctx: ToolContext) -> ToolResult:
+    from ctk.core.plugin import PluginRegistry
+
+    manager = PluginRegistry()
+    importers = manager.list_importers()
+    exporters = manager.list_exporters()
+
+    result_str = "Available Plugins:\n\n"
+
+    result_str += "Importers:\n"
+    if importers:
+        for name in sorted(importers):
+            result_str += f"  - {name}\n"
+    else:
+        result_str += "  (none)\n"
+
+    result_str += "\nExporters:\n"
+    if exporters:
+        for name in sorted(exporters):
+            result_str += f"  - {name}\n"
+    else:
+        result_str += "  (none)\n"
+
+    return ToolResult.message(result_str)
+
+
 def _do_export_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     export_format = ctx.args.get("format", "markdown")
@@ -992,6 +1067,39 @@ USE THIS TOOL WHEN: user says "what models", "show models", "which models were u
             "required": ["conversation_id"],
         },
         handler=_do_list_conversation_paths,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="duplicate_conversation",
+        description="""Create a copy of a conversation with a new ID.
+
+USE THIS TOOL WHEN: user says "duplicate", "copy conversation", "clone this".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to duplicate",
+                },
+                "new_title": {
+                    "type": "string",
+                    "description": "Optional title for the copy",
+                },
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_duplicate_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="list_plugins",
+        description=(
+            'List available importer and exporter plugins.\n\n'
+            'USE THIS TOOL WHEN: user asks "what plugins", "list importers",'
+            ' "list exporters", "supported formats".'
+        ),
+        input_schema={"type": "object", "properties": {}, "required": []},
+        handler=_do_list_plugins,
         pass_through=False,
     ),
     BuiltinTool(
