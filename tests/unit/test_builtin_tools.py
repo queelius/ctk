@@ -171,6 +171,77 @@ def test_get_statistics_smoke(tmp_path):
         db.close()
 
 
+def test_task5_tools_in_builtin_tool_names():
+    """All 4 Task-5 single-conversation-read tools are registered."""
+    names = builtin_tool_names()
+    for tool in (
+        "get_conversation",
+        "show_conversation_content",
+        "list_conversation_paths",
+        "export_conversation",
+    ):
+        assert tool in names, f"{tool!r} not found in builtin_tool_names()"
+
+
+def test_export_conversation_smoke(tmp_path):
+    """export_conversation with an 8-char prefix returns an export string, not an error."""
+    import uuid
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        conv_id = str(uuid.uuid4())
+        tree = ConversationTree(id=conv_id, title="Export smoke")
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="hello export"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        result = execute_builtin_tool(
+            db,
+            "export_conversation",
+            {"conversation_id": conv_id[:8], "format": "markdown"},
+        )
+        assert not result.startswith("Error executing"), result
+        assert "Export smoke" in result or "markdown" in result.lower(), repr(result)
+    finally:
+        db.close()
+
+
+def test_get_conversation_prefix_smoke(tmp_path):
+    """get_conversation with an 8-char prefix resolves and returns conversation detail."""
+    import uuid
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        conv_id = str(uuid.uuid4())
+        tree = ConversationTree(id=conv_id, title="GetConv smoke")
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="hi there"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        result = execute_builtin_tool(
+            db,
+            "get_conversation",
+            {"conversation_id": conv_id[:8]},
+        )
+        assert not result.startswith("Error executing"), result
+        assert "No conversation found" not in result, repr(result)
+        assert "GetConv smoke" in result, repr(result)
+    finally:
+        db.close()
+
+
 def test_migrated_builtin_schemas_match_registry():
     """Every migrated BuiltinTool must be byte-identical to its TOOLS_REGISTRY entry.
 

@@ -425,6 +425,193 @@ def _do_list_conversations(ctx: ToolContext) -> ToolResult:
     return ToolResult.message(result_str)
 
 
+def _do_get_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args["conversation_id"]
+
+    # Handle prefix matching (own inline scan, NOT _resolve_conversation_id)
+    if len(conv_id) < 36:
+        all_convs = ctx.db.list_conversations(limit=None, include_archived=True)
+        matches = [c for c in all_convs if c.id.startswith(conv_id)]
+
+        if len(matches) == 0:
+            return ToolResult.message(f"No conversation found matching '{conv_id}'")
+        elif len(matches) > 1:
+            return ToolResult.message(
+                f"Multiple conversations match '{conv_id}' - please be more specific"
+            )
+        else:
+            conv_id = matches[0].id
+
+    # Load conversation
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    result_str = f"Conversation: {tree.title or 'Untitled'}\n"
+    result_str += f"ID: {tree.id}\n"
+    if tree.metadata:
+        if tree.metadata.source:
+            result_str += f"Source: {tree.metadata.source}\n"
+        if tree.metadata.model:
+            result_str += f"Model: {tree.metadata.model}\n"
+        if tree.metadata.project:
+            result_str += f"Project: {tree.metadata.project}\n"
+        if tree.metadata.tags:
+            result_str += f"Tags: {', '.join(tree.metadata.tags)}\n"
+
+    # Count messages
+    msg_count = len(tree.message_map)
+    result_str += f"Messages: {msg_count}\n"
+
+    # Show messages if requested
+    if ctx.args.get("show_messages", False):
+        result_str += "\nMessages:\n"
+        path = tree.get_longest_path()
+        for i, msg in enumerate(path[:5], 1):
+            # Handle both MessageContent objects and plain strings
+            if hasattr(msg.content, "get_text"):
+                text = msg.content.get_text()
+            else:
+                text = str(msg.content) if msg.content else ""
+            content = text[:100] if text else "(no content)"
+            role = msg.role.value if hasattr(msg.role, "value") else str(msg.role)
+            result_str += f"\n{i}. {role}: {content}...\n"
+        if len(path) > 5:
+            result_str += f"\n... and {len(path) - 5} more messages\n"
+
+    return ToolResult.message(result_str)
+
+
+def _do_show_conversation_content(ctx: ToolContext) -> ToolResult:
+    from ctk.core.conversation_display import show_conversation_helper
+
+    conv_id = ctx.args.get("conversation_id", "")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    path_selection = ctx.args.get("path_selection", "longest")
+
+    result = show_conversation_helper(
+        db=ctx.db,
+        conv_id=conv_id,
+        path_selection=path_selection,
+        plain_output=True,
+        show_metadata=True,
+    )
+
+    if result["success"]:
+        return ToolResult.message(result["output"])
+    else:
+        return ToolResult.message(f"Error: {result['error']}")
+
+
+def _do_list_conversation_paths(ctx: ToolContext) -> ToolResult:
+    conv_id_arg = ctx.args.get("conversation_id", "")
+    if not conv_id_arg:
+        return ToolResult.message("Error: conversation_id required")
+    conv_id = _resolve_conversation_id(ctx.db, conv_id_arg)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(f"Conversation not found: {conv_id_arg}")
+
+    conversation = ctx.db.load_conversation(conv_id)
+    if not conversation:
+        return ToolResult.message(f"Conversation not found: {conv_id}")
+
+    paths = conversation.get_all_paths()
+
+    if not paths:
+        return ToolResult.message(f"No paths found in conversation {conv_id[:8]}...")
+
+    result_str = f"Paths in conversation {conv_id[:8]}... ({len(paths)} total):\n\n"
+    for i, path in enumerate(paths, 1):
+        result_str += f"Path {i} ({len(path)} messages):\n"
+        for msg in path:
+            role_label = msg.role.value.title() if msg.role else "User"
+            content_text = (
+                msg.content.get_text()
+                if hasattr(msg.content, "get_text")
+                else str(msg.content)
+            )
+            preview = (
+                content_text[:50].replace("\n", " ").strip() if content_text else ""
+            )
+            if len(content_text) > 50:
+                preview += "..."
+            result_str += f"  {role_label}: {preview}\n"
+        result_str += "\n"
+
+    return ToolResult.message(result_str)
+
+
+def _do_export_conversation(ctx: ToolContext) -> ToolResult:
+    conv_id = ctx.args.get("conversation_id", "")
+    export_format = ctx.args.get("format", "markdown")
+    if not conv_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    conv_id = _resolve_conversation_id(ctx.db, conv_id)
+    if conv_id.startswith("Error:"):
+        return ToolResult.message(conv_id)
+
+    tree = ctx.db.load_conversation(conv_id)
+    if not tree:
+        return ToolResult.message(f"Conversation {conv_id} not found")
+
+    if export_format == "markdown":
+        from ctk.exporters.markdown import MarkdownExporter
+
+        exporter = MarkdownExporter()
+        output = exporter.export_data([tree])
+        return ToolResult.message(f"Markdown export of '{tree.title}':\n\n{output}")
+
+    elif export_format == "json":
+        import json
+
+        # Convert to dict
+        conv_dict = {
+            "id": tree.id,
+            "title": tree.title,
+            "messages": [
+                {
+                    "role": msg.role.value if msg.role else "user",
+                    "content": (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    ),
+                }
+                for msg in tree.get_longest_path()
+            ],
+        }
+        return ToolResult.message(f"JSON export:\n{json.dumps(conv_dict, indent=2)}")
+
+    elif export_format == "jsonl":
+        messages = tree.get_longest_path()
+        lines = []
+        for msg in messages:
+            import json
+
+            line = json.dumps(
+                {
+                    "role": msg.role.value if msg.role else "user",
+                    "content": (
+                        msg.content.get_text()
+                        if hasattr(msg.content, "get_text")
+                        else str(msg.content)
+                    ),
+                }
+            )
+            lines.append(line)
+        return ToolResult.message(
+            f"JSONL export ({len(lines)} messages):\n" + "\n".join(lines)
+        )
+
+    else:
+        return ToolResult.message(
+            f"Unknown format: {export_format}. Use markdown, json, or jsonl."
+        )
+
+
 _BUILTIN_TOOLS: List[BuiltinTool] = [
     BuiltinTool(
         name="star_conversation",
@@ -733,6 +920,102 @@ USE THIS TOOL WHEN: user says "what models", "show models", "which models were u
         },
         handler=_do_list_conversations,
         pass_through=True,
+    ),
+    BuiltinTool(
+        name="get_conversation",
+        description=(
+            "Get details of a specific conversation by its ID.\n\n"
+            "DO NOT USE THIS TOOL FOR: greetings, chitchat, or questions that"
+            " don't mention a specific conversation ID.\n\n"
+            "USE THIS TOOL WHEN: user provides a conversation ID and wants details about it."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID",
+                },
+                "show_messages": {
+                    "type": "boolean",
+                    "description": "Include message content (default: false)",
+                },
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_get_conversation,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="show_conversation_content",
+        description=(
+            "Show the full content of a conversation.\n\n"
+            'USE THIS TOOL WHEN: user says "show me the conversation",'
+            ' "display the chat", "what was said in...".'
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to show",
+                },
+                "path_selection": {
+                    "type": "string",
+                    "description": (
+                        "Which path to show: 'longest' (default), 'latest',"
+                        " or a path number like '0', '1'"
+                    ),
+                },
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_show_conversation_content,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="list_conversation_paths",
+        description=(
+            "List all paths in a branching conversation tree.\n\n"
+            'USE THIS TOOL WHEN: user asks "show paths", "list branches",'
+            ' "how many paths", "conversation branches".\n\n'
+            "Returns all distinct paths from root to leaf in the conversation tree."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or prefix of conversation ID",
+                }
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_list_conversation_paths,
+        pass_through=False,
+    ),
+    BuiltinTool(
+        name="export_conversation",
+        description="""Export a conversation to a specific format.
+
+USE THIS TOOL WHEN: user says "export to markdown", "save as json", "export conversation".""",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID",
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["markdown", "json", "jsonl"],
+                    "description": "Export format (default: markdown)",
+                },
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_export_conversation,
+        pass_through=False,
     ),
 ]
 _HANDLERS: Dict[str, BuiltinTool] = {}
