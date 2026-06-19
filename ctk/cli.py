@@ -833,6 +833,38 @@ def _resolve_conversation_id(db, conv_id):
 
 
 def execute_ask_tool(
+    db, tool_name, tool_args, debug=False, use_rich=True, shell_executor=None
+):
+    """Dispatch a builtin tool. Migrated tools route to the builtin_tools
+    registry; not-yet-migrated tools fall back to the legacy dispatcher.
+    """
+    if debug:
+        import sys
+
+        print(f"[DEBUG] Tool: {tool_name}", file=sys.stderr)
+        print(f"[DEBUG] Args: {tool_args}", file=sys.stderr)
+    from ctk.core.builtin_tools import builtin_tool_names, execute_builtin_tool
+
+    if tool_name in builtin_tool_names():
+        return execute_builtin_tool(
+            db,
+            tool_name,
+            tool_args,
+            use_rich=use_rich,
+            debug=debug,
+            shell_executor=shell_executor,
+        )
+    return _execute_ask_tool_legacy(
+        db,
+        tool_name,
+        tool_args,
+        debug=debug,
+        use_rich=use_rich,
+        shell_executor=shell_executor,
+    )
+
+
+def _execute_ask_tool_legacy(
     db: ConversationDB,
     tool_name: str,
     tool_args: dict,
@@ -841,7 +873,7 @@ def execute_ask_tool(
     shell_executor=None,
 ) -> str:
     """
-    Execute a tool and return result as string.
+    Execute a tool and return result as string (legacy dispatcher).
 
     Args:
         db: Database instance
@@ -855,10 +887,6 @@ def execute_ask_tool(
         String representation of result
     """
     import sys
-
-    if debug:
-        print(f"[DEBUG] Tool: {tool_name}", file=sys.stderr)
-        print(f"[DEBUG] Args: {tool_args}", file=sys.stderr)
 
     try:
         if tool_name == "search_conversations":
