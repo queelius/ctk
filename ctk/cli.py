@@ -1797,6 +1797,46 @@ def cmd_sources(args):
     return 0
 
 
+def _offer_database_choice(candidates, default_dir):
+    """Interactively offer a database when none is configured.
+
+    Returns a chosen path, the default dir for a new database, or None when
+    stdin is not a TTY or the user declines. Reprompts at most once.
+    """
+    import os
+    import sys
+
+    if not sys.stdin.isatty():
+        return None
+
+    print("No database configured.")
+    if candidates:
+        print("Found these CTK databases in the current directory:")
+        for i, path in enumerate(candidates, 1):
+            print(f"  {i}. {path}")
+    print(f"  n. Create a new database at {default_dir}")
+    print("  Or type a path to a database directory.")
+
+    for _attempt in range(2):
+        try:
+            choice = input("Open which database? ").strip()
+        except EOFError:
+            return None
+        if not choice:
+            return None
+        if choice.lower() == "n":
+            return default_dir
+        if choice.isdigit():
+            idx = int(choice)
+            if 1 <= idx <= len(candidates):
+                return candidates[idx - 1]
+            print("That number is not in the list.")
+            continue
+        # Anything else is treated as a path.
+        return os.path.expanduser(choice)
+    return None
+
+
 def _resolve_tui_db_path(args, parser=None):
     """Return a usable db_path for the TUI, or an int exit code on failure.
 
