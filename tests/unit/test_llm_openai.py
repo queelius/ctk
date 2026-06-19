@@ -8,6 +8,7 @@ a smaller surface and a more stable contract.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -522,9 +523,6 @@ class TestOpenAIProviderStreamTurn:
 # ---------------------------------------------------------------------------
 
 
-import json  # noqa: E402 (placed here to keep the section self-contained)
-
-
 def _provider_fm():
     """Build an OpenAIProvider without making any network calls.
 
@@ -560,3 +558,10 @@ def test_format_message_passes_plain_string():
     p = _provider_fm()
     out = p._format_message(Message(role=MessageRole.ASSISTANT, content="plain"))
     assert out["content"] == "plain"
+
+
+def test_format_message_coerces_none_content():
+    p = _provider_fm()
+    out = p._format_message(Message(role=MessageRole.USER, content=None))
+    assert out["content"] == ""
+    json.dumps(out)
