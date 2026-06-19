@@ -719,6 +719,116 @@ def _do_execute_shell_command(ctx: ToolContext) -> ToolResult:
         return ToolResult.message(f"Error executing command: {e}")
 
 
+def _do_search_conversations(ctx: ToolContext) -> ToolResult:
+    """Search or list conversations and return a plain-text summary.
+
+    The legacy handler had a dual code path keyed on ``use_rich``:
+    - use_rich=True  (no live caller): printed a Rich table then returned "".
+    - use_rich=False (TUI always passes this): built and returned a plain string.
+
+    This handler eliminates the Rich/stdout path entirely.  It always builds the
+    plain-text string (identical to the old use_rich=False branch) and packages it
+    as ``ToolResult.text``.  The ``data`` field carries the raw conversation list
+    for any future CLI renderer that wants to display a Rich table by reading
+    ``result.data`` / ``result.rich_renderable`` -- the handler itself never prints.
+    """
+    import sys
+
+    tags_raw = ctx.args.get("tags")
+    tags_list: Optional[List[str]] = str(tags_raw).split(",") if tags_raw else None
+
+    def to_bool_or_none(val):
+        if val is None:
+            return None
+        if isinstance(val, bool):
+            return True if val else None
+        if isinstance(val, str):
+            lower_val = val.lower()
+            if lower_val in ("true", "1", "yes"):
+                return True
+            return None
+        return None
+
+    starred = to_bool_or_none(ctx.args.get("starred"))
+    pinned = to_bool_or_none(ctx.args.get("pinned"))
+    archived = to_bool_or_none(ctx.args.get("archived"))
+
+    def clean_none(val):
+        if val is None or (
+            isinstance(val, str) and val.lower() in ("none", "null", "")
+        ):
+            return None
+        return val
+
+    query_text = clean_none(ctx.args.get("query"))
+    source = clean_none(ctx.args.get("source"))
+    project = clean_none(ctx.args.get("project"))
+    model = clean_none(ctx.args.get("model"))
+    limit_val = clean_none(ctx.args.get("limit"))
+
+    if ctx.debug:
+        print(
+            f"[DEBUG] Parsed filters: starred={starred},"
+            f" pinned={pinned}, archived={archived}",
+            file=sys.stderr,
+        )
+        print(
+            f"[DEBUG] query={query_text}, source={source}, model={model}",
+            file=sys.stderr,
+        )
+
+    if query_text:
+        results = ctx.db.search_conversations(
+            query_text=query_text,
+            limit=limit_val,
+            source=source,
+            project=project,
+            model=model,
+            starred=starred,
+            archived=archived,
+            tags=tags_list,
+            include_archived=False,
+        )
+    else:
+        results = ctx.db.list_conversations(
+            limit=limit_val,
+            source=source,
+            project=project,
+            model=model,
+            starred=starred,
+            pinned=pinned,
+            archived=archived,
+            tags=tags_list,
+            include_archived=False,
+        )
+
+    from ctk.core.models import PaginatedResult as _PR
+
+    results_list = results.items if isinstance(results, _PR) else list(results)
+
+    if ctx.debug:
+        print(
+            f"[DEBUG] Query returned {len(results_list)} results",
+            file=sys.stderr,
+        )
+
+    if not results_list:
+        return ToolResult(text="No conversations found.", data=[], rich_renderable=True)
+
+    result_str = f"Found {len(results_list)} conversation(s):\n\n"
+    for i, conv in enumerate(results_list[:10], 1):
+        conv_dict = conv.to_dict()
+        title = conv_dict.get("title", "Untitled")[:50]
+        result_str += f"[{i}] {conv_dict['id'][:8]} - {title}\n"
+
+    if len(results_list) > 10:
+        result_str += f"\n... and {len(results_list) - 10} more (showing first 10)\n"
+
+    result_str += "\nUse: show [N] or cd [N] to view (e.g., 'show 1' or 'cd 2')"
+
+    return ToolResult(text=result_str, data=results_list, rich_renderable=True)
+
+
 def _do_show_conversation_tree(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
@@ -749,6 +859,77 @@ def _do_show_conversation_tree(ctx: ToolContext) -> ToolResult:
 
 
 _BUILTIN_TOOLS: List[BuiltinTool] = [
+    BuiltinTool(
+        name="search_conversations",
+        description=(
+            "Search and filter conversations in the database.\n\n"
+            "DO NOT USE THIS TOOL FOR: greetings (hi, hello), chitchat, general questions.\n\n"
+            "USE THIS TOOL WHEN user explicitly asks to find/search/list conversations.\n\n"
+            "IMPORTANT: After showing results, suggest shell commands like `show <id>` or"
+            " `cd <id>` - NEVER mention this tool's name to users.\n\n"
+            "EXAMPLES:\n"
+            '- "find conversations about python" → {"query": "python"}\n'
+            '- "show me starred conversations" → {"starred": true}\n'
+            '- "list recent conversations" → {"limit": 10}\n\n'
+            "RULE: Only include starred/pinned/archived if user explicitly mentions them."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Optional search query text (searches titles and message content)."
+                        " Omit for listing without search."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Filter by source (e.g., 'openai', 'anthropic')",
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Filter by project name",
+                },
+                "model": {"type": "string", "description": "Filter by model name"},
+                "starred": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true to show ONLY starred conversations."
+                        " Omit this parameter completely unless user explicitly"
+                        " mentions 'starred'."
+                    ),
+                },
+                "pinned": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true to show ONLY pinned conversations."
+                        " Omit this parameter completely unless user explicitly"
+                        " mentions 'pinned'."
+                    ),
+                },
+                "archived": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true to show ONLY archived conversations."
+                        " Omit this parameter completely unless user explicitly"
+                        " mentions 'archived'."
+                    ),
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Comma-separated tags to filter by",
+                },
+            },
+            "required": [],
+        },
+        handler=_do_search_conversations,
+        pass_through=True,
+    ),
     BuiltinTool(
         name="star_conversation",
         description="""Star a conversation to mark it as important.

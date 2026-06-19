@@ -378,6 +378,80 @@ def test_show_conversation_tree_stub_fallback(tmp_path):
         db.close()
 
 
+def test_search_conversations_in_builtin_tool_names():
+    """R1 guard (name): search_conversations must be registered in builtin_tool_names()."""
+    assert "search_conversations" in builtin_tool_names()
+
+
+def test_search_conversations_match_returns_found_prefix(tmp_path):
+    """R1 guard: matching search returns 'Found N ...' string, NEVER the empty sentinel."""
+    import uuid
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        tree = ConversationTree(id=str(uuid.uuid4()), title="Python tutorial")
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="python functions"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        result = execute_builtin_tool(
+            db, "search_conversations", {"query": "python"}, use_rich=False
+        )
+        assert result != "", "empty sentinel must be gone"
+        assert result.startswith("Found "), repr(result)
+    finally:
+        db.close()
+
+
+def test_search_conversations_empty_returns_no_found(tmp_path):
+    """R1 guard: empty-result search returns exact sentinel, NEVER the empty string."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        result = execute_builtin_tool(
+            db,
+            "search_conversations",
+            {"query": "xyzzy-no-match-ever"},
+            use_rich=False,
+        )
+        assert result != "", "empty string sentinel must be gone"
+        assert result == "No conversations found.", repr(result)
+    finally:
+        db.close()
+
+
+def test_search_conversations_use_rich_true_also_returns_string(tmp_path):
+    """R1 guard: use_rich=True no longer prints or returns '' -- returns plain string."""
+    import uuid
+
+    db = ConversationDB(str(tmp_path))
+    try:
+        tree = ConversationTree(id=str(uuid.uuid4()), title="Rich test conv")
+        tree.add_message(
+            Message(
+                id=str(uuid.uuid4()),
+                role=MessageRole.USER,
+                content=MessageContent(text="rich render check"),
+                parent_id=None,
+            )
+        )
+        db.save_conversation(tree)
+
+        result = execute_builtin_tool(
+            db, "search_conversations", {"query": "rich render"}, use_rich=True
+        )
+        # The dead use_rich=True stdout path is gone: result must be non-empty string
+        assert result != "", "empty sentinel must be gone even with use_rich=True"
+        assert result.startswith("Found "), repr(result)
+    finally:
+        db.close()
+
+
 def test_migrated_builtin_schemas_match_registry():
     """Every migrated BuiltinTool must be byte-identical to its TOOLS_REGISTRY entry.
 
