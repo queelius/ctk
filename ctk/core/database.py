@@ -189,86 +189,22 @@ class ConversationDB:
         logger.info(f"Database schema initialized at {self.db_path}")
 
     def _migrate_schema(self):
-        """
-        Apply any necessary schema migrations for existing databases.
-
-        Uses file locking to prevent race conditions when multiple processes
-        try to migrate the schema simultaneously.
-        """
-        # Skip locking for non-SQLite databases
+        """Apply versioned schema migrations under a file lock for directory DBs."""
         if self.db_dir is None:
-            self._apply_migrations()
+            self._run_migrations()
             return
-
-        # Use file-based locking for SQLite to prevent concurrent migrations
         lock_path = self.db_dir / ".migration.lock"
-
         try:
             with migration_lock(lock_path, timeout=MIGRATION_LOCK_TIMEOUT):
-                self._apply_migrations()
+                self._run_migrations()
         except TimeoutError:
             logger.warning("Migration lock timeout - another process may be migrating")
-            # Still try to run migrations, they should be idempotent
-            self._apply_migrations()
-        except Exception as e:
-            logger.warning(f"Migration lock error: {e}, proceeding without lock")
-            self._apply_migrations()
+            self._run_migrations()
 
-    def _apply_migrations(self):
-        """Apply schema migrations (internal method, assumes lock is held if needed)."""
-        with self.engine.connect() as conn:
-            # Check if we need to add new columns to conversations table
-            try:
-                # Try to detect if slug column exists
-                result = conn.execute(
-                    text(
-                        "SELECT sql FROM sqlite_master WHERE type='table' AND name='conversations'"
-                    )
-                )
-                row = result.fetchone()
-                if row:
-                    table_sql = row[0] or ""
+    def _run_migrations(self):
+        from ctk.core.migrations import run_migrations
 
-                    # Add slug column if missing
-                    if "slug" not in table_sql.lower():
-                        try:
-                            conn.execute(
-                                text(
-                                    "ALTER TABLE conversations ADD COLUMN slug VARCHAR"
-                                )
-                            )
-                            logger.info("Added 'slug' column to conversations table")
-                        except OperationalError as e:
-                            # Column might already exist (race condition or detection failed)
-                            if "duplicate column" not in str(e).lower():
-                                logger.debug(f"Could not add slug column: {e}")
-                        except IntegrityError as e:
-                            logger.debug(f"Slug column already exists: {e}")
-
-                    # Add summary column if missing
-                    if "summary" not in table_sql.lower():
-                        try:
-                            conn.execute(
-                                text(
-                                    "ALTER TABLE conversations ADD COLUMN summary TEXT"
-                                )
-                            )
-                            logger.info("Added 'summary' column to conversations table")
-                        except OperationalError as e:
-                            if "duplicate column" not in str(e).lower():
-                                logger.debug(f"Could not add summary column: {e}")
-                        except IntegrityError as e:
-                            logger.debug(f"Summary column already exists: {e}")
-
-                    conn.commit()
-
-                    # Generate slugs for conversations that don't have them
-                    self._generate_missing_slugs()
-            except OperationalError as e:
-                # Not SQLite or other issue - skip migration
-                logger.debug(f"Schema migration skipped (OperationalError): {e}")
-            except SQLAlchemyError as e:
-                logger.debug(f"Schema migration skipped (SQLAlchemyError): {e}")
+        run_migrations(self.engine, generate_slugs=self._generate_missing_slugs)
 
     def _generate_missing_slugs(self):
         """Generate slugs for conversations that don't have them"""
