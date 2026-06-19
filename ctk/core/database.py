@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import and_, create_engine, distinct, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
-from sqlalchemy.orm import Session, scoped_session, sessionmaker
+from sqlalchemy.orm import Session, scoped_session, selectinload, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from .constants import (
@@ -124,6 +124,35 @@ def migration_lock(lock_path: Path, timeout: float = 30.0):
             logger.debug(f"Migration lock released: {lock_path}")
 
 
+def _summary_from_row(
+    conv: "ConversationModel", msg_count: int
+) -> "ConversationSummary":
+    """Build a ConversationSummary from a (ConversationModel, message_count) row.
+
+    Reads scalar columns directly from the ORM model rather than going through
+    to_dict() so we avoid triggering lazy relationship loads for messages/tags.
+    Tags must already be loaded (e.g. via selectinload) before calling this.
+    """
+    from .models import ConversationSummary
+
+    return ConversationSummary(
+        id=conv.id,
+        title=conv.title or "Untitled",
+        slug=conv.slug,
+        created_at=conv.created_at if conv.created_at else datetime.now(),
+        updated_at=conv.updated_at if conv.updated_at else datetime.now(),
+        summary=conv.summary,
+        source=conv.source,
+        model=conv.model,
+        project=conv.project,
+        starred_at=conv.starred_at,
+        pinned_at=conv.pinned_at,
+        archived_at=conv.archived_at,
+        tags=[tag.name for tag in conv.tags],
+        message_count=msg_count,
+    )
+
+
 class ConversationDB:
     """SQLAlchemy-based database for storing conversations"""
 
@@ -180,6 +209,10 @@ class ConversationDB:
 
         # Create tables if they don't exist
         self._init_schema()
+
+        # Cache dialect and FTS flags once so callers don't re-query the DB.
+        self._is_sqlite: bool = self.engine.dialect.name == "sqlite"
+        self._has_fts: bool = self._compute_has_fts5()
 
     def _init_schema(self):
         """Initialize database schema"""
@@ -412,9 +445,9 @@ class ConversationDB:
             logger.warning(f"FTS5 setup failed (search will use LIKE fallback): {e}")
             return False
 
-    def _has_fts5(self) -> bool:
-        """Check if FTS5 tables are available."""
-        if self.db_dir is None:
+    def _compute_has_fts5(self) -> bool:
+        """Probe the DB once to determine whether FTS5 tables exist."""
+        if not self._is_sqlite:
             return False
         try:
             with self.engine.connect() as conn:
@@ -427,6 +460,10 @@ class ConversationDB:
                 return result.fetchone() is not None
         except Exception:
             return False
+
+    def _has_fts5(self) -> bool:
+        """Return the cached FTS5 availability flag."""
+        return self._has_fts
 
     def _prepare_fts_query(self, query_text: str) -> str:
         """
@@ -918,6 +955,65 @@ class ConversationDB:
             )
             return conv.id if conv else None
 
+    def _apply_conversation_filters(
+        self,
+        query,
+        *,
+        starred: Optional[bool] = None,
+        pinned: Optional[bool] = None,
+        archived: Optional[bool] = None,
+        source: Optional[str] = None,
+        project: Optional[str] = None,
+        model: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        include_archived: bool = False,
+    ):
+        """Apply standard WHERE-clause filters shared by list/count/iter.
+
+        Semantics (preserved exactly from pre-refactor behavior):
+        - source/project/model: exact equality match
+        - tag: exact tag name match (single, deprecated)
+        - tags: any-of list of tag names; adds DISTINCT when applied
+        - archived: None -> exclude archived (unless include_archived); True -> only
+          archived; False -> only non-archived
+        - starred/pinned: None -> no filter; True -> only set; False -> only unset
+        - include_archived: when True and archived is None, archived rows are included
+        """
+        if source:
+            query = query.filter(ConversationModel.source == source)
+        if project:
+            query = query.filter(ConversationModel.project == project)
+        if model:
+            query = query.filter(ConversationModel.model == model)
+        if tag:
+            query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
+        if tags:
+            query = query.join(ConversationModel.tags).filter(TagModel.name.in_(tags))
+            query = query.distinct()
+
+        # Archive filtering
+        if not include_archived and archived is None:
+            query = query.filter(ConversationModel.archived_at.is_(None))
+        elif archived is True:
+            query = query.filter(ConversationModel.archived_at.isnot(None))
+        elif archived is False:
+            query = query.filter(ConversationModel.archived_at.is_(None))
+
+        # Star filtering
+        if starred is True:
+            query = query.filter(ConversationModel.starred_at.isnot(None))
+        elif starred is False:
+            query = query.filter(ConversationModel.starred_at.is_(None))
+
+        # Pin filtering
+        if pinned is True:
+            query = query.filter(ConversationModel.pinned_at.isnot(None))
+        elif pinned is False:
+            query = query.filter(ConversationModel.pinned_at.is_(None))
+
+        return query
+
     def list_conversations(
         self,
         limit: Optional[int] = None,
@@ -968,48 +1064,34 @@ class ConversationDB:
         use_cursor = cursor is not None
 
         with self.session_scope() as session:
-            query = session.query(ConversationModel)
-
-            # Apply filters
-            if source:
-                query = query.filter(ConversationModel.source == source)
-            if project:
-                query = query.filter(ConversationModel.project == project)
-            if model:
-                query = query.filter(ConversationModel.model == model)
-            if tag:
-                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
-            if tags:
-                # Match any of the tags. DISTINCT so a conversation carrying
-                # more than one of the requested tags is returned once, not
-                # once per matching tag.
-                query = query.join(ConversationModel.tags).filter(
-                    TagModel.name.in_(tags)
+            # Select scalar columns + aggregate message count in a single query.
+            # selectinload(tags) issues one extra batched SELECT for all loaded
+            # conversations, eliminating the per-row N+1 lazy loads.
+            query = (
+                session.query(
+                    ConversationModel,
+                    func.count(MessageModel.id).label("message_count"),
                 )
-                query = query.distinct()
+                .outerjoin(MessageModel)
+                .options(selectinload(ConversationModel.tags))
+            )
 
-            # Archive filtering
-            if not include_archived and archived is None:
-                # Default: exclude archived
-                query = query.filter(ConversationModel.archived_at.is_(None))
-            elif archived is True:
-                # Only archived
-                query = query.filter(ConversationModel.archived_at.isnot(None))
-            elif archived is False:
-                # Only non-archived
-                query = query.filter(ConversationModel.archived_at.is_(None))
+            # Apply shared WHERE-clause filters.
+            query = self._apply_conversation_filters(
+                query,
+                starred=starred,
+                pinned=pinned,
+                archived=archived,
+                source=source,
+                project=project,
+                model=model,
+                tag=tag,
+                tags=tags,
+                include_archived=include_archived,
+            )
 
-            # Star filtering
-            if starred is True:
-                query = query.filter(ConversationModel.starred_at.isnot(None))
-            elif starred is False:
-                query = query.filter(ConversationModel.starred_at.is_(None))
-
-            # Pin filtering
-            if pinned is True:
-                query = query.filter(ConversationModel.pinned_at.isnot(None))
-            elif pinned is False:
-                query = query.filter(ConversationModel.pinned_at.is_(None))
+            # GROUP BY for the message-count aggregate.
+            query = query.group_by(ConversationModel.id)
 
             if use_cursor:
                 # Cursor-based (keyset) pagination
@@ -1037,21 +1119,18 @@ class ConversationDB:
                     )
 
                 # Fetch one extra to determine has_more
-                conversations = query.limit(page_size + 1).all()
+                rows = query.limit(page_size + 1).all()
 
-                has_more = len(conversations) > page_size
+                has_more = len(rows) > page_size
                 if has_more:
-                    conversations = conversations[:page_size]
+                    rows = rows[:page_size]
 
-                items = [
-                    ConversationSummary.from_dict(conv.to_dict())
-                    for conv in conversations
-                ]
+                items = [_summary_from_row(conv, msg_count) for conv, msg_count in rows]
 
                 next_cursor = None
-                if has_more and items:
-                    last = conversations[-1]
-                    next_cursor = encode_cursor(last.updated_at, last.id)
+                if has_more and rows:
+                    last_conv = rows[-1][0]
+                    next_cursor = encode_cursor(last_conv.updated_at, last_conv.id)
 
                 return PaginatedResult(
                     items=items,
@@ -1067,12 +1146,9 @@ class ConversationDB:
 
                 if limit is not None:
                     query = query.limit(limit)
-                conversations = query.offset(offset).all()
+                rows = query.offset(offset).all()
 
-                return [
-                    ConversationSummary.from_dict(conv.to_dict())
-                    for conv in conversations
-                ]
+                return [_summary_from_row(conv, msg_count) for conv, msg_count in rows]
 
     def count_conversations(
         self,
@@ -1097,35 +1173,18 @@ class ConversationDB:
             # otherwise inflate the count (and the REST `total`).
             query = session.query(func.count(distinct(ConversationModel.id)))
 
-            if source:
-                query = query.filter(ConversationModel.source == source)
-            if project:
-                query = query.filter(ConversationModel.project == project)
-            if model:
-                query = query.filter(ConversationModel.model == model)
-            if tag:
-                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
-            if tags:
-                query = query.join(ConversationModel.tags).filter(
-                    TagModel.name.in_(tags)
-                )
-
-            if not include_archived and archived is None:
-                query = query.filter(ConversationModel.archived_at.is_(None))
-            elif archived is True:
-                query = query.filter(ConversationModel.archived_at.isnot(None))
-            elif archived is False:
-                query = query.filter(ConversationModel.archived_at.is_(None))
-
-            if starred is True:
-                query = query.filter(ConversationModel.starred_at.isnot(None))
-            elif starred is False:
-                query = query.filter(ConversationModel.starred_at.is_(None))
-
-            if pinned is True:
-                query = query.filter(ConversationModel.pinned_at.isnot(None))
-            elif pinned is False:
-                query = query.filter(ConversationModel.pinned_at.is_(None))
+            query = self._apply_conversation_filters(
+                query,
+                starred=starred,
+                pinned=pinned,
+                archived=archived,
+                source=source,
+                project=project,
+                model=model,
+                tag=tag,
+                tags=tags,
+                include_archived=include_archived,
+            )
 
             return query.scalar() or 0
 
@@ -1173,39 +1232,18 @@ class ConversationDB:
         try:
             query = session.query(ConversationModel)
 
-            # Apply filters
-            if source:
-                query = query.filter(ConversationModel.source == source)
-            if project:
-                query = query.filter(ConversationModel.project == project)
-            if model:
-                query = query.filter(ConversationModel.model == model)
-            if tag:
-                query = query.join(ConversationModel.tags).filter(TagModel.name == tag)
-            if tags:
-                query = query.join(ConversationModel.tags).filter(
-                    TagModel.name.in_(tags)
-                )
-
-            # Archive filtering
-            if not include_archived and archived is None:
-                query = query.filter(ConversationModel.archived_at.is_(None))
-            elif archived is True:
-                query = query.filter(ConversationModel.archived_at.isnot(None))
-            elif archived is False:
-                query = query.filter(ConversationModel.archived_at.is_(None))
-
-            # Star filtering
-            if starred is True:
-                query = query.filter(ConversationModel.starred_at.isnot(None))
-            elif starred is False:
-                query = query.filter(ConversationModel.starred_at.is_(None))
-
-            # Pin filtering
-            if pinned is True:
-                query = query.filter(ConversationModel.pinned_at.isnot(None))
-            elif pinned is False:
-                query = query.filter(ConversationModel.pinned_at.is_(None))
+            query = self._apply_conversation_filters(
+                query,
+                starred=starred,
+                pinned=pinned,
+                archived=archived,
+                source=source,
+                project=project,
+                model=model,
+                tag=tag,
+                tags=tags,
+                include_archived=include_archived,
+            )
 
             # Ordering
             query = query.order_by(
@@ -1312,7 +1350,7 @@ class ConversationDB:
                         ConversationModel.title.ilike(like_pattern, escape="\\")
                     )
                 elif content_only:
-                    if "sqlite" in str(self.engine.url):
+                    if self._is_sqlite:
                         query = query.filter(
                             text(
                                 "json_extract(messages.content_json, '$.text') "
@@ -1326,7 +1364,7 @@ class ConversationDB:
                             )
                         )
                 else:
-                    if "sqlite" in str(self.engine.url):
+                    if self._is_sqlite:
                         query = query.filter(
                             or_(
                                 ConversationModel.title.ilike(
@@ -1529,7 +1567,7 @@ class ConversationDB:
                         ConversationModel.title.ilike(like_pattern, escape="\\")
                     )
                 elif content_only:
-                    if "sqlite" in str(self.engine.url):
+                    if self._is_sqlite:
                         query = query.filter(
                             text(
                                 "json_extract(messages.content_json, '$.text') "
@@ -1544,7 +1582,7 @@ class ConversationDB:
                         )
                 else:
                     # Search both title and content (LIKE fallback)
-                    if "sqlite" in str(self.engine.url):
+                    if self._is_sqlite:
                         query = query.filter(
                             or_(
                                 ConversationModel.title.ilike(
@@ -2188,7 +2226,7 @@ class ConversationDB:
         """Get conversation counts over time"""
         with self.session_scope() as session:
             # SQLite-specific date formatting
-            if "sqlite" in str(self.engine.url):
+            if self._is_sqlite:
                 if granularity == "day":
                     date_format = "date(created_at)"
                 elif granularity == "week":

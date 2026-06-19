@@ -135,9 +135,9 @@ def get_ctk_system_prompt(db: "ConversationDB", current_path: str = "/") -> str:
         total_msgs = stats.get("total_messages", 0)
 
         # Get counts for starred, pinned, archived
-        starred_count = len(db.list_conversations(starred=True, limit=None))
-        pinned_count = len(db.list_conversations(pinned=True, limit=None))
-        archived_count = len(db.list_conversations(archived=True, limit=None))
+        starred_count = db.count_conversations(starred=True)
+        pinned_count = db.count_conversations(pinned=True)
+        archived_count = db.count_conversations(archived=True)
 
         # Get top sources
         sources = stats.get("by_source", {})
@@ -192,8 +192,8 @@ def get_ctk_system_prompt_no_tools(
         total_msgs = stats.get("total_messages", 0)
 
         # Get counts for starred, pinned, archived
-        starred_count = len(db.list_conversations(starred=True, limit=None))
-        pinned_count = len(db.list_conversations(pinned=True, limit=None))
+        starred_count = db.count_conversations(starred=True)
+        pinned_count = db.count_conversations(pinned=True)
 
         # Get top sources
         sources = stats.get("by_source", {})
