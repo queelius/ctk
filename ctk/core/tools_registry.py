@@ -11,7 +11,7 @@ Each tool definition includes:
 - input_schema: JSON Schema for tool parameters
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Tool definitions for CTK operations
 TOOLS_REGISTRY: List[Dict[str, Any]] = [
@@ -563,6 +563,19 @@ def register_provider(provider: ToolProvider) -> None:
 def iter_providers() -> Iterable[ToolProvider]:
     """Iterate over all registered tool providers in display order."""
     return list(_PROVIDERS)
+
+
+def provider_for_tool(name: str) -> Optional[str]:
+    """Return the name of the provider that owns ``name``, or None.
+
+    Routing derives from provider ownership rather than a hardcoded
+    name set, so adding a tool to a provider needs no edit elsewhere.
+    """
+    for provider in _PROVIDERS:
+        for tool in provider.tools:
+            if tool.get("name") == name:
+                return provider.name
+    return None
 
 
 def all_tools() -> List[Dict[str, Any]]:

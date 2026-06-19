@@ -100,6 +100,31 @@ async def _wait_turn_done(application, pilot, max_steps: int = 100) -> None:
             return
 
 
+def test_execute_tool_routes_network_by_provider(monkeypatch, tmp_path):
+    import ctk.core.network_tools as nt
+    from ctk.core.database import ConversationDB
+    from ctk.tui.app import CTKApp
+
+    called = {}
+
+    def fake_exec(db, name, args):
+        called["name"] = name
+        return "ok"
+
+    monkeypatch.setattr(nt, "execute_network_tool", fake_exec)
+    db = ConversationDB(str(tmp_path / "db"))
+    try:
+        app = CTKApp(db=db, provider=None, enable_tools=True)
+        assert (
+            app._execute_tool("find_similar_conversations", {"conversation_id": "x"})
+            == "ok"
+        )
+        assert called["name"] == "find_similar_conversations"
+        assert not hasattr(CTKApp, "_NETWORK_TOOL_NAMES")
+    finally:
+        db.close()
+
+
 @pytest.mark.asyncio
 async def test_tool_chat_turn_renders_reply_and_clears_turn(tmp_path):
     """The tool-enabled worker must render the assistant reply and end the turn.

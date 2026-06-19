@@ -666,34 +666,22 @@ class CTKApp(App):
         except Exception as exc:  # pragma: no cover
             self.post_message(ChatDone(error=str(exc)))
 
-    # Tool names belonging to the ctk.network virtual MCP. Routed to
-    # ctk.core.network_tools.execute_network_tool instead of the legacy
-    # cli.execute_ask_tool dispatcher. Kept as a class-level set so the
-    # check is O(1) and the list is greppable.
-    _NETWORK_TOOL_NAMES = frozenset({"find_similar_conversations", "list_neighbors"})
-
     def _execute_tool(self, name: str, args: Dict[str, Any]) -> str:
         """Run a CTK tool, returning its result as a string.
 
-        Routes by tool-name to the right provider:
-
-        * ``ctk.network`` tools → ``network_tools.execute_network_tool``
-        * ``ctk.builtin`` tools → ``cli.execute_ask_tool`` (legacy
-          dispatcher; will move into a dedicated builtin_tools module
-          in a follow-up)
-
-        Kept as a single seam so a future refactor (real MCP server
-        registration, plugin tools, etc.) can route here without
-        changing the worker.
+        Routes by the tool's owning provider (from the registry) rather
+        than a hardcoded name set, so a new provider needs no edit here.
         """
-        if name in self._NETWORK_TOOL_NAMES:
+        from ctk.core.tools_registry import provider_for_tool
+
+        if provider_for_tool(name) == "ctk.network":
             from ctk.core.network_tools import execute_network_tool
 
             return execute_network_tool(self.db, name, args)
 
         from ctk.cli import execute_ask_tool
 
-        # ``use_rich`` would print to stdout, which the TUI swallows.
+        # use_rich would print to stdout, which the TUI swallows.
         return execute_ask_tool(self.db, name, args, use_rich=False)
 
     # ----- UI thread handlers for chat-with-tools messages -------------
