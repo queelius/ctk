@@ -70,83 +70,101 @@ def _resolve_conversation_id(db: ConversationDB, conv_id: str) -> str:
     return full
 
 
+def _update_core(
+    db: ConversationDB,
+    conversation_id: str,
+    *,
+    starred: Optional[bool] = None,
+    pinned: Optional[bool] = None,
+    archived: Optional[bool] = None,
+    title: Optional[str] = None,
+) -> "tuple[str, list[str]]":
+    """Resolve and apply one or more field mutations to a conversation.
+
+    Returns ``(full_id, changes)`` on success, or ``(error_sentinel, [])``
+    when the id cannot be resolved. The caller checks
+    ``full.startswith("Error:")`` and is responsible for its own return
+    string formatting.
+    """
+    full = _resolve_conversation_id(db, conversation_id)
+    if full.startswith("Error:"):
+        return (full, [])
+
+    changes: list = []
+    if starred is not None:
+        db.star_conversation(full, star=starred)
+        changes.append(f"starred={starred}")
+    if pinned is not None:
+        db.pin_conversation(full, pin=pinned)
+        changes.append(f"pinned={pinned}")
+    if archived is not None:
+        db.archive_conversation(full, archive=archived)
+        changes.append(f"archived={archived}")
+    if title is not None:
+        db.update_conversation_metadata(full, title=title)
+        changes.append(f"title={title!r}")
+
+    return (full, changes)
+
+
 def _do_star_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    # Resolve prefix
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.star_conversation(conv_id)
-    return ToolResult.message(f"Starred conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, starred=True)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Starred conversation {full[:8]}...")
 
 
 def _do_unstar_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.star_conversation(conv_id, star=False)
-    return ToolResult.message(f"Unstarred conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, starred=False)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Unstarred conversation {full[:8]}...")
 
 
 def _do_pin_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.pin_conversation(conv_id)
-    return ToolResult.message(f"Pinned conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, pinned=True)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Pinned conversation {full[:8]}...")
 
 
 def _do_unpin_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.pin_conversation(conv_id, pin=False)
-    return ToolResult.message(f"Unpinned conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, pinned=False)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Unpinned conversation {full[:8]}...")
 
 
 def _do_archive_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.archive_conversation(conv_id)
-    return ToolResult.message(f"Archived conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, archived=True)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Archived conversation {full[:8]}...")
 
 
 def _do_unarchive_conversation(ctx: ToolContext) -> ToolResult:
     conv_id = ctx.args.get("conversation_id", "")
     if not conv_id:
         return ToolResult.message("Error: conversation_id required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.archive_conversation(conv_id, archive=False)
-    return ToolResult.message(f"Unarchived conversation {conv_id[:8]}...")
+    full, _ = _update_core(ctx.db, conv_id, archived=False)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Unarchived conversation {full[:8]}...")
 
 
 def _do_rename_conversation(ctx: ToolContext) -> ToolResult:
@@ -156,13 +174,10 @@ def _do_rename_conversation(ctx: ToolContext) -> ToolResult:
         return ToolResult.message("Error: conversation_id required")
     if not title:
         return ToolResult.message("Error: title required")
-
-    conv_id = _resolve_conversation_id(ctx.db, conv_id)
-    if conv_id.startswith("Error:"):
-        return ToolResult.message(conv_id)
-
-    ctx.db.update_conversation_metadata(conv_id, title=title)
-    return ToolResult.message(f"Renamed conversation {conv_id[:8]}... to '{title}'")
+    full, _ = _update_core(ctx.db, conv_id, title=title)
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    return ToolResult.message(f"Renamed conversation {full[:8]}... to '{title}'")
 
 
 def _do_delete_conversation(ctx: ToolContext) -> ToolResult:
