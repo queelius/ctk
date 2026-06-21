@@ -1,23 +1,24 @@
 """Network/similarity tools exposed as the ``ctk.network`` virtual MCP.
 
 In the new "everything the LLM can do is a tool" model (2.12.0), the
-graph/similarity analysis that used to live behind ``ctk net …``
+graph/similarity analysis that used to live behind ``ctk net ...``
 subcommands becomes tools the model can invoke during chat. The model
 is in a much better position to choose when to call them ("find
 conversations like this one") than the user is to remember the exact
 subcommand.
 
-Scope for 2.12.0 — only the tools that can be answered directly from
+Scope for 2.12.0 -- only the tools that can be answered directly from
 the persisted ``SimilarityModel`` table ship as MCP tools:
 
-* ``find_similar_conversations`` — top-k by stored similarity
-* ``list_neighbors`` — graph adjacency for a given conversation
+* ``find_similar_conversations`` -- top-k by stored similarity, with
+  on-the-fly cosine fallback when the table is empty but embeddings exist
+* ``list_neighbors`` -- graph adjacency for a given conversation
 
 The richer graph analytics (clusters, centrality, paths) need a live
 NetworkX graph that today gets rebuilt inside the CLI commands. They
 will move to MCP tools in a follow-up once the graph-construction
 machinery is factored out of cli_net.py into a reusable helper. Until
-then, those operations are simply unavailable to the model — and that
+then, those operations are simply unavailable to the model -- and that
 is fine; the user can build the graph with ``ctk db links`` and then
 ask "find similar to X" which IS a tool.
 
@@ -29,7 +30,7 @@ fit a chat turn (slow, big-memory).
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from sqlalchemy import or_
@@ -48,10 +49,11 @@ _NETWORK_TOOLS: List[Dict[str, Any]] = [
             "Find conversations similar to a given one using precomputed "
             "embeddings. USE WHEN the user asks 'what other conversations "
             "are like this', 'find related threads', 'show me similar', "
-            "etc. Requires that similarities have been computed first via "
-            "`ctk db embeddings` and `ctk db links`. If no similarities "
-            "are recorded for the seed, returns a message saying so — "
-            "relay it to the user."
+            "etc. Requires that embeddings have been generated first via "
+            "`ctk db embeddings`. When the similarity graph has been built "
+            "(`ctk db links`), results come from the persisted table; "
+            "otherwise an on-the-fly cosine fallback is used. "
+            "Relay any error or hint messages to the user."
         ),
         "input_schema": {
             "type": "object",
@@ -67,9 +69,9 @@ _NETWORK_TOOLS: List[Dict[str, Any]] = [
                 "min_similarity": {
                     "type": "number",
                     "description": (
-                        "Minimum similarity score in [0, 1] (default 0.0, "
-                        "i.e., return whatever was stored)."
+                        "Minimum similarity score in [0, 1] (default 0.1)."
                     ),
+                    "default": 0.1,
                 },
             },
             "required": ["conversation_id"],
@@ -130,7 +132,12 @@ _NETWORK_TOOLS: List[Dict[str, Any]] = [
 
 
 def _resolve_id(db, prefix: str) -> Optional[str]:
-    """Resolve a conv-id prefix to the full id, or return None."""
+    """Resolve a conv-id prefix to the full id, or return None.
+
+    Kept for backward compatibility with existing callers and tests.
+    New code prefers ``_resolve_id_via_db`` which uses the indexed
+    ``db.resolve_identifier`` path.
+    """
     if not prefix:
         return None
     # Cheapest path: try as a full id first.
@@ -142,6 +149,20 @@ def _resolve_id(db, prefix: str) -> Optional[str]:
         if conv.id.startswith(prefix):
             return conv.id
     return None
+
+
+def _resolve_id_via_db(db, identifier: str) -> Optional[str]:
+    """Resolve identifier using the indexed ``db.resolve_identifier`` method.
+
+    Returns the full conversation id, or None if not found or ambiguous.
+    Consistent with the MCP ``find_similar`` handler's resolution path.
+    """
+    if not identifier:
+        return None
+    result: Optional[Tuple[str, Any]] = db.resolve_identifier(identifier)
+    if result is None:
+        return None
+    return result[0]
 
 
 def _query_similarities(db, seed_id: str, limit: int, min_sim: float):
@@ -179,6 +200,40 @@ def _query_similarities(db, seed_id: str, limit: int, min_sim: float):
             )
             out.append((other, float(r.similarity)))
         return out
+
+
+def _compute_cosine_fallback(
+    all_embs: List[Dict[str, Any]],
+    seed_id: str,
+    limit: int,
+    min_sim: float,
+) -> Optional[List[Tuple[str, float]]]:
+    """Compute on-the-fly cosine similarity from stored embeddings.
+
+    Returns a sorted list of (other_id, similarity) pairs, or None if the
+    seed conversation has no embedding in the provided list.
+    """
+    target_vec: Optional[np.ndarray] = None
+    candidate_embs: Dict[str, np.ndarray] = {}
+
+    for rec in all_embs:
+        vec = np.array(rec["embedding"])
+        if rec["conversation_id"] == seed_id:
+            target_vec = vec
+        else:
+            candidate_embs[rec["conversation_id"]] = vec
+
+    if target_vec is None:
+        return None
+
+    results: List[Tuple[str, float]] = []
+    for cid, vec in candidate_embs.items():
+        sim = float(cosine_similarity(target_vec, vec))
+        if sim >= min_sim:
+            results.append((cid, sim))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results[:limit]
 
 
 def _format_results(db, pairs) -> str:
@@ -314,11 +369,13 @@ def execute_network_tool(db, name: str, args: Dict[str, Any]) -> str:
 
 
 def _do_find_similar(db, args: Dict[str, Any]) -> str:
-    seed_id = _resolve_id(db, args.get("conversation_id", ""))
+    seed_id = _resolve_id_via_db(db, args.get("conversation_id", ""))
     if seed_id is None:
         return f"Error: no conversation found matching '{args.get('conversation_id')}'"
     limit = int(args.get("limit", 10))
-    min_sim = float(args.get("min_similarity", 0.0))
+    min_sim = float(args.get("min_similarity", 0.1))
+
+    # Try the persisted similarity table first (fast, preserves existing behavior).
     try:
         pairs = _query_similarities(db, seed_id, limit, min_sim)
     except Exception as exc:
@@ -327,12 +384,34 @@ def _do_find_similar(db, args: Dict[str, Any]) -> str:
             "If you haven't yet, run `ctk db embeddings` then `ctk db links` "
             "to build the similarity graph."
         )
-    if not pairs:
+
+    if pairs:
+        # Populated-table path: return as before, no change.
+        return _format_results(db, pairs)
+
+    # Table is empty for this conversation. Check whether embeddings exist.
+    all_embs = db.get_all_embeddings()
+    if not all_embs:
         return (
-            "(no similarities recorded for that conversation — "
+            "No embeddings found. Generate them first with "
+            "`ctk db embeddings` then `ctk db links`."
+        )
+
+    # On-the-fly cosine fallback: compute directly from stored embeddings.
+    fallback = _compute_cosine_fallback(all_embs, seed_id, limit, min_sim)
+    if fallback is None:
+        return (
+            f"No embedding found for conversation {seed_id[:8]}. "
+            "Re-run `ctk db embeddings` to index it."
+        )
+
+    if not fallback:
+        return (
+            "(no similarities recorded for that conversation -- "
             "run `ctk db embeddings` and `ctk db links` to build them)"
         )
-    return _format_results(db, pairs)
+
+    return _format_results(db, fallback)
 
 
 def _do_neighbors(db, args: Dict[str, Any]) -> str:

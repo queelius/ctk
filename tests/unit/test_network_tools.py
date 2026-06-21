@@ -51,6 +51,25 @@ def _make_tree(conv_id: str, title: str = "Test") -> ConversationTree:
     return tree
 
 
+def _insert_embedding(
+    db, conv_id: str, vector: list, provider: str = "test", model: str = "test-model"
+) -> None:
+    """Insert a minimal EmbeddingModel row for the given conversation."""
+    from ctk.core.db_models import EmbeddingModel
+
+    with db.session_scope() as session:
+        row = EmbeddingModel(
+            conversation_id=conv_id,
+            provider=provider,
+            model=model,
+            chunking_strategy="whole",
+            aggregation_strategy="mean",
+            embedding=vector,
+            dimensions=len(vector),
+        )
+        session.add(row)
+
+
 def _insert_similarity(db, id1: str, id2: str, score: float) -> None:
     """Insert a SimilarityModel row directly (ids must already be saved conversations)."""
     from ctk.core.db_models import SimilarityModel
@@ -167,14 +186,15 @@ class TestFindSimilarEmpty:
         assert result.startswith("Error:")
         assert "not-here" in result
 
-    def test_no_similarities_recorded(self, populated_db):
-        # cccc-3333 exists but has no similarity rows
+    def test_no_similarities_recorded_no_embeddings(self, populated_db):
+        # cccc-3333 exists but has no similarity rows and no embeddings in DB;
+        # the new precheck fires and returns the friendly "no embeddings" hint.
         result = execute_network_tool(
             populated_db,
             "find_similar_conversations",
             {"conversation_id": "cccc-3333"},
         )
-        assert "no similarities recorded" in result.lower()
+        assert "no embeddings found" in result.lower()
 
     def test_empty_string_conversation_id(self, empty_db):
         result = execute_network_tool(
@@ -249,13 +269,16 @@ class TestFindSimilarPopulated:
         assert "a-003" not in result
         assert "a-004" not in result
 
-    def test_min_similarity_too_high_returns_empty_message(self, populated_db):
+    def test_min_similarity_too_high_no_embeddings_hint(self, populated_db):
+        # populated_db has similarity rows but no embeddings.
+        # min_similarity=0.999 causes the table query to return empty.
+        # The fallback then checks embeddings, finds none, and returns the hint.
         result = execute_network_tool(
             populated_db,
             "find_similar_conversations",
             {"conversation_id": "aaaa-1111", "min_similarity": 0.999},
         )
-        assert "no similarities recorded" in result.lower()
+        assert "no embeddings found" in result.lower()
 
     def test_returns_title_in_output(self, populated_db):
         result = execute_network_tool(
@@ -379,6 +402,102 @@ class TestListNeighborsPopulated:
         scores = re.findall(r"\((\d+\.\d+)\)", result)
         scores = [float(s) for s in scores]
         assert scores == sorted(scores, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# On-the-fly cosine fallback (embeddings present, NO SimilarityModel rows)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def embeddings_no_table_db():
+    """DB with 3 conversations + embeddings but NO persisted SimilarityModel rows.
+
+    Vectors are chosen so that conv A and conv B are very similar (both have
+    large component-0) and conv C is dissimilar. The fallback should rank B
+    above C when querying from A.
+
+    IDs are chosen so that the first 8 characters of each ID are unique
+    ("alpha001", "beta0001", "gam00001") enabling 8-char prefix resolution tests.
+    """
+    db = ConversationDB(":memory:")
+    db.save_conversation(_make_tree("alpha001-python", "Python"))
+    db.save_conversation(_make_tree("beta0001-python-adv", "Python advanced"))
+    db.save_conversation(_make_tree("gam00001-cooking", "Cooking"))
+    # Simple 3-D unit-ish vectors: A and B share the same direction.
+    _insert_embedding(db, "alpha001-python", [1.0, 0.0, 0.0])
+    _insert_embedding(db, "beta0001-python-adv", [0.95, 0.1, 0.1])
+    _insert_embedding(db, "gam00001-cooking", [0.0, 0.0, 1.0])
+    return db
+
+
+@pytest.mark.unit
+class TestFindSimilarFallback:
+    """Guard tests for the on-the-fly cosine fallback path."""
+
+    def test_fallback_returns_results_when_table_empty(self, embeddings_no_table_db):
+        """Core guard: with embeddings but no table rows, results must appear."""
+        result = execute_network_tool(
+            embeddings_no_table_db,
+            "find_similar_conversations",
+            {"conversation_id": "alpha001-python"},
+        )
+        # Must not be the "no similarities recorded" message or the no-embeddings hint.
+        assert "no embeddings found" not in result.lower()
+        assert "no similarities recorded" not in result.lower()
+        # The similar conversation (beta0001) should appear in the output.
+        assert "beta0001" in result
+
+    def test_fallback_ranks_by_cosine(self, embeddings_no_table_db):
+        """The fallback result must be sorted by similarity descending."""
+        import re
+
+        result = execute_network_tool(
+            embeddings_no_table_db,
+            "find_similar_conversations",
+            {"conversation_id": "alpha001-python", "min_similarity": 0.0},
+        )
+        scores = [float(s) for s in re.findall(r"\((\d+\.\d+)\)", result)]
+        assert scores == sorted(
+            scores, reverse=True
+        ), "Fallback results must be sorted descending by similarity"
+
+    def test_fallback_prefix_resolves_via_resolve_identifier(
+        self, embeddings_no_table_db
+    ):
+        """An 8-char prefix must resolve via db.resolve_identifier and yield results."""
+        # "alpha001" is the first 8 chars of "alpha001-python" (unique in this DB).
+        result = execute_network_tool(
+            embeddings_no_table_db,
+            "find_similar_conversations",
+            {"conversation_id": "alpha001"},
+        )
+        # Must not be an error -- the prefix resolved.
+        assert not result.startswith("Error:")
+        # The fallback should return a ranked result.
+        assert "beta0001" in result
+
+    def test_fallback_dissimilar_excluded_by_min_similarity(
+        self, embeddings_no_table_db
+    ):
+        """gam00001 (orthogonal vector) must be absent at default min_similarity=0.1."""
+        result = execute_network_tool(
+            embeddings_no_table_db,
+            "find_similar_conversations",
+            {"conversation_id": "alpha001-python"},
+        )
+        # gam00001 has cosine ~ 0 with alpha001, below the 0.1 default floor.
+        assert "gam00001" not in result
+
+    def test_populated_table_path_unchanged(self, populated_db):
+        """When SimilarityModel rows exist for the seed, the table path fires as before."""
+        result = execute_network_tool(
+            populated_db,
+            "find_similar_conversations",
+            {"conversation_id": "aaaa-1111"},
+        )
+        assert "bbbb" in result
+        assert "0.750" in result
 
 
 # ---------------------------------------------------------------------------
