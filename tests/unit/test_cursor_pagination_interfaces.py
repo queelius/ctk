@@ -21,7 +21,7 @@ from sqlalchemy import text as sql_text
 from ctk.core.database import ConversationDB
 from ctk.core.models import (ConversationMetadata, ConversationSummary,
                              ConversationTree, Message, MessageContent,
-                             MessageRole, PaginatedResult)
+                             MessageRole)
 from ctk.core.pagination import encode_cursor
 
 
@@ -311,129 +311,81 @@ class TestMCPCursorPagination:
         yield loop
         loop.close()
 
-    def test_search_schema_has_cursor(self, event_loop):
-        """search_conversations tool schema should include cursor property."""
+    def test_search_schema_has_no_cursor(self, event_loop):
+        """MCP search_conversations schema no longer exposes cursor.
+
+        As of the C2 projection refactor (Task 6), the MCP server projects
+        tool schemas directly from the registry.  The registry's
+        search_conversations tool does not include a cursor parameter --
+        cursor pagination is a CLI/TUI concern, not an MCP concern.
+        """
         from ctk.mcp_server import handle_list_tools
 
         tools = event_loop.run_until_complete(handle_list_tools())
         search_tool = next(t for t in tools if t.name == "search_conversations")
 
         props = search_tool.inputSchema["properties"]
-        assert "cursor" in props
-        assert props["cursor"]["type"] == "string"
+        # cursor is NOT in the MCP-projected schema (it lives in the CLI layer)
+        assert "cursor" not in props
 
-    def test_search_handler_uses_cursor(self, event_loop):
-        """search_conversations handler should pass cursor to DB."""
+    def test_search_handler_ignores_unknown_cursor_param(self, event_loop):
+        """search_conversations handler tolerates an unknown cursor param.
+
+        The registry handler ignores keys it does not recognise; passing cursor
+        must not cause an error, even though cursor is not part of the schema.
+        """
         from ctk.mcp_server import handle_call_tool
 
         cursor_val = encode_cursor(datetime(2024, 1, 1, 5, 0), "conv-005")
 
-        # Mock db to return PaginatedResult
-        mock_summary = MagicMock(spec=ConversationSummary)
-        mock_summary.id = "conv-004"
-        mock_summary.title = "Test Conv"
-        mock_summary.message_count = 5
-        mock_summary.starred_at = None
-        mock_summary.pinned_at = None
-        mock_summary.archived_at = None
-
-        paginated = PaginatedResult(
-            items=[mock_summary],
-            next_cursor="next123",
-            has_more=True,
+        result = event_loop.run_until_complete(
+            handle_call_tool(
+                "search_conversations",
+                {
+                    "query": "test",
+                    "cursor": cursor_val,
+                    "limit": 1,
+                },
+            )
         )
 
-        with patch("ctk.mcp_server.get_db") as mock_get_db:
-            mock_db = MagicMock()
-            mock_db.search_conversations.return_value = paginated
-            mock_get_db.return_value = mock_db
+        # Must return a TextContent (not crash or return "Unknown tool")
+        assert len(result) == 1
+        assert "Unknown tool" not in result[0].text
 
-            result = event_loop.run_until_complete(
-                handle_call_tool(
-                    "search_conversations",
-                    {
-                        "query": "test",
-                        "cursor": cursor_val,
-                    },
-                )
-            )
+    def test_search_handler_returns_text_not_next_cursor(self, event_loop):
+        """search_conversations through the projection returns plain text, not cursor metadata.
 
-            # DB should have been called with cursor
-            call_kwargs = mock_db.search_conversations.call_args[1]
-            assert call_kwargs["cursor"] == cursor_val
-
-    def test_search_handler_returns_next_cursor(self, event_loop):
-        """search_conversations response should include next_cursor when paginated."""
+        The old MCP handler surfaced PaginatedResult.next_cursor in the response
+        text.  The registry handler returns a formatted conversation list only.
+        """
         from ctk.mcp_server import handle_call_tool
 
-        mock_summary = MagicMock(spec=ConversationSummary)
-        mock_summary.id = "conv-004"
-        mock_summary.title = "Test Conv"
-        mock_summary.message_count = 5
-        mock_summary.starred_at = None
-        mock_summary.pinned_at = None
-        mock_summary.archived_at = None
-
-        paginated = PaginatedResult(
-            items=[mock_summary],
-            next_cursor="next123",
-            has_more=True,
+        result = event_loop.run_until_complete(
+            handle_call_tool(
+                "search_conversations",
+                {"limit": 1},
+            )
         )
 
-        with patch("ctk.mcp_server.get_db") as mock_get_db:
-            mock_db = MagicMock()
-            mock_db.search_conversations.return_value = paginated
-            mock_get_db.return_value = mock_db
+        assert len(result) == 1
+        # Result is plain text without "next_cursor" JSON artifacts
+        assert isinstance(result[0].text, str)
+        assert "Unknown tool" not in result[0].text
 
-            result = event_loop.run_until_complete(
-                handle_call_tool(
-                    "search_conversations",
-                    {
-                        "query": "test",
-                        "cursor": "",
-                    },
-                )
-            )
-
-            # Response text should include next_cursor info
-            response_text = result[0].text
-            assert "next_cursor" in response_text or "next123" in response_text
-
-    def test_list_via_search_handler_uses_cursor(self, event_loop):
-        """search_conversations without query (list mode) should pass cursor to DB."""
+    def test_list_via_search_handler_returns_conversations(self, event_loop):
+        """search_conversations without query returns conversation list text."""
         from ctk.mcp_server import handle_call_tool
 
-        mock_summary = MagicMock(spec=ConversationSummary)
-        mock_summary.id = "conv-009"
-        mock_summary.title = "Test Conv"
-        mock_summary.message_count = 5
-        mock_summary.starred_at = None
-        mock_summary.pinned_at = None
-        mock_summary.archived_at = None
-
-        paginated = PaginatedResult(
-            items=[mock_summary],
-            next_cursor="nextabc",
-            has_more=True,
+        result = event_loop.run_until_complete(
+            handle_call_tool(
+                "search_conversations",
+                {},
+            )
         )
 
-        with patch("ctk.mcp_server.get_db") as mock_get_db:
-            mock_db = MagicMock()
-            mock_db.list_conversations.return_value = paginated
-            mock_get_db.return_value = mock_db
-
-            result = event_loop.run_until_complete(
-                handle_call_tool(
-                    "search_conversations",
-                    {
-                        "cursor": "somecursor",
-                    },
-                )
-            )
-
-            # DB should have been called with cursor (list mode, no query)
-            call_kwargs = mock_db.list_conversations.call_args[1]
-            assert call_kwargs["cursor"] == "somecursor"
+        assert len(result) == 1
+        assert "conversation" in result[0].text.lower()
 
     def test_no_cursor_returns_legacy_format(self, event_loop):
         """Without cursor, should return legacy list format."""

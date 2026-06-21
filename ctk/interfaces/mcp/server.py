@@ -1,8 +1,14 @@
 """
-CTK MCP Server — core server with tool registration and dispatch.
+CTK MCP Server -- core server with tool registration and dispatch.
 
-Collects tool definitions and handlers from handler modules, registers them
-with the MCP Server, and implements dispatch.
+Sources the MCP tool list and dispatch from the registry projection layer
+(``ctk.interfaces.mcp.projection``), which in turn reads the canonical tool
+definitions registered by the provider modules.
+
+The two explicit provider imports below are critical: after Task 7 removes the
+handlers package (which previously caused them to be imported transitively),
+these lines are the ONLY path that registers the ``ctk.builtin`` and
+``ctk.network`` providers before ``list_tools`` runs.
 """
 
 import logging
@@ -14,7 +20,9 @@ import mcp.types as types
 from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
-from ctk.interfaces.mcp.handlers import ALL_HANDLERS, ALL_TOOLS
+import ctk.core.builtin_tools  # noqa: F401 -- registers ctk.builtin provider
+import ctk.core.network_tools  # noqa: F401 -- registers ctk.network provider
+from ctk.interfaces.mcp import projection
 from ctk.interfaces.mcp.validation import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -68,7 +76,7 @@ def _resolve_get_db():
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available CTK tools."""
-    return ALL_TOOLS
+    return projection.project_tools()
 
 
 @server.call_tool()
@@ -76,12 +84,8 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
     """Handle tool calls with input validation."""
 
     try:
-        handler = ALL_HANDLERS.get(name)
-        if handler is None:
-            return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
-
         db = _resolve_get_db()
-        return await handler(arguments, db)
+        return await projection.handle_tool(name, arguments, db)
 
     except ValidationError as e:
         # Return validation errors without traceback (they're expected)
