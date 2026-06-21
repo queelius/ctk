@@ -456,7 +456,7 @@ def test_builtin_provider_wired_into_registry():
     """R6: importing builtin_tools registers the ctk.builtin provider.
 
     The provider must own the builtin tool names (routing derives from
-    ownership) and expose exactly the 27 migrated tools.
+    ownership) and expose exactly the 28 migrated tools.
     """
     import ctk.core.builtin_tools  # noqa: F401  (registers the provider on import)
     from ctk.core.tools_registry import iter_providers, provider_for_tool
@@ -465,4 +465,4 @@ def test_builtin_provider_wired_into_registry():
 
     builtin = [p for p in iter_providers() if p.name == "ctk.builtin"]
     assert len(builtin) == 1, "ctk.builtin provider must be registered exactly once"
-    assert len(builtin[0].tools) == 27
+    assert len(builtin[0].tools) == 28

@@ -705,6 +705,53 @@ def _do_export_conversation(ctx: ToolContext) -> ToolResult:
         )
 
 
+def _do_update_conversation(ctx: ToolContext) -> ToolResult:
+    conversation_id = ctx.args.get("conversation_id", "")
+    if not conversation_id:
+        return ToolResult.message("Error: conversation_id required")
+
+    # Tri-state booleans: None means "not specified"; False is a real value to apply.
+    def _parse_bool(v):
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes")
+        return bool(v)
+
+    starred = _parse_bool(ctx.args.get("starred"))
+    pinned = _parse_bool(ctx.args.get("pinned"))
+    archived = _parse_bool(ctx.args.get("archived"))
+    title = ctx.args.get("title")
+
+    full, changes = _update_core(
+        ctx.db,
+        conversation_id,
+        starred=starred,
+        pinned=pinned,
+        archived=archived,
+        title=title,
+    )
+    if full.startswith("Error:"):
+        return ToolResult.message(full)
+    if not changes:
+        return ToolResult.message("No changes specified")
+
+    # Port wording from ctk/interfaces/mcp/handlers/conversation.py:218-270
+    human_changes = []
+    if starred is not None:
+        human_changes.append("Starred" if starred else "Unstarred")
+    if pinned is not None:
+        human_changes.append("Pinned" if pinned else "Unpinned")
+    if archived is not None:
+        human_changes.append("Archived" if archived else "Unarchived")
+    if title is not None:
+        human_changes.append(f'Title set to "{title}"')
+
+    return ToolResult.message(f"Updated {full[:8]}: {', '.join(human_changes)}")
+
+
 def _do_execute_shell_command(ctx: ToolContext) -> ToolResult:
     command = ctx.args.get("command", "")
     if not command:
@@ -1517,6 +1564,51 @@ USE THIS TOOL WHEN: user says "export to markdown", "save as json", "export conv
         },
         handler=_do_execute_sql,
         pass_through=True,
+    ),
+    BuiltinTool(
+        name="update_conversation",
+        description=(
+            "Update one or more fields of a conversation in a single call.\n\n"
+            "Supported fields (all optional, at least one required beyond id):\n"
+            "- starred: true to star, false to unstar\n"
+            "- pinned: true to pin, false to unpin\n"
+            "- archived: true to archive, false to unarchive\n"
+            "- title: new title string\n\n"
+            "All boolean fields are tri-state: omit the field entirely to leave it"
+            " unchanged; pass false to actively clear the flag.\n\n"
+            "USE THIS TOOL WHEN: user wants to change multiple attributes at once,"
+            " e.g. 'star and rename this conversation'."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "conversation_id": {
+                    "type": "string",
+                    "description": "Full or partial conversation ID to update",
+                },
+                "starred": {
+                    "type": "boolean",
+                    "description": "Set to true to star, false to unstar; omit to leave unchanged",
+                },
+                "pinned": {
+                    "type": "boolean",
+                    "description": "Set to true to pin, false to unpin; omit to leave unchanged",
+                },
+                "archived": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true to archive, false to unarchive; omit to leave unchanged"
+                    ),
+                },
+                "title": {
+                    "type": "string",
+                    "description": "New title for the conversation",
+                },
+            },
+            "required": ["conversation_id"],
+        },
+        handler=_do_update_conversation,
+        pass_through=False,
     ),
 ]
 _HANDLERS: Dict[str, BuiltinTool] = {}
