@@ -363,6 +363,11 @@ class OpenAIProvider(LLMProvider):
         # assistant's prior tool request.
         if msg.metadata and "tool_call_id" in msg.metadata:
             formatted["tool_call_id"] = msg.metadata["tool_call_id"]
+        # Assistant messages that initiated tool calls must carry tool_calls
+        # so strict OpenAI-spec servers can match the following TOOL results.
+        # When tool_calls is present, content may be empty ("") or None.
+        if msg.role == MessageRole.ASSISTANT and msg.metadata and "tool_calls" in msg.metadata:
+            formatted["tool_calls"] = msg.metadata["tool_calls"]
         return formatted
 
     # ------------------------------------------------------------------

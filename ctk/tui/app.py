@@ -18,6 +18,7 @@ Design notes:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import uuid
@@ -614,12 +615,41 @@ class CTKApp(App):
                             reasoning=turn_reasoning,
                         )
                     )
+
+                if tool_calls:
+                    # Always append an assistant message when tool_calls are
+                    # present, even when turn_text is empty.  Strict OpenAI-spec
+                    # servers require the assistant message (carrying tool_calls)
+                    # to precede every TOOL-role result in the history.
+                    tool_calls_payload = [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": (
+                                    tc["arguments"]
+                                    if isinstance(tc["arguments"], str)
+                                    else json.dumps(tc["arguments"])
+                                ),
+                            },
+                        }
+                        for tc in tool_calls
+                    ]
+                    history.append(
+                        LLMMessage(
+                            role=LLMMessageRole.ASSISTANT,
+                            content=turn_text or "",
+                            metadata={"tool_calls": tool_calls_payload},
+                        )
+                    )
+                else:
                     if turn_text:
                         history.append(
-                            LLMMessage(role=LLMMessageRole.ASSISTANT, content=turn_text)
+                            LLMMessage(
+                                role=LLMMessageRole.ASSISTANT, content=turn_text
+                            )
                         )
-
-                if not tool_calls:
                     self.post_message(ChatDone())
                     return
 
