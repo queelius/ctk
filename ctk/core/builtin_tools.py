@@ -9,6 +9,9 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from sqlalchemy import text
+
+from ctk.core.constants import MAX_QUERY_LENGTH, MAX_SQL_ROWS
 from ctk.core.database import ConversationDB
 
 logger = logging.getLogger(__name__)
@@ -858,6 +861,64 @@ def _do_show_conversation_tree(ctx: ToolContext) -> ToolResult:
     )
 
 
+def _do_execute_sql(ctx: ToolContext) -> ToolResult:
+    sql = ctx.args.get("sql")
+    if not sql:
+        return ToolResult.message("Error: sql is required")
+    if len(sql) > MAX_QUERY_LENGTH:
+        return ToolResult.message(
+            f"Error: sql query exceeds maximum length of {MAX_QUERY_LENGTH} characters"
+        )
+    params = ctx.args.get("params", [])
+
+    try:
+        with ctx.db.engine.connect() as conn:
+            conn.execute(text("PRAGMA query_only = ON"))
+            if params:
+                result = conn.execute(
+                    text(sql),
+                    {f"p{i}": v for i, v in enumerate(params)},
+                )
+            else:
+                result = conn.execute(text(sql))
+
+            columns = list(result.keys())
+            rows = result.fetchmany(MAX_SQL_ROWS + 1)
+
+            truncated = len(rows) > MAX_SQL_ROWS
+            if truncated:
+                rows = rows[:MAX_SQL_ROWS]
+
+    except Exception as e:
+        error_msg = str(e)
+        if "query_only" in error_msg.lower() or "readonly" in error_msg.lower():
+            return ToolResult.message(
+                "Error: Only SELECT queries are allowed (database is read-only)."
+            )
+        return ToolResult.message(f"SQL error: {error_msg}")
+
+    if not rows:
+        return ToolResult(
+            text="Query returned no results.",
+            data={"columns": columns, "rows": []},
+        )
+
+    # Format as text table
+    lines = [" | ".join(columns)]
+    lines.append("-|-".join("-" * len(c) for c in columns))
+    for row in rows:
+        lines.append(" | ".join(str(v) if v is not None else "NULL" for v in row))
+
+    if truncated:
+        lines.append(f"\n... truncated to {MAX_SQL_ROWS} rows")
+
+    table_text = "\n".join(lines)
+    return ToolResult(
+        text=table_text,
+        data={"columns": columns, "rows": [list(r) for r in rows]},
+    )
+
+
 _BUILTIN_TOOLS: List[BuiltinTool] = [
     BuiltinTool(
         name="search_conversations",
@@ -1412,6 +1473,35 @@ USE THIS TOOL WHEN: user says "export to markdown", "save as json", "export conv
         },
         handler=_do_show_conversation_tree,
         pass_through=False,
+    ),
+    BuiltinTool(
+        name="execute_sql",
+        description=(
+            "Run a read-only SQL query against the CTK database. Use for"
+            " flexible queries not covered by other tools."
+            " Tables: conversations (id, title, source, model, starred_at,"
+            " pinned_at, archived_at, created_at, updated_at, message_count),"
+            " messages (id, conversation_id, role, content, parent_id,"
+            " created_at), tags (conversation_id, tag)."
+            " Full-text search available via messages_fts table."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "sql": {
+                    "type": "string",
+                    "description": "SQL query to execute",
+                },
+                "params": {
+                    "type": "array",
+                    "description": "Query parameters for ? placeholders",
+                    "items": {},
+                },
+            },
+            "required": ["sql"],
+        },
+        handler=_do_execute_sql,
+        pass_through=True,
     ),
 ]
 _HANDLERS: Dict[str, BuiltinTool] = {}

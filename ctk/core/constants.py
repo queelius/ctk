@@ -27,6 +27,7 @@ SEARCH_CONVERSATIONS_LIMIT = 500  # Default limit for search command conversatio
 # --- Input Validation Limits ---
 
 MAX_QUERY_LENGTH = 10000  # Maximum search query length
+MAX_SQL_ROWS = 100  # Maximum rows returned by execute_sql
 MAX_TITLE_LENGTH = 1000  # Maximum conversation title length
 MAX_ID_LENGTH = 200  # Maximum conversation ID length
 MAX_RESULT_LIMIT = 10000  # Maximum results per query

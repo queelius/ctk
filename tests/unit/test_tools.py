@@ -158,13 +158,14 @@ class TestIsPassThroughTool:
 
     @pytest.mark.unit
     def test_pass_through_set_is_the_five_known_tools(self):
-        """The derived pass-through set must equal the five documented tools."""
+        """The derived pass-through set must equal the six documented tools."""
         assert pass_through_tools() == {
             "search_conversations",
             "get_conversation",
             "get_statistics",
             "execute_shell_command",
             "list_conversations",
+            "execute_sql",
         }
 
     @pytest.mark.unit

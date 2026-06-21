@@ -31,7 +31,7 @@ pytestmark = pytest.mark.unit
 #   "
 # and update _EXPECTED_DIGEST below.
 # ---------------------------------------------------------------------------
-_EXPECTED_DIGEST = "af510d8a88e918a135b55ce8bcf647ddd449bc89ec55c152475eea7f61f87651"
+_EXPECTED_DIGEST = "1300d364d7094fecb49daa06f8691f1b6942a403fb76350f1c9a2d2275ad9215"
 
 _EXPECTED_NAMES = [
     "archive_conversation",
@@ -39,6 +39,7 @@ _EXPECTED_NAMES = [
     "delete_conversation",
     "duplicate_conversation",
     "execute_shell_command",
+    "execute_sql",
     "export_conversation",
     "get_conversation",
     "get_recent_conversations",
@@ -96,7 +97,7 @@ def test_builtin_schemas_are_byte_stable():
     view = _builtin_schema_view()
     names = [t["name"] for t in view]
 
-    assert len(names) == 26
+    assert len(names) == 27
     assert names == _EXPECTED_NAMES
 
     digest = hashlib.sha256(json.dumps(view, sort_keys=True).encode()).hexdigest()
