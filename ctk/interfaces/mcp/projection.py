@@ -96,24 +96,13 @@ def normalize_aliases(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def _registry_tool_by_name(name: str) -> Optional[Dict[str, Any]]:
-    """Return the registry tool dict for the given canonical name, or None."""
-    for t in all_tools():
-        if t.get("name") == name:
-            return t
-    return None
-
-
-def _to_mcp_tool(
-    tool_dict: Dict[str, Any], override_name: Optional[str] = None
-) -> types.Tool:
+def _to_mcp_tool(tool_dict: Dict[str, Any]) -> types.Tool:
     """Convert a registry tool dict to a ``types.Tool``.
 
-    Drops ``pass_through`` (a registry-only key).  Uses ``override_name`` when
-    building the legacy alias tool definition.
+    Drops ``pass_through`` (a registry-only key).
     """
     return types.Tool(
-        name=override_name or tool_dict["name"],
+        name=tool_dict["name"],
         description=tool_dict["description"],
         inputSchema=tool_dict["input_schema"],
     )
