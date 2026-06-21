@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/queelius/ctk",
-    packages=find_packages(exclude=['export', 'tests']),
+    packages=find_packages(exclude=["export", "tests"]),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -52,12 +52,6 @@ setup(
             "flake8>=6.0",
             "mypy>=1.0",
             "pytest-timeout>=2.0.0",
-            "flask>=2.0",
-            "flask-cors>=4.0",
-        ],
-        "rest": [
-            "flask>=2.0",
-            "flask-cors>=4.0",
         ],
     },
     entry_points={

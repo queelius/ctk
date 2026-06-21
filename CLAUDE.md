@@ -113,8 +113,6 @@ Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrappi
 
 **MCP Server** (`ctk/interfaces/mcp/`): exposes a subset of CTK as a real MCP server for use by external clients. 7 tools: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar`, `semantic_search`, `execute_sql`. Entry point: `python -m ctk.mcp_server`.
 
-**REST API** (`ctk/interfaces/rest/api.py`): Flask-based read/write REST surface. Defaults to `127.0.0.1` because there's no auth. Used for the HTML viewer and any external integrations.
-
 **Shared Utilities**:
 - `ctk/core/formatting.py`: `format_conversations_table()` (Rich tables with emoji flags)
 - `ctk/core/db_helpers.py`: `list_conversations_helper()`, `search_conversations_helper()`
@@ -132,7 +130,7 @@ Schema changes go through the versioned `PRAGMA user_version` migration runner (
 ## Project Layout Beyond `ctk/`
 
 - `docs/` is a MkDocs site (`mkdocs.yml`). Build with `mkdocs serve` for local preview. Note: `docs/index.md` is currently a stale copy of the pre-2.12 README and should be regenerated from the current README before publishing.
-- `examples/` has runnable demos: `mcp_example_server.py` and `mcp_python_server.py` for MCP, `rest_server.py` for the Flask surface, `fluent_api.py` and `fluent_api_demo.ipynb` for the `CTK` builder API, `similarity_quickstart.py` for `ctk net`.
+- `examples/` has runnable demos: `mcp_example_server.py` and `mcp_python_server.py` for MCP, `fluent_api.py` and `fluent_api_demo.ipynb` for the `CTK` builder API, `similarity_quickstart.py` for `ctk net`.
 - `dev/openai-db/` is the local dev database directory (gitignored). Use `ctk --db dev/openai-db` to drive the TUI against it.
 - `PLAN.md` is a historical record of Phases 1-7 code-quality work, already absorbed into the auto-memory. Don't take new work from it.
 

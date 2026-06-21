@@ -8,7 +8,7 @@ CTK (Conversation Toolkit) is designed with a modular, plugin-based architecture
 
 1. **Tree-First Design**: All conversations are trees. Linear conversations are simply trees with a single path.
 2. **Plugin Architecture**: Import/export formats are discovered and loaded dynamically.
-3. **Multiple Interfaces**: The same core functionality is exposed through CLI, REST API, MCP, and other interfaces.
+3. **Multiple Interfaces**: The same core functionality is exposed through CLI, MCP, and other interfaces.
 4. **Provider Agnostic**: Unified data model works across all AI providers (OpenAI, Anthropic, etc.).
 
 ## Directory Structure
@@ -34,11 +34,7 @@ ctk/
 │
 ├── interfaces/            # Multiple interface implementations
 │   ├── base.py           # Base interface class
-│   ├── rest/             # RESTful API
-│   │   └── api.py
-│   ├── mcp/              # Model Context Protocol
-│   ├── web/              # Web frontend
-│   └── cli_v2/           # Enhanced CLI
+│   └── mcp/              # Model Context Protocol
 │
 └── cli.py                # Main CLI entry point
 ```
@@ -173,18 +169,6 @@ class BaseInterface(ABC):
     def list_conversations(...)
 ```
 
-### REST API
-
-Flask-based REST API for web integration:
-
-```
-GET    /api/conversations        # List all
-GET    /api/conversations/<id>   # Get specific
-POST   /api/conversations/search # Search
-POST   /api/import              # Import data
-POST   /api/export              # Export data
-```
-
 ### CLI
 
 Command-line interface for terminal usage:
@@ -198,10 +182,6 @@ ctk search "python async"
 ### MCP (Model Context Protocol)
 
 Integration with AI assistants and tools (coming soon).
-
-### Web Frontend
-
-Browser-based interface for non-technical users.
 
 ## Export Formats
 
