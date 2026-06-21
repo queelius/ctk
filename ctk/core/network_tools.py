@@ -31,8 +31,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 from sqlalchemy import or_
 
+from ctk.core.similarity import cosine_similarity, extract_conversation_text
 from ctk.core.tools_registry import ToolProvider, register_provider
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,29 @@ _NETWORK_TOOLS: List[Dict[str, Any]] = [
                 },
             },
             "required": ["conversation_id"],
+        },
+    },
+    {
+        "name": "semantic_search",
+        "pass_through": False,
+        "description": (
+            "Search conversations by meaning using embeddings. Unlike text search, "
+            "this finds conceptually similar conversations even without keyword matches. "
+            "Requires embeddings to have been generated first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language query to search by meaning",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of results to return (default: 10)",
+                },
+            },
+            "required": ["query"],
         },
     },
 ]
@@ -168,6 +193,110 @@ def _format_results(db, pairs) -> str:
     return "\n".join(lines)
 
 
+def _build_title_cache(
+    db, conversation_ids: List[str], max_len: int = 50
+) -> Dict[str, str]:
+    """Build a title cache using one list_conversations call (no per-row load)."""
+    id_set = set(conversation_ids)
+    cache: Dict[str, str] = {}
+    try:
+        summaries = db.list_conversations(limit=len(conversation_ids) + 100)
+        for summary in summaries:
+            if summary.id in id_set:
+                cache[summary.id] = (summary.title or "Untitled")[:max_len]
+    except Exception as exc:
+        logger.debug("Title cache build failed: %s", exc)
+    return cache
+
+
+def _do_semantic_search(db, args: Dict[str, Any]) -> str:
+    """Implement semantic_search by re-fitting on stored embeddings + query."""
+    query = args.get("query", "")
+    if not query:
+        return "Error: query is required"
+    top_k = int(args.get("top_k", 10))
+
+    all_embs = db.get_all_embeddings()
+    if not all_embs:
+        return (
+            "No embeddings found. Generate them first with "
+            "`ctk db embeddings` then `ctk db links`."
+        )
+
+    provider_name = all_embs[0].get("provider", "tfidf")
+
+    try:
+        from ctk.core.similarity import (
+            ConversationEmbedder,
+            ConversationEmbeddingConfig,
+        )
+        from ctk.embeddings.base import AggregationStrategy, ChunkingStrategy
+
+        config = ConversationEmbeddingConfig(
+            provider=provider_name,
+            chunking=ChunkingStrategy.WHOLE,
+            aggregation=AggregationStrategy.MEAN,
+        )
+
+        if provider_name == "tfidf":
+            from ctk.embeddings.tfidf import TFIDFEmbedding
+
+            tfidf = TFIDFEmbedding(config.provider_config)
+            texts = []
+            for emb_record in all_embs:
+                try:
+                    conv = db.load_conversation(emb_record["conversation_id"])
+                    if conv:
+                        texts.append(extract_conversation_text(conv))
+                except Exception:
+                    continue
+
+            if not texts:
+                return "Error: Could not load conversation texts for TF-IDF fitting."
+
+            tfidf.fit(texts + [query])
+            query_resp = tfidf.embed(query)
+            query_vec = np.array(query_resp.embedding)
+        else:
+            embedder = ConversationEmbedder(config)
+            query_resp = embedder.provider.embed(query)
+            query_vec = np.array(query_resp.embedding)
+
+    except Exception as exc:
+        logger.error("Failed to embed query: %s", exc)
+        return f"Error embedding query: {exc}"
+
+    results = []
+    for emb_record in all_embs:
+        stored_vec = np.array(emb_record["embedding"])
+        sim = cosine_similarity(query_vec, stored_vec)
+        if sim > 0:
+            results.append(
+                {
+                    "conversation_id": emb_record["conversation_id"],
+                    "similarity": sim,
+                }
+            )
+
+    results.sort(key=lambda x: x["similarity"], reverse=True)
+    results = results[:top_k]
+
+    if not results:
+        return "No semantically similar conversations found."
+
+    result_ids = [r["conversation_id"] for r in results]
+    title_cache = _build_title_cache(db, result_ids)
+
+    lines = [f'Semantic search results for "{query}":\n']
+    for i, r in enumerate(results, 1):
+        cid = r["conversation_id"]
+        sim = r["similarity"]
+        title = title_cache.get(cid, "Unknown")
+        lines.append(f"[{i}] {cid[:8]} ({sim:.2f}) {title}")
+
+    return "\n".join(lines)
+
+
 def execute_network_tool(db, name: str, args: Dict[str, Any]) -> str:
     """Dispatch a ``ctk.network`` tool call to its implementation.
 
@@ -179,6 +308,8 @@ def execute_network_tool(db, name: str, args: Dict[str, Any]) -> str:
         return _do_find_similar(db, args)
     if name == "list_neighbors":
         return _do_neighbors(db, args)
+    if name == "semantic_search":
+        return _do_semantic_search(db, args)
     return f"Error: unknown ctk.network tool: {name}"
 
 

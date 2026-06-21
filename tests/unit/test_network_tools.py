@@ -395,7 +395,7 @@ class TestProviderRegistration:
         names = [p.name for p in iter_providers()]
         assert "ctk.network" in names
 
-    def test_network_provider_has_two_tools(self):
+    def test_network_provider_has_three_tools(self):
         from ctk.core.tools_registry import iter_providers
 
         providers = {p.name: p for p in iter_providers()}
@@ -404,6 +404,7 @@ class TestProviderRegistration:
         tool_names = [t["name"] for t in net.tools]
         assert "find_similar_conversations" in tool_names
         assert "list_neighbors" in tool_names
+        assert "semantic_search" in tool_names
 
     def test_find_similar_schema_requires_conversation_id(self):
         from ctk.core.tools_registry import iter_providers
