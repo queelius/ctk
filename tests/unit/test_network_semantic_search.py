@@ -36,15 +36,14 @@ def empty_db(tmp_path):
 
 def test_no_embeddings_friendly_message(empty_db):
     out = execute_network_tool(empty_db, "semantic_search", {"query": "python"})
-    # Must not be a traceback and must mention embeddings
-    assert "embedding" in out.lower()
-    assert not out.startswith("Traceback")
+    # Must not be a traceback; must be the exact friendly message
+    assert out == _NO_EMBEDDINGS_MSG
 
 
 def test_no_embeddings_exact_message(empty_db):
-    """Tighter guard: the exact friendly sentence must appear."""
+    """Tighter guard: the full friendly message must match exactly."""
     out = execute_network_tool(empty_db, "semantic_search", {"query": "python"})
-    assert "No embeddings found" in out
+    assert out == _NO_EMBEDDINGS_MSG
 
 
 # ---------------------------------------------------------------------------

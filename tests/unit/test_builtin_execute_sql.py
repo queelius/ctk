@@ -22,8 +22,8 @@ def test_write_is_read_only_rejected(tmp_path):
             "execute_sql",
             {"sql": "CREATE TABLE x (a INTEGER)"},
         )
-        # read-only DB rejects writes with a friendly message, not a raw stack
-        assert "read" in out.lower() or "only" in out.lower() or "Error" in out
+        # read-only DB rejects writes with the exact friendly message
+        assert "Only SELECT queries are allowed (database is read-only)." in out
     finally:
         db.close()
 

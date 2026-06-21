@@ -84,12 +84,18 @@ The previous per-conversation, per-library, per-view, chat REPL, and ad-hoc netw
 
 Everything the LLM can do is a tool, and every tool comes from a named provider, modeled on MCP servers. `ctk/core/tools_registry.py` holds only the provider-agnostic machinery (`ToolProvider`, `register_provider`, `iter_providers`, `provider_for_tool`, `all_tools`); the tool definitions live in their defining modules and register on import.
 
-- `ctk.builtin` is search/list/get/update/star/etc. Defined in `ctk/core/builtin_tools.py`, which registers the provider on import.
-- `ctk.network` is `find_similar_conversations`, `list_neighbors` (queries the persisted `SimilarityModel` table). Defined in `ctk/core/network_tools.py`.
+- `ctk.builtin` (~28 tools): search/list/get/update/star/execute_sql/etc. Defined in
+  `ctk/core/builtin_tools.py`, which registers the provider on import. `update_conversation` is
+  the canonical mutation tool; the individual verb tools (`star_conversation`, `pin_conversation`,
+  etc.) are thin wrappers around it.
+- `ctk.network` (3 tools): `find_similar_conversations`, `list_neighbors`, `semantic_search`.
+  Defined in `ctk/core/network_tools.py`. `find_similar_conversations` queries the persisted
+  `SimilarityModel` table; `semantic_search` re-fits a TF-IDF model on stored embeddings at
+  query time.
 
 `/mcp` in the TUI lists all providers and their tools. The TUI's chat worker fetches the flat tool list via `ctk.core.tools.get_ask_tools()` which calls `tools_registry.all_tools()` across providers. Adding a new provider: define it in a module that calls `register_provider(...)`, then ensure something imports the module before the TUI starts (e.g., from `ctk/tui/app.py:_register_builtin_providers`).
 
-Tool execution is dispatched in `CTKApp._execute_tool` based on tool name: network tools route to `network_tools.execute_network_tool`, builtin tools to `ctk/core/builtin_tools.py`. Each builtin tool is a self-dispatching `BuiltinTool` (schema + handler co-located, mirroring `network_tools.py`); `execute_builtin_tool(db, name, args, ...)` dict-dispatches to the handler and returns a `ToolResult` (`text`, plus optional `data`/`rich_renderable` for a future renderer). Importing the module registers the `ctk.builtin` provider via `register_provider`, so the LLM-facing schemas and the executable handlers are two views of one `_BUILTIN_TOOLS` list and cannot drift. `cli.execute_ask_tool` is now a thin shim that adds the debug prints and forwards to `execute_builtin_tool` (the 832-line legacy if/elif dispatcher and `TOOLS_REGISTRY` are gone). `is_pass_through_tool` derives the pass-through set from the registered tools' `pass_through` flag rather than a hardcoded list.
+Tool execution is dispatched in `CTKApp._execute_tool` based on tool name: network tools route to `network_tools.execute_network_tool`, builtin tools to `ctk/core/builtin_tools.py`. Each builtin tool is a self-dispatching `BuiltinTool` (schema + handler co-located, mirroring `network_tools.py`); `execute_builtin_tool(db, name, args, ...)` dict-dispatches to the handler and returns a `ToolResult` (`text`, plus optional `data`/`rich_renderable` for a future renderer). Importing the module registers the `ctk.builtin` provider via `register_provider`, so the LLM-facing schemas and the executable handlers are two views of one `_BUILTIN_TOOLS` list and cannot drift. `is_pass_through_tool` derives the pass-through set from the registered tools' `pass_through` flag rather than a hardcoded list.
 
 ### Plugin System (`ctk/core/plugin.py`)
 
@@ -111,7 +117,7 @@ Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrappi
 
 **Fluent Python API** (`ctk/api.py`): `CTK` class with builder pattern, e.g. `CTK("db.db").search("python").limit(10).get()`.
 
-**MCP Server** (`ctk/interfaces/mcp/`): exposes a subset of CTK as a real MCP server for use by external clients. 7 tools: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar`, `semantic_search`, `execute_sql`. Entry point: `python -m ctk.mcp_server`.
+**MCP Server** (`ctk/interfaces/mcp/`): exposes a curated subset of the tool registry to external MCP clients. The projection layer (`ctk/interfaces/mcp/projection.py`) reads `all_tools()` from the registry at server start and emits only the 7 canonical names in `_CURATED_MCP_TOOLS`: `search_conversations`, `get_conversation`, `update_conversation`, `get_statistics`, `find_similar_conversations`, `semantic_search`, `execute_sql`. It also synthesizes a `find_similar` alias tool (with old MCP parameter names reversed) for a one-release backward-compatibility window, giving 8 entries in the exposed list. The alias map in `_ALIAS` rewrites incoming argument keys before dispatch so callers using old names keep working. `execute_sql` and `semantic_search` are registry tools from `ctk.builtin` and `ctk.network` respectively; `update_conversation` is the canonical mutation tool (verb tools are TUI-side wrappers). The REST API has been removed; all external access goes through MCP or the CLI. Entry point: `python -m ctk.mcp_server`.
 
 **Shared Utilities**:
 - `ctk/core/formatting.py`: `format_conversations_table()` (Rich tables with emoji flags)
@@ -165,8 +171,8 @@ starred = to_bool(starred_val) if starred_val is not None else None
 
 ### Testing
 - Unit tests in `tests/unit/`, integration tests in `tests/integration/`.
-- ~1700 unit tests pass as of 2.14.x.
-- Coverage threshold: 59% (enforced in pytest.ini); actual ~54%, so single-file runs trip the threshold but full-suite runs stay under it. Don't gate work on the coverage report.
+- ~2135 unit tests pass as of 2.20.0.
+- Coverage threshold: 59% (enforced in pytest.ini); actual ~67%, so single-file runs trip the threshold but full-suite runs stay under it. Don't gate work on the coverage report.
 - Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key`. Skip with `-m "not requires_ollama"`.
 
 **Textual TUI tests** (`tests/unit/test_textual_tui.py`): Pilot-driven, async, headless. Pattern: instantiate `CTKApp(db=..., provider=None)`, then `async with app.run_test() as pilot: await pilot.pause(); await pilot.press("ctrl+h"); ...`. ALWAYS add a Pilot test for any new modal. A render call inside `pause()` exercises the same pipeline that crashes on `_render`/`_bindings` shadows, so the 2.13.x family of bugs gets caught at unit-test time. For actions that key off `_focused_message_id`, patch the method directly (`app._focused_message_id = lambda: target_id`) instead of fighting Textual focus propagation in headless mode.
