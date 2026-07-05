@@ -11,11 +11,21 @@ from __future__ import annotations
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
-def _msg(mid: str, parent: str | None = None, role: MessageRole = MessageRole.USER, text: str = "") -> Message:
+def _msg(
+    mid: str,
+    parent: str | None = None,
+    role: MessageRole = MessageRole.USER,
+    text: str = "",
+) -> Message:
     """Build a Message with explicit id + parent for deterministic tests."""
     return Message(
         id=mid,
@@ -38,12 +48,12 @@ def _linear(ids: list[str]) -> ConversationTree:
 def _branching() -> ConversationTree:
     """A small tree with a branch:
 
-        a
-        └── b
-            ├── c
-            │   └── d
-            └── e
-                └── f
+    a
+    └── b
+        ├── c
+        │   └── d
+        └── e
+            └── f
     """
     tree = ConversationTree()
     tree.add_message(_msg("a"))

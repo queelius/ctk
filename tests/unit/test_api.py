@@ -14,8 +14,7 @@ import pytest
 
 from ctk.api import CTK, ConversationBuilder, ConversationLoader
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationTree, Message, MessageContent,
-                             MessageRole)
+from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
 
 
 class TestCTKFluentAPI:

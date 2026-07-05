@@ -6,13 +6,29 @@ __version__ = "2.20.0"
 __author__ = "Alex Towell"
 
 # Fluent API
-from .api import (CTK, ConversationBuilder, ConversationLoader, ExportBuilder,
-                  ImportBuilder, QueryBuilder, SearchBuilder, conversation,
-                  from_db, load)
+from .api import (
+    CTK,
+    ConversationBuilder,
+    ConversationLoader,
+    ExportBuilder,
+    ImportBuilder,
+    QueryBuilder,
+    SearchBuilder,
+    conversation,
+    from_db,
+    load,
+)
 from .core.database import ConversationDB
-from .core.models import (ContentType, ConversationMetadata, ConversationTree,
-                          MediaContent, Message, MessageContent, MessageRole,
-                          ToolCall)
+from .core.models import (
+    ContentType,
+    ConversationMetadata,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+    ToolCall,
+)
 from .core.plugin import PluginRegistry
 
 __all__ = [

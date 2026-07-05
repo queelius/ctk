@@ -26,7 +26,6 @@ from ctk.llm.base import (
 )
 from ctk.llm.openai import OpenAIProvider
 
-
 pytestmark = pytest.mark.unit
 
 

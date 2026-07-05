@@ -271,7 +271,9 @@ class HelpModal(ModalScreen[None]):
         out.append("[bold]Key bindings[/bold]")
         for binding in self._app_bindings:
             key = getattr(binding, "key", "?")
-            description = getattr(binding, "description", "") or getattr(binding, "action", "")
+            description = getattr(binding, "description", "") or getattr(
+                binding, "action", ""
+            )
             show = getattr(binding, "show", True)
             if not show:
                 continue
@@ -298,10 +300,16 @@ class HelpModal(ModalScreen[None]):
                 out.append(f"      • [dim]{tool['name']}[/dim]  {summary}")
         out.append("")
 
-        out.append("[yellow italic]Note:[/yellow italic] CTK's [cyan]fork[/cyan] and "
-                   "[cyan]branch[/cyan] are inverted relative to git. In CTK:")
-        out.append("  • [cyan]fork[/cyan]   = snip to focused message (drop later messages + sibling branches)")
+        out.append(
+            "[yellow italic]Note:[/yellow italic] CTK's [cyan]fork[/cyan] and "
+            "[cyan]branch[/cyan] are inverted relative to git. In CTK:"
+        )
+        out.append(
+            "  • [cyan]fork[/cyan]   = snip to focused message (drop later messages + sibling branches)"
+        )
         out.append("  • [cyan]branch[/cyan] = duplicate the entire tree under a new id")
-        out.append("Both produce a new conversation; only [cyan]branch[/cyan] preserves the full tree.")
+        out.append(
+            "Both produce a new conversation; only [cyan]branch[/cyan] preserves the full tree."
+        )
 
         return "\n".join(out)

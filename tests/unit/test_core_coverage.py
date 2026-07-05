@@ -10,8 +10,13 @@ import pytest
 
 from ctk.core.config import Config
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.core.plugin import ExporterPlugin, ImporterPlugin, PluginRegistry
 
 

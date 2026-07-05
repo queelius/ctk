@@ -8,8 +8,13 @@ from datetime import datetime, timedelta
 import pytest
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 class TestDatabaseCRUD:

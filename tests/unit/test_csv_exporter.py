@@ -10,8 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.exporters.csv_exporter import CSVExporter
 
 

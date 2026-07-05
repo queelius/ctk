@@ -15,10 +15,15 @@ from datetime import datetime
 
 import pytest
 
-from ctk.core.models import (ContentType, ConversationMetadata,
-                             ConversationTree, MediaContent, Message,
-                             MessageContent, MessageRole)
-
+from ctk.core.models import (
+    ContentType,
+    ConversationMetadata,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -57,9 +62,7 @@ class TestResolveImagePath:
     def test_remote_url_returns_none(self):
         from ctk.tui.images import resolve_image_path
 
-        media = MediaContent(
-            type=ContentType.IMAGE, url="https://example.com/foo.png"
-        )
+        media = MediaContent(type=ContentType.IMAGE, url="https://example.com/foo.png")
         # We don't fetch — that would block the UI thread.
         assert resolve_image_path(media) is None
 
@@ -85,7 +88,9 @@ class TestResolveImagePath:
         resolved = resolve_image_path(m, media_root=str(tmp_path))
         assert resolved == str(img)
 
-    def test_relative_url_falls_back_to_cwd_when_root_missing(self, tmp_path, monkeypatch):
+    def test_relative_url_falls_back_to_cwd_when_root_missing(
+        self, tmp_path, monkeypatch
+    ):
         from ctk.tui.images import resolve_image_path
 
         sub = tmp_path / "media"
@@ -95,9 +100,9 @@ class TestResolveImagePath:
         monkeypatch.chdir(tmp_path)
         m = MediaContent(type=ContentType.IMAGE, url="media/x.png")
         # No media_root passed: cwd is tried as a fallback.
-        assert resolve_image_path(m) == "media/x.png" or resolve_image_path(
-            m
-        ) == str(img)
+        assert resolve_image_path(m) == "media/x.png" or resolve_image_path(m) == str(
+            img
+        )
 
     def test_base64_data_writes_temp_file(self):
         from ctk.tui.images import _TEMP_PATHS, resolve_image_path
@@ -136,6 +141,7 @@ class TestResolveImagePath:
         if path:
             os.unlink(path)
             from ctk.tui.images import _TEMP_PATHS
+
             if path in _TEMP_PATHS:
                 _TEMP_PATHS.remove(path)
 
@@ -157,8 +163,7 @@ class TestResolveImagePath:
 
 class TestCleanupTempFiles:
     def test_cleanup_removes_tracked_files(self):
-        from ctk.tui.images import (_TEMP_PATHS, cleanup_temp_files,
-                                    resolve_image_path)
+        from ctk.tui.images import _TEMP_PATHS, cleanup_temp_files, resolve_image_path
 
         media = MediaContent(
             type=ContentType.IMAGE,
@@ -236,9 +241,9 @@ async def test_message_view_mounts_image_widget(tmp_path):
             # Among the children of the message view, at least one
             # should be an InlineImage we mounted ourselves.
             kinds = [type(c).__name__ for c in app.main.messages.children]
-            assert "InlineImage" in kinds, (
-                f"expected InlineImage in mounted widgets, got: {kinds}"
-            )
+            assert (
+                "InlineImage" in kinds
+            ), f"expected InlineImage in mounted widgets, got: {kinds}"
     finally:
         db.close()
 

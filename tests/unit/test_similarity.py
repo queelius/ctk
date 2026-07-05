@@ -6,17 +6,29 @@ import os
 import numpy as np
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
-from ctk.core.similarity import (ConversationEmbedder,
-                                 ConversationEmbeddingConfig,
-                                 ConversationGraph, ConversationGraphBuilder,
-                                 ConversationLink, SimilarityComputer,
-                                 SimilarityMetric, SimilarityResult)
-from ctk.embeddings.base import (AggregationStrategy,
-                                              ChunkingStrategy,
-                                              EmbeddingProvider,
-                                              EmbeddingResponse)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
+from ctk.core.similarity import (
+    ConversationEmbedder,
+    ConversationEmbeddingConfig,
+    ConversationGraph,
+    ConversationGraphBuilder,
+    ConversationLink,
+    SimilarityComputer,
+    SimilarityMetric,
+    SimilarityResult,
+)
+from ctk.embeddings.base import (
+    AggregationStrategy,
+    ChunkingStrategy,
+    EmbeddingProvider,
+    EmbeddingResponse,
+)
 
 # ==================== Mock Provider ====================
 

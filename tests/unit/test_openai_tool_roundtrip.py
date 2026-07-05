@@ -29,6 +29,7 @@ pytestmark = [pytest.mark.unit]
 # (a) Unit tests for _format_message
 # ---------------------------------------------------------------------------
 
+
 def _make_provider() -> OpenAIProvider:
     """Build a provider without needing a real API key or endpoint."""
     import unittest.mock as mock
@@ -109,6 +110,7 @@ def test_format_message_assistant_without_tool_calls_unchanged():
 # ---------------------------------------------------------------------------
 # (b) TUI worker history-assembly: empty-text tool turn keeps assistant message
 # ---------------------------------------------------------------------------
+
 
 class _ToolProvider:
     """Two-turn scripted provider: first turn is pure tool call (no text),
@@ -197,16 +199,14 @@ async def test_empty_text_tool_turn_appends_assistant_message(tmp_path, monkeypa
         db.close()
 
     # The provider must have been called twice (tool turn + final answer).
-    assert provider._call_count == 2, (
-        f"Expected 2 calls to stream_turn, got {provider._call_count}"
-    )
+    assert (
+        provider._call_count == 2
+    ), f"Expected 2 calls to stream_turn, got {provider._call_count}"
 
     # The history fed into the second turn must contain an ASSISTANT message
     # with tool_calls metadata BEFORE the TOOL-role result message.
     second_history = provider.received_histories[1]
-    assistant_msgs = [
-        m for m in second_history if m.role == LLMMessageRole.ASSISTANT
-    ]
+    assistant_msgs = [m for m in second_history if m.role == LLMMessageRole.ASSISTANT]
     assert assistant_msgs, (
         "No assistant LLMMessage was appended to history for the empty-text tool turn. "
         "Strict OpenAI servers will 400 because TOOL messages have no preceding "
@@ -214,12 +214,12 @@ async def test_empty_text_tool_turn_appends_assistant_message(tmp_path, monkeypa
     )
 
     last_assistant = assistant_msgs[-1]
-    assert last_assistant.metadata is not None, (
-        "Assistant message for tool turn must carry metadata"
-    )
-    assert "tool_calls" in last_assistant.metadata, (
-        "Assistant message must carry tool_calls in metadata"
-    )
+    assert (
+        last_assistant.metadata is not None
+    ), "Assistant message for tool turn must carry metadata"
+    assert (
+        "tool_calls" in last_assistant.metadata
+    ), "Assistant message must carry tool_calls in metadata"
     tc = last_assistant.metadata["tool_calls"][0]
     assert tc["id"] == "call_99", f"Expected call_99, got {tc['id']!r}"
     assert tc["type"] == "function"
@@ -234,13 +234,11 @@ async def test_empty_text_tool_turn_appends_assistant_message(tmp_path, monkeypa
         and "tool_calls" in m.metadata
     )
     tool_msgs = [
-        (i, m)
-        for i, m in enumerate(second_history)
-        if m.role == LLMMessageRole.TOOL
+        (i, m) for i, m in enumerate(second_history) if m.role == LLMMessageRole.TOOL
     ]
     assert tool_msgs, "expected at least one TOOL message in history"
     for tool_idx, tool_msg in tool_msgs:
-        assert tool_idx > asst_idx, (
-            "TOOL message must come after the assistant tool_calls message"
-        )
+        assert (
+            tool_idx > asst_idx
+        ), "TOOL message must come after the assistant tool_calls message"
         assert tool_msg.metadata and tool_msg.metadata.get("tool_call_id") == "call_99"

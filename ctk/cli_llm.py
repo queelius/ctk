@@ -183,5 +183,7 @@ def dispatch_llm_command(args):
             return commands[args.llm_command](args)
         print(f"Unknown llm command: {args.llm_command}")
         return 1
-    print("Error: No llm command specified. Use 'ctk llm --help' for available commands.")
+    print(
+        "Error: No llm command specified. Use 'ctk llm --help' for available commands."
+    )
     return 1

@@ -18,6 +18,7 @@ from rich.text import Text
 from .models import ConversationTree
 from .models import Message as DBMessage
 from .models import MessageContent
+
 logger = logging.getLogger(__name__)
 
 

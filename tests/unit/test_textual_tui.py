@@ -23,7 +23,6 @@ from ctk.core.models import (
     MessageRole,
 )
 
-
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
 
@@ -159,7 +158,7 @@ async def test_fork_truncates_tree_to_focused_message(seeded_db):
     """Ctrl+F at a message id prunes descendants and assigns a new id."""
     import uuid as uuid_mod
 
-    from ctk.core.models import (Message, MessageContent, MessageRole)
+    from ctk.core.models import Message, MessageContent, MessageRole
     from ctk.tui.app import CTKApp
 
     _, db = seeded_db
@@ -215,9 +214,7 @@ async def test_app_with_no_provider_disables_chat_path(seeded_db):
         # Fabricate a Submitted event; no provider means we should hit
         # the early-return branch and NOT mutate _turn_active.
         assert app.main is not None
-        app.on_chat_input_submitted(
-            ChatInput.Submitted(app.main.input, "hi")
-        )
+        app.on_chat_input_submitted(ChatInput.Submitted(app.main.input, "hi"))
         await pilot.pause()
         assert app._turn_active is False
 
@@ -260,8 +257,7 @@ async def test_sibling_switch_swaps_path_tail(seeded_db):
 
 async def test_set_system_prompt_inserts_message(seeded_db):
     """Setting a non-empty system prompt inserts a SYSTEM root."""
-    from ctk.core.models import (ConversationMetadata, ConversationTree,
-                                 MessageRole)
+    from ctk.core.models import ConversationMetadata, ConversationTree, MessageRole
     from ctk.tui.app import CTKApp
 
     _, db = seeded_db
@@ -282,8 +278,13 @@ async def test_set_system_prompt_clear_removes_message(seeded_db):
     """
     import uuid as uuid_mod
 
-    from ctk.core.models import (ConversationMetadata, ConversationTree,
-                                 Message, MessageContent, MessageRole)
+    from ctk.core.models import (
+        ConversationMetadata,
+        ConversationTree,
+        Message,
+        MessageContent,
+        MessageRole,
+    )
     from ctk.tui.app import CTKApp
 
     _, db = seeded_db
@@ -307,16 +308,13 @@ async def test_set_system_prompt_clear_removes_message(seeded_db):
         tree.add_message(child)
 
         app._set_system_prompt(tree, "")
-        assert not any(
-            m.role == MessageRole.SYSTEM for m in tree.message_map.values()
-        )
+        assert not any(m.role == MessageRole.SYSTEM for m in tree.message_map.values())
         assert child.id in tree.root_message_ids
 
 
 async def test_set_system_prompt_clear_with_no_children_is_noop(seeded_db):
     """Clearing a SYSTEM-only tree must leave the tree intact (regression)."""
-    from ctk.core.models import (ConversationMetadata, ConversationTree,
-                                 MessageRole)
+    from ctk.core.models import ConversationMetadata, ConversationTree, MessageRole
     from ctk.tui.app import CTKApp
 
     _, db = seeded_db
@@ -330,9 +328,7 @@ async def test_set_system_prompt_clear_with_no_children_is_noop(seeded_db):
         # Tree still has the SYSTEM message and a non-empty root list
         # — otherwise get_longest_path() would return [].
         assert tree.root_message_ids
-        assert any(
-            m.role == MessageRole.SYSTEM for m in tree.message_map.values()
-        )
+        assert any(m.role == MessageRole.SYSTEM for m in tree.message_map.values())
 
 
 async def test_attach_file_appends_system_message(seeded_db, tmp_path):
@@ -359,7 +355,8 @@ async def test_attach_file_appends_system_message(seeded_db, tmp_path):
         after_count = len(app._current_tree.message_map)
         assert after_count == before_count + 1
         sys_msgs = [
-            m for m in app._current_tree.message_map.values()
+            m
+            for m in app._current_tree.message_map.values()
             if m.role == MessageRole.SYSTEM
         ]
         assert sys_msgs
@@ -730,11 +727,13 @@ async def test_sidebar_pagination_loads_more_pages(tmp_path, monkeypatch):
                     updated_at=datetime.now(),
                 ),
             )
-            tree.add_message(Message(
-                id=str(uuid.uuid4()),
-                role=MessageRole.USER,
-                content=MessageContent(text=f"hello {i}"),
-            ))
+            tree.add_message(
+                Message(
+                    id=str(uuid.uuid4()),
+                    role=MessageRole.USER,
+                    content=MessageContent(text=f"hello {i}"),
+                )
+            )
             db.save_conversation(tree)
 
         app = CTKApp(db=db, provider=None)
@@ -815,11 +814,13 @@ async def test_sidebar_recent_tab_does_not_paginate(tmp_path, monkeypatch):
                     updated_at=datetime.now(),
                 ),
             )
-            tree.add_message(Message(
-                id=str(uuid.uuid4()),
-                role=MessageRole.USER,
-                content=MessageContent(text=f"hello {i}"),
-            ))
+            tree.add_message(
+                Message(
+                    id=str(uuid.uuid4()),
+                    role=MessageRole.USER,
+                    content=MessageContent(text=f"hello {i}"),
+                )
+            )
             db.save_conversation(tree)
 
         app = CTKApp(db=db, provider=None)
@@ -907,7 +908,8 @@ async def test_slash_snapshot_prefixes_title_with_date(seeded_db):
         assert handled is True
         today = date.today().isoformat()
         snapshots = [
-            c for c in db.list_conversations()
+            c
+            for c in db.list_conversations()
             if c.title and c.title.startswith(f"[{today}]")
         ]
         assert snapshots, "no snapshot title with today's date"

@@ -16,8 +16,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.exporters.hugo import HugoExporter
 
 

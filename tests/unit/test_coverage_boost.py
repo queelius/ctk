@@ -8,8 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.exporters.jsonl import JSONLExporter
 from ctk.importers.gemini import GeminiImporter
 from ctk.importers.jsonl import JSONLImporter

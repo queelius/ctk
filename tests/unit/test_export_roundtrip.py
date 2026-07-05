@@ -7,8 +7,15 @@ from datetime import datetime
 
 import pytest
 
-from ctk.core.models import (ContentType, ConversationTree, MediaContent,
-                             Message, MessageContent, MessageRole, ToolCall)
+from ctk.core.models import (
+    ContentType,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+    ToolCall,
+)
 from ctk.exporters.json import JSONExporter
 from ctk.exporters.jsonl import JSONLExporter
 

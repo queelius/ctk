@@ -27,9 +27,7 @@ def add_net_commands(subparsers):
         "net",
         help="Build embeddings and similarity graph (analytical queries are tools)",
     )
-    net_subparsers = net_parser.add_subparsers(
-        dest="net_command", help="Operation"
-    )
+    net_subparsers = net_parser.add_subparsers(dest="net_command", help="Operation")
 
     embeddings_parser = net_subparsers.add_parser(
         "embeddings", help="Generate embeddings for conversations"
@@ -87,9 +85,12 @@ def cmd_embeddings(args):
     """Generate embeddings for conversations and persist them."""
     from rich.console import Console
 
-    from ctk.core.similarity import (AggregationStrategy, ChunkingStrategy,
-                                     ConversationEmbedder,
-                                     ConversationEmbeddingConfig)
+    from ctk.core.similarity import (
+        AggregationStrategy,
+        ChunkingStrategy,
+        ConversationEmbedder,
+        ConversationEmbeddingConfig,
+    )
 
     console = Console()
 
@@ -214,11 +215,14 @@ def cmd_links(args):
     """Build a similarity graph from existing embeddings."""
     from rich.console import Console
 
-    from ctk.core.similarity import (AggregationStrategy, ChunkingStrategy,
-                                     ConversationEmbedder,
-                                     ConversationEmbeddingConfig,
-                                     ConversationGraphBuilder,
-                                     SimilarityComputer)
+    from ctk.core.similarity import (
+        AggregationStrategy,
+        ChunkingStrategy,
+        ConversationEmbedder,
+        ConversationEmbeddingConfig,
+        ConversationGraphBuilder,
+        SimilarityComputer,
+    )
 
     console = Console()
 
@@ -258,9 +262,7 @@ def cmd_links(args):
             filter_kwargs["limit"] = filters["limit"]
 
         if filters.get("search"):
-            conversations = db.search_conversations(
-                filters["search"], **filter_kwargs
-            )
+            conversations = db.search_conversations(filters["search"], **filter_kwargs)
         else:
             conversations = db.list_conversations(**filter_kwargs)
 
@@ -276,7 +278,9 @@ def cmd_links(args):
 
         console.print(f"Found {len(conversations)} conversations")
         if len(conversations) < 2:
-            console.print("[yellow]Need at least 2 conversations to build a graph[/yellow]")
+            console.print(
+                "[yellow]Need at least 2 conversations to build a graph[/yellow]"
+            )
             return 0
 
         console.print(

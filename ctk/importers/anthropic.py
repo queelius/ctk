@@ -21,7 +21,6 @@ from ctk.core.models import (
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
-
 # Anthropic's parent uuid for root messages in the 2026+ export format.
 ROOT_PARENT_SENTINEL = "00000000-0000-4000-8000-000000000000"
 

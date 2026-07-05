@@ -7,10 +7,17 @@ from datetime import datetime
 
 import pytest
 
-from ctk.core.models import (ContentType, ConversationMetadata,
-                             ConversationSummary, ConversationTree,
-                             MediaContent, Message, MessageContent,
-                             MessageRole, ToolCall)
+from ctk.core.models import (
+    ContentType,
+    ConversationMetadata,
+    ConversationSummary,
+    ConversationTree,
+    MediaContent,
+    Message,
+    MessageContent,
+    MessageRole,
+    ToolCall,
+)
 
 
 class TestMediaContent:

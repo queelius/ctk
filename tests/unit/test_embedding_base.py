@@ -3,10 +3,12 @@
 import numpy as np
 import pytest
 
-from ctk.embeddings.base import (AggregationStrategy,
-                                              ChunkingStrategy,
-                                              EmbeddingProvider,
-                                              EmbeddingResponse)
+from ctk.embeddings.base import (
+    AggregationStrategy,
+    ChunkingStrategy,
+    EmbeddingProvider,
+    EmbeddingResponse,
+)
 
 
 class ConcreteProvider(EmbeddingProvider):

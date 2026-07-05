@@ -180,12 +180,10 @@ class CopilotImporter(ImporterPlugin):
             cursor = conn.cursor()
 
             # VS Code stores extension data in ItemTable
-            cursor.execute(
-                """
+            cursor.execute("""
                 SELECT key, value FROM ItemTable
                 WHERE key LIKE '%copilot%' OR key LIKE '%github%'
-            """
-            )
+            """)
 
             for row in cursor.fetchall():
                 try:

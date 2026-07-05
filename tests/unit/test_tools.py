@@ -8,9 +8,7 @@ Covers:
 
 import pytest
 
-from ctk.core.tools import (get_ask_tools, is_pass_through_tool,
-                            pass_through_tools)
-
+from ctk.core.tools import get_ask_tools, is_pass_through_tool, pass_through_tools
 
 # ==================== get_ask_tools ====================
 

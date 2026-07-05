@@ -19,9 +19,15 @@ import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationSummary,
-                             ConversationTree, Message, MessageContent,
-                             MessageRole, PaginatedResult)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationSummary,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+    PaginatedResult,
+)
 from ctk.core.pagination import decode_cursor, encode_cursor
 
 # =============================================================================

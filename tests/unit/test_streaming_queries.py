@@ -18,9 +18,14 @@ import pytest
 from sqlalchemy import text as sql_text
 
 from ctk.core.database import ConversationDB
-from ctk.core.models import (ConversationMetadata, ConversationSummary,
-                             ConversationTree, Message, MessageContent,
-                             MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationSummary,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 
 
 def _create_db_with_conversations(n: int = 10) -> ConversationDB:

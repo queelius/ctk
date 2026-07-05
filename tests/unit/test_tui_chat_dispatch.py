@@ -23,7 +23,6 @@ from ctk.llm.base import StreamEvent
 from ctk.tui import app as app_module
 from ctk.tui.app import CTKApp
 
-
 pytestmark = [pytest.mark.unit]
 
 

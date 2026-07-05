@@ -27,7 +27,6 @@ from ctk.core.models import (
 )
 from ctk.core.tree import ConversationTreeNavigator, TreeMessage
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

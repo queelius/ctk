@@ -8,8 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.models import (ConversationMetadata, ConversationTree, Message,
-                             MessageContent, MessageRole)
+from ctk.core.models import (
+    ConversationMetadata,
+    ConversationTree,
+    Message,
+    MessageContent,
+    MessageRole,
+)
 from ctk.exporters.echo import ECHOExporter
 from ctk.exporters.json import JSONExporter
 from ctk.exporters.jsonl import JSONLExporter

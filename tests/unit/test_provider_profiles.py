@@ -204,9 +204,7 @@ class TestProviderProfileSlash:
         assert "muse" in note  # availables shown
 
     @pytest.mark.unit
-    def test_switch_rebuilds_provider_and_updates_app_state(
-        self, config_with_profiles
-    ):
+    def test_switch_rebuilds_provider_and_updates_app_state(self, config_with_profiles):
         from ctk.llm import factory
         from ctk.tui import slash
 

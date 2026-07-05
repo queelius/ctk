@@ -18,7 +18,6 @@ import numpy as np
 from ctk.core.models import ConversationTree, MessageRole
 from ctk.embeddings.base import AggregationStrategy, ChunkingStrategy, EmbeddingProvider
 
-
 # ==================== Shared Utilities ====================
 
 

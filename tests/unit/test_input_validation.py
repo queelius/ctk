@@ -15,12 +15,16 @@ from pathlib import Path
 
 import pytest
 
-from ctk.core.input_validation import (ValidationError, validate_boolean,
-                                       validate_conversation_id,
-                                       validate_export_format,
-                                       validate_file_path, validate_integer,
-                                       validate_path_selection,
-                                       validate_string)
+from ctk.core.input_validation import (
+    ValidationError,
+    validate_boolean,
+    validate_conversation_id,
+    validate_export_format,
+    validate_file_path,
+    validate_integer,
+    validate_path_selection,
+    validate_string,
+)
 
 # ==================== ValidationError ====================
 

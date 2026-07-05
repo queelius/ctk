@@ -138,6 +138,5 @@ class CSVExporter(ExporterPlugin):
                 )
 
 
-
 # Register the exporter
 exporter = CSVExporter()

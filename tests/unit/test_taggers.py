@@ -11,8 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ctk.core.models import (ConversationTree, Message, MessageContent,
-                             MessageRole)
+from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
 from ctk.taggers.openai_tagger import OpenAITagger
 from ctk.taggers.tfidf_tagger import TFIDFTagger
 

@@ -8,10 +8,18 @@ Earlier versions maintained hand-rolled clients for Ollama and
 Anthropic; those were removed in 2.10.0 in favor of the single wrapper.
 """
 
-from ctk.llm.base import (AuthenticationError, ChatResponse,
-                          ContextLengthError, LLMProvider, LLMProviderError,
-                          Message, MessageRole, ModelInfo, ModelNotFoundError,
-                          RateLimitError)
+from ctk.llm.base import (
+    AuthenticationError,
+    ChatResponse,
+    ContextLengthError,
+    LLMProvider,
+    LLMProviderError,
+    Message,
+    MessageRole,
+    ModelInfo,
+    ModelNotFoundError,
+    RateLimitError,
+)
 from ctk.llm.factory import build_provider
 from ctk.llm.openai import OpenAIProvider
 

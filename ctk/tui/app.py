@@ -646,9 +646,7 @@ class CTKApp(App):
                 else:
                     if turn_text:
                         history.append(
-                            LLMMessage(
-                                role=LLMMessageRole.ASSISTANT, content=turn_text
-                            )
+                            LLMMessage(role=LLMMessageRole.ASSISTANT, content=turn_text)
                         )
                     self.post_message(ChatDone())
                     return
