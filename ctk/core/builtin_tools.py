@@ -223,20 +223,23 @@ def _do_tag_conversation(ctx: ToolContext) -> ToolResult:
 
 
 def _do_list_tags(ctx: ToolContext) -> ToolResult:
-    # Get all tags with counts
+    # get_statistics() returns top_tags (a usage-sorted list of
+    # {"name", "count"} dicts, capped at 10) plus total_tags.
     stats = ctx.db.get_statistics()
-    tags_data = stats.get("by_tag", {})
+    top_tags = stats.get("top_tags", [])
 
-    if not tags_data:
+    if not top_tags:
         return ToolResult.message("No tags found in database.")
 
     result_str = "Tags in database:\n\n"
-    # Sort by count descending
-    sorted_tags = sorted(tags_data.items(), key=lambda x: x[1], reverse=True)
-    for tag, count in sorted_tags:
-        result_str += f"  {tag}: {count} conversation(s)\n"
+    for entry in top_tags:
+        result_str += f"  {entry['name']}: {entry['count']} conversation(s)\n"
 
-    result_str += f"\nTotal: {len(tags_data)} unique tags"
+    total = stats.get("total_tags", len(top_tags))
+    if total > len(top_tags):
+        result_str += f"\n  ... and {total - len(top_tags)} more tags\n"
+
+    result_str += f"\nTotal: {total} unique tags"
     return ToolResult.message(result_str)
 
 
@@ -296,14 +299,19 @@ def _do_get_statistics(ctx: ToolContext) -> ToolResult:
     result_str += f"Total conversations: {stats.get('total_conversations', 0)}\n"
     result_str += f"Total messages: {stats.get('total_messages', 0)}\n"
 
-    if stats.get("by_source"):
+    if stats.get("conversations_by_source"):
         result_str += "\nBy source:\n"
-        for source, count in stats["by_source"].items():
+        for source, count in stats["conversations_by_source"].items():
             result_str += f"  - {source}: {count}\n"
 
-    if stats.get("by_model"):
+    if stats.get("conversations_by_model"):
         result_str += "\nTop models:\n"
-        for model, count in list(stats["by_model"].items())[:5]:
+        top_models = sorted(
+            stats["conversations_by_model"].items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        for model, count in top_models[:5]:
             result_str += f"  - {model}: {count}\n"
 
     return ToolResult.message(result_str)
@@ -311,7 +319,7 @@ def _do_get_statistics(ctx: ToolContext) -> ToolResult:
 
 def _do_list_sources(ctx: ToolContext) -> ToolResult:
     stats = ctx.db.get_statistics()
-    sources_data = stats.get("by_source", {})
+    sources_data = stats.get("conversations_by_source", {})
 
     if not sources_data:
         return ToolResult.message("No sources found in database.")
@@ -327,7 +335,7 @@ def _do_list_sources(ctx: ToolContext) -> ToolResult:
 
 def _do_list_models(ctx: ToolContext) -> ToolResult:
     stats = ctx.db.get_statistics()
-    models_data = stats.get("by_model", {})
+    models_data = stats.get("conversations_by_model", {})
 
     if not models_data:
         return ToolResult.message("No models found in database.")

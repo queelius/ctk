@@ -27,7 +27,6 @@ from ctk.core.prompts import (
     get_ctk_system_prompt_no_tools,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -502,3 +501,47 @@ class TestGenerateTuiPromptFromHelp:
         assert "/search b" in result
         # Third example should be absent
         assert "/search c" not in result
+
+
+class TestSystemPromptSources:
+    """Regression guard for the dead-key bug: the prompt builders read
+    stats["by_source"], but get_statistics() returns conversations_by_source,
+    so the source summary always rendered as "none"."""
+
+    def test_system_prompt_includes_seeded_source(self, tmp_path):
+        db = ConversationDB(str(tmp_path))
+        try:
+            tree = ConversationTree(
+                id="eeeeeeee-0000-0000-0000-000000000000", title="Sourced"
+            )
+            tree.add_message(
+                Message(
+                    id="ee-m1",
+                    role=MessageRole.USER,
+                    content=MessageContent(text="hello"),
+                    parent_id=None,
+                )
+            )
+            tree.metadata.source = "openai"
+            db.save_conversation(tree)
+
+            prompt = get_ctk_system_prompt(db)
+            assert "openai: 1" in prompt
+        finally:
+            db.close()
+
+
+class TestCliPromptHelpFallback:
+    """The no-description fallback should use only the FIRST line of the
+    subcommand's help. The old code split on a literal backslash-n
+    (never present), embedding the entire multi-line help text."""
+
+    def test_no_description_uses_first_help_line_only(self):
+        parser = argparse.ArgumentParser(prog="ctk")
+        sub = parser.add_subparsers(dest="command")
+        nodesc = sub.add_parser("nodesc")
+        prompt = generate_cli_prompt_from_argparse(parser)
+        first_line = nodesc.format_help().split("\n")[0]
+        assert f"**nodesc**: {first_line}" in prompt
+        # The help BODY must not be embedded (only its first line).
+        assert "-h, --help" not in prompt

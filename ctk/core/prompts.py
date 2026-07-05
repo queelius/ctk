@@ -23,9 +23,12 @@ def generate_cli_prompt_from_argparse(parser) -> str:
     Returns:
         System prompt describing available CTK operations
     """
-    prompt = """You are a helpful assistant for CTK (Conversation Toolkit), a tool for managing and analyzing conversation data.
+    prompt = """You are a helpful assistant for CTK (Conversation Toolkit),
+a tool for managing and analyzing conversation data.
 
-The user will ask questions or request operations in natural language. Your job is to understand their intent and call the appropriate tool functions to fulfill their request.
+The user will ask questions or request operations in natural language. Your job is
+to understand their intent and call the appropriate tool functions to fulfill their
+request.
 
 Available CTK Operations:
 
@@ -40,7 +43,14 @@ Available CTK Operations:
                     if cmd_name in ["chat", "ask"]:
                         continue
 
-                    prompt += f"\n**{cmd_name}**: {cmd_parser.description or cmd_parser.format_help().split('\\n')[0]}\n"
+                    # Hoisted out of the f-string: backslashes in f-string
+                    # expressions are a SyntaxError before Python 3.12, and
+                    # python_requires is >=3.8.
+                    cmd_summary = (
+                        cmd_parser.description
+                        or cmd_parser.format_help().split("\n")[0]
+                    )
+                    prompt += f"\n**{cmd_name}**: {cmd_summary}\n"
 
                     # Add key arguments
                     args_info = []
@@ -81,7 +91,9 @@ def generate_tui_prompt_from_help(command_help: Dict[str, Dict[str, Any]]) -> st
     """
     prompt = """You are a helpful assistant within the CTK chat TUI (Text User Interface).
 
-The user will ask questions or request operations in natural language. Your job is to understand their intent and call the appropriate tool functions to execute TUI commands.
+The user will ask questions or request operations in natural language. Your job is
+to understand their intent and call the appropriate tool functions to execute TUI
+commands.
 
 Available TUI Commands:
 
@@ -140,7 +152,7 @@ def get_ctk_system_prompt(db: "ConversationDB", current_path: str = "/") -> str:
         archived_count = db.count_conversations(archived=True)
 
         # Get top sources
-        sources = stats.get("by_source", {})
+        sources = stats.get("conversations_by_source", {})
         source_summary = (
             ", ".join(f"{k}: {v}" for k, v in list(sources.items())[:3])
             if sources
@@ -157,7 +169,9 @@ def get_ctk_system_prompt(db: "ConversationDB", current_path: str = "/") -> str:
 
     prompt = f"""You help users explore their conversation history.
 
-Database: {total_convs} conversations, {total_msgs} messages ({starred_count} starred, {pinned_count} pinned)
+Database: {total_convs} conversations, {total_msgs} messages
+Flags: {starred_count} starred, {pinned_count} pinned, {archived_count} archived
+Sources: {source_summary}
 Location: {current_path}
 
 Tools:
@@ -165,7 +179,8 @@ Tools:
 - get_conversation: View a conversation by ID
 - get_statistics: Database stats
 
-Search results are numbered [1], [2], etc. When user says "show 1" or "open 2", use the ID from that numbered result with get_conversation.
+Search results are numbered [1], [2], etc. When user says "show 1" or "open 2",
+use the ID from that numbered result with get_conversation.
 
 USE TOOLS for data queries. Never fabricate data."""
 
@@ -196,7 +211,7 @@ def get_ctk_system_prompt_no_tools(
         pinned_count = db.count_conversations(pinned=True)
 
         # Get top sources
-        sources = stats.get("by_source", {})
+        sources = stats.get("conversations_by_source", {})
         source_summary = (
             ", ".join(f"{k}: {v}" for k, v in list(sources.items())[:3])
             if sources
@@ -213,6 +228,8 @@ def get_ctk_system_prompt_no_tools(
     prompt = f"""You help users explore their conversation history in CTK.
 
 Database: {total_convs} conversations, {total_msgs} messages
+Flags: {starred_count} starred, {pinned_count} pinned
+Sources: {source_summary}
 Location: {current_path}
 
 You cannot search or view conversations directly. Guide users to type shell commands:

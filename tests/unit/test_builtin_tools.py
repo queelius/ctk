@@ -58,34 +58,89 @@ def test_list_tags_empty_db(tmp_path):
         db.close()
 
 
-def test_list_tags_seeded_db(tmp_path):
-    """list_tags with tags in the db.
+def _seed_conv(db, conv_id, *, tags=None, source=None, model=None):
+    tree = ConversationTree(id=conv_id, title=f"Conv {conv_id[:4]}")
+    tree.add_message(
+        Message(
+            id=f"{conv_id[:8]}-m1",
+            role=MessageRole.USER,
+            content=MessageContent(text="hello"),
+            parent_id=None,
+        )
+    )
+    if tags:
+        tree.metadata.tags = tags
+    if source:
+        tree.metadata.source = source
+    if model:
+        tree.metadata.model = model
+    db.save_conversation(tree)
+    return tree.id
 
-    The legacy handler reads stats.get("by_tag", {}) but get_statistics()
-    returns "top_tags" (list of dicts), never "by_tag". So the legacy code
-    always falls through to the empty-sentinel path. This test guards that
-    the migrated handler reproduces that exact behavior verbatim.
+
+def test_list_tags_seeded_db(tmp_path):
+    """list_tags reports the tags actually in the db.
+
+    Regression guard for the dead-key bug: the handler read stats["by_tag"],
+    a key get_statistics() never returns (it returns top_tags + total_tags),
+    so list_tags always claimed the database had no tags.
     """
     db = ConversationDB(str(tmp_path))
     try:
-        tree = ConversationTree(
-            id="aaaaaaaa-0000-0000-0000-000000000000", title="Tagged"
-        )
-        tree.add_message(
-            Message(
-                id="m1",
-                role=MessageRole.USER,
-                content=MessageContent(text="hello"),
-                parent_id=None,
-            )
-        )
-        tree.metadata.tags = ["python", "ai"]
-        db.save_conversation(tree)
-
-        # Legacy behavior: by_tag key is absent from get_statistics(), so even
-        # a seeded db returns the "No tags found" string.
+        _seed_conv(db, "aaaaaaaa-0000-0000-0000-000000000000", tags=["python", "ai"])
         result = execute_builtin_tool(db, "list_tags", {})
-        assert result == "No tags found in database."
+        assert result.startswith("Tags in database:")
+        assert "python: 1 conversation(s)" in result
+        assert "ai: 1 conversation(s)" in result
+        assert "Total: 2 unique tags" in result
+    finally:
+        db.close()
+
+
+def test_list_sources_seeded_db(tmp_path):
+    """list_sources reports real sources (was dead: read stats["by_source"],
+    actual key is conversations_by_source)."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_conv(db, "bbbbbbbb-0000-0000-0000-000000000000", source="openai")
+        result = execute_builtin_tool(db, "list_sources", {})
+        assert result.startswith("Sources in database:")
+        assert "openai: 1 conversation(s)" in result
+        assert "Total: 1 sources" in result
+    finally:
+        db.close()
+
+
+def test_list_models_seeded_db(tmp_path):
+    """list_models reports real models (was dead: read stats["by_model"],
+    which get_statistics never returned at all)."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_conv(db, "cccccccc-0000-0000-0000-000000000000", model="gpt-4")
+        result = execute_builtin_tool(db, "list_models", {})
+        assert result.startswith("Models in database:")
+        assert "gpt-4: 1 conversation(s)" in result
+        assert "Total: 1 unique models" in result
+    finally:
+        db.close()
+
+
+def test_get_statistics_shows_sources_and_models(tmp_path):
+    """get_statistics renders its By-source and Top-models sections
+    (both were dead: by_source/by_model keys never existed)."""
+    db = ConversationDB(str(tmp_path))
+    try:
+        _seed_conv(
+            db,
+            "dddddddd-0000-0000-0000-000000000000",
+            source="openai",
+            model="gpt-4",
+        )
+        result = execute_builtin_tool(db, "get_statistics", {})
+        assert "By source:" in result
+        assert "openai: 1" in result
+        assert "Top models:" in result
+        assert "gpt-4: 1" in result
     finally:
         db.close()
 
