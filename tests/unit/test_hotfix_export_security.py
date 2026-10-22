@@ -378,3 +378,77 @@ class TestHugoImageContainment:
             hugo_organize="none",
         )
         assert [p.read_bytes() for p in out.rglob("*.png")] == [b"OKPNG"]
+
+
+# ==================== 3. Path traversal via conversation ids ====================
+
+_EVIL_IDS = ["../../escape", "/abs/x", "..", "a/../../../b", "..\\..\\win"]
+
+
+def _all_files(root):
+    return [p for p in root.rglob("*") if p.is_file()]
+
+
+class TestEchoConversationIdTraversal:
+    @pytest.mark.parametrize("conv_id", _EVIL_IDS)
+    def test_evil_id_stays_inside_conversations_dir(self, tmp_path, conv_id):
+        import json
+
+        from ctk.exporters.echo import ECHOExporter
+
+        root = tmp_path / "jail"
+        root.mkdir()
+        out = root / "out"
+        ECHOExporter().export_to_directory([_conv_with_image(conv_id, None)], str(out))
+
+        # Nothing was written outside the output directory.
+        assert all(out.resolve() in p.resolve().parents for p in _all_files(tmp_path))
+        conv_jsons = list(out.rglob("conversation.json"))
+        assert len(conv_jsons) == 1
+        # The conversation directory is a direct child of conversations/.
+        assert conv_jsons[0].parent.parent == out / "conversations"
+        # The index points at the directory that was actually written.
+        index = json.loads((out / "index.json").read_text())
+        entry = index["conversations"][0]
+        assert entry["id"] == conv_id
+        assert (out / entry["path"]).resolve() == conv_jsons[0].parent.resolve()
+
+    def test_normal_id_unchanged(self, tmp_path):
+        from ctk.exporters.echo import ECHOExporter
+
+        out = tmp_path / "out"
+        cid = "8f14e45f-ceea-467f-a0e6-3a1f1b5b6d1a"
+        ECHOExporter().export_to_directory([_conv_with_image(cid, None)], str(out))
+        assert (out / "conversations" / cid / "conversation.json").is_file()
+
+
+class TestHugoConversationIdTraversal:
+    @pytest.mark.parametrize("title", ["!!!", "Some Title", None])
+    @pytest.mark.parametrize("conv_id", _EVIL_IDS)
+    def test_evil_id_stays_inside_output_dir(self, tmp_path, conv_id, title):
+        from ctk.exporters.hugo import HugoExporter
+
+        root = tmp_path / "jail"
+        root.mkdir()
+        out = root / "site"
+        HugoExporter().export_to_file(
+            [_conv_with_image(conv_id, None, title=title)],
+            str(out),
+            hugo_organize="none",
+        )
+        assert all(out.resolve() in p.resolve().parents for p in _all_files(tmp_path))
+        bundles = list(out.rglob("index.md"))
+        assert len(bundles) == 1
+        # The bundle is a direct child of the output directory.
+        assert bundles[0].parent.parent == out
+
+    def test_normal_slug_unchanged(self, tmp_path):
+        from ctk.exporters.hugo import HugoExporter
+
+        out = tmp_path / "site"
+        HugoExporter().export_to_file(
+            [_conv_with_image("a1b2c3d4-e5f6", None, title="Hello World")],
+            str(out),
+            hugo_organize="none",
+        )
+        assert (out / "hello-world-a1b2c3d4" / "index.md").is_file()

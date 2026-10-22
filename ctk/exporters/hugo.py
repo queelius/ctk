@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ctk.core.models import ConversationTree, Message, MessageRole
-from ctk.core.paths import resolve_media_ref
+from ctk.core.paths import resolve_media_ref, safe_component
 from ctk.core.plugin import ExporterPlugin
 
 logger = logging.getLogger(__name__)
@@ -170,6 +170,9 @@ class HugoExporter(ExporterPlugin):
             bundle_name = f"{date_str}-{slug}"
         else:
             bundle_name = slug
+        # The slug embeds part of the (untrusted) conversation id: make sure
+        # the bundle is a single directory directly under output_dir.
+        bundle_name = safe_component(bundle_name, fallback="untitled")
 
         # Create page bundle directory
         bundle_dir = output_dir / bundle_name
