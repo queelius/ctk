@@ -22,6 +22,7 @@ import json
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -141,6 +142,23 @@ class TurnStarted(TextualMessage):
         self.turn_index = turn_index
 
 
+@dataclass
+class ChatTurn:
+    """The conversation an in-flight assistant turn belongs to.
+
+    Captured at submit time so the worker result handlers write to (and
+    save) the tree the turn started in, no matter which conversation the
+    sidebar shows when they arrive. ``parent_id`` is the message the next
+    assistant message attaches under: the user message at first, then each
+    stored assistant message (so a tool loop chains). ``reply_id`` is the
+    no-tools path's placeholder assistant message, filled at stream end.
+    """
+
+    tree: ConversationTree
+    parent_id: str
+    reply_id: Optional[str] = None
+
+
 def _truncate(text: str, limit: int) -> str:
     """Trim ``text`` to ``limit`` chars with an ellipsis suffix."""
     if len(text) <= limit:
@@ -241,6 +259,8 @@ class CTKApp(App):
         # Set when an assistant turn (text or text+tools) is in flight,
         # so we can ignore double-submits and reflect the state in the UI.
         self._turn_active: bool = False
+        # The conversation the in-flight turn writes to (None when idle).
+        self._turn: Optional[ChatTurn] = None
         self._active_worker: Optional[Any] = None
         self._thinking_block: Optional[ThinkingBlock] = None
         self._turn_indicator: Optional[Static] = None
@@ -330,7 +350,14 @@ class CTKApp(App):
         # branch, system prompt, etc.) bypass this path and always rebuild.
         if self._current_tree is not None and conv_id == self._current_tree.id:
             return
-        tree = self.db.load_conversation(conv_id)
+        # Re-opening the conversation a turn is streaming into must show the
+        # turn's live tree (it holds the not-yet-saved user message), not a
+        # stale copy from the DB.
+        if self._turn is not None and conv_id == self._turn.tree.id:
+            tree: Optional[ConversationTree] = self._turn.tree
+        else:
+            tree = self.db.load_conversation(conv_id)
+        self._drop_turn_widgets()
         if tree is None:
             self.main.messages.show_empty("(conversation not found)")
             self._current_tree = None
@@ -338,7 +365,52 @@ class CTKApp(App):
         self._current_tree = tree
         self.main.messages.show_conversation(tree)
         self.main.set_header(self._header_for(tree))
+        self._reattach_turn_widgets()
         self._refresh_status()
+
+    # ------------------------------------------------------------------
+    # Turn ownership
+    # ------------------------------------------------------------------
+
+    def _turn_visible(self) -> bool:
+        """True when the in-flight turn's conversation is the one displayed."""
+        return self._turn is not None and self._current_tree is self._turn.tree
+
+    def _drop_turn_widgets(self) -> None:
+        """Forget live turn widgets before the main pane is rebuilt.
+
+        Rebuilding the message view unmounts them; later tokens must not
+        update (or mount new widgets into) a pane showing another tree.
+        """
+        if self._turn is None:
+            return
+        self._clear_turn_indicator()
+        self._streaming_bubble = None
+        self._thinking_block = None
+
+    def _reattach_turn_widgets(self) -> None:
+        """After re-rendering the turn's tree, rebind the no-tools live bubble."""
+        if not self._turn_visible() or self.main is None:
+            return
+        assert self._turn is not None
+        if self._turn.reply_id is None:
+            return  # tool path: the next token lazily mounts a live bubble
+        for bubble in self.main.messages.query(MessageBubble):
+            if bubble.message_id == self._turn.reply_id:
+                self._streaming_bubble = bubble
+                self._update_streaming_bubble(self._streaming_buffer)
+                return
+
+    def _refuse_mid_turn(self) -> bool:
+        """Refuse tree-mutating actions on the conversation a turn owns."""
+        if self._turn_visible():
+            self.notify(
+                "A reply is still streaming into this conversation; "
+                "wait for it (or press Escape to cancel) first.",
+                severity="warning",
+            )
+            return True
+        return False
 
     def _header_for(self, tree: ConversationTree) -> str:
         bits = [tree.title or "(untitled)"]
@@ -421,10 +493,7 @@ class CTKApp(App):
             self._active_worker = self._chat_worker_with_tools(user_msg.id)
         else:
             # Fast path: stream tokens straight into a single bubble.
-            self._start_streaming_bubble(user_msg.id)
-            self._active_worker = self._stream_worker(
-                self._llm_history_for(self._current_tree)
-            )
+            self._active_worker = self._start_stream_turn(user_msg.id)
 
     def _render_system_note(self, text: str) -> None:
         """Mount a slash-command result inline as a system-style note.
@@ -439,6 +508,18 @@ class CTKApp(App):
         self.main.messages.mount(Static(Text(text), classes="message-system"))
         self.main.messages.scroll_end(animate=False)
 
+    def _start_stream_turn(self, parent_id: str) -> Any:
+        """Start a no-tools turn answering ``parent_id`` in the current tree.
+
+        Binds the turn to the current tree (see ``ChatTurn``), captures the
+        LLM history on the UI thread, and returns the worker.
+        """
+        assert self._current_tree is not None
+        self._turn = ChatTurn(tree=self._current_tree, parent_id=parent_id)
+        history = self._llm_history_for(self._current_tree)
+        self._start_streaming_bubble(parent_id)
+        return self._stream_worker(history)
+
     def _start_streaming_bubble(self, parent_id: str) -> None:
         """Set up an empty assistant bubble for the streaming worker to fill."""
         assert self.main is not None
@@ -449,8 +530,9 @@ class CTKApp(App):
             parent_id=parent_id,
             timestamp=datetime.now(),
         )
-        if self._current_tree is not None:
-            self._current_tree.add_message(assistant_msg)
+        if self._turn is not None:
+            self._turn.tree.add_message(assistant_msg)
+            self._turn.reply_id = assistant_msg.id
 
         self._streaming_buffer = ""
         bubble = MessageBubble(assistant_msg)
@@ -551,16 +633,25 @@ class CTKApp(App):
 
     _MAX_TOOL_TURNS: int = 6
 
+    def _chat_worker_with_tools(self, parent_msg_id: str) -> Any:
+        """Start a tool-enabled chat turn answering ``parent_msg_id``.
+
+        ``parent_msg_id`` is the user message we're responding to. The
+        turn is bound to the current tree (see ``ChatTurn``) so the
+        assistant messages the UI-thread handlers store land in that tree,
+        under that parent, even if the user switches conversations
+        mid-turn. History is captured here, on the UI thread, for the same
+        reason. Returns the worker.
+        """
+        assert self._current_tree is not None
+        self._turn = ChatTurn(tree=self._current_tree, parent_id=parent_msg_id)
+        return self._tools_worker(self._llm_history_for(self._current_tree))
+
     @work(thread=True, exclusive=True)
-    def _chat_worker_with_tools(self, parent_msg_id: str) -> None:
-        """Run a tool-enabled chat turn.
+    def _tools_worker(self, history: List[LLMMessage]) -> None:
+        """Worker thread: run the stream_turn / tool-execution loop.
 
-        ``parent_msg_id`` is the user message we're responding to. It's
-        passed through so the assistant message we ultimately store has
-        a correct parent_id even though tree mutation happens on the UI
-        thread (in the message handlers).
-
-        Snapshot semantics: ``history`` is captured once at worker
+        Snapshot semantics: ``history`` is captured once at turn
         start. If the user opens Ctrl+G to edit the system prompt or
         Ctrl+O to attach a file mid-turn, those changes are persisted
         to the tree but do NOT influence the in-flight LLM call. They
@@ -579,7 +670,6 @@ class CTKApp(App):
 
         try:
             assert self.provider is not None
-            history = self._llm_history_for(self._current_tree)
             tools = get_ask_tools(include_pass_through=False)
 
             for turn in range(self._MAX_TOOL_TURNS):
@@ -646,9 +736,7 @@ class CTKApp(App):
                 else:
                     if turn_text:
                         history.append(
-                            LLMMessage(
-                                role=LLMMessageRole.ASSISTANT, content=turn_text
-                            )
+                            LLMMessage(role=LLMMessageRole.ASSISTANT, content=turn_text)
                         )
                     self.post_message(ChatDone())
                     return
@@ -717,7 +805,8 @@ class CTKApp(App):
     # ----- UI thread handlers for chat-with-tools messages -------------
 
     def on_turn_started(self, event: TurnStarted) -> None:
-        self._show_turn_indicator()
+        if self._turn_visible():
+            self._show_turn_indicator()
 
     def _show_turn_indicator(self) -> None:
         if self.main is None or self._turn_indicator is not None:
@@ -745,7 +834,8 @@ class CTKApp(App):
             self._turn_indicator = None
 
     def on_reasoning_token(self, event: ReasoningToken) -> None:
-        if self.main is None:
+        # Display only: on_chat_assistant_text persists the reasoning.
+        if self.main is None or not self._turn_visible():
             return
         self._clear_turn_indicator()
         if self._thinking_block is None:
@@ -773,7 +863,8 @@ class CTKApp(App):
             parent_id=None,
             timestamp=datetime.now(),
         )
-        self._streaming_buffer = ""
+        # Keep _streaming_buffer: after re-opening the turn's conversation
+        # mid-turn, the new bubble shows everything streamed so far.
         bubble = MessageBubble(bubble_msg)
         self._streaming_bubble = bubble
         self.main.messages.mount(
@@ -789,12 +880,9 @@ class CTKApp(App):
         turns have no bubble and keep their expanded ThinkingBlock as the
         visible reply.
         """
-        if self.main is None or self._current_tree is None:
+        turn = self._turn
+        if turn is None:
             return
-        parent_id = None
-        path = self._current_tree.get_longest_path()
-        if path:
-            parent_id = path[-1].id
         content = MessageContent(text=event.text or event.reasoning or "")
         if event.reasoning:
             content.reasoning.append(ReasoningBlock(text=event.reasoning))
@@ -802,10 +890,12 @@ class CTKApp(App):
             id=str(uuid.uuid4()),
             role=MessageRole.ASSISTANT,
             content=content,
-            parent_id=parent_id,
+            parent_id=turn.parent_id,
             timestamp=datetime.now(),
         )
-        self._current_tree.add_message(assistant_msg)
+        turn.tree.add_message(assistant_msg)
+        # A follow-up tool-loop turn chains under this message.
+        turn.parent_id = assistant_msg.id
         # Reset per-turn live widgets so the next turn creates fresh ones.
         self._streaming_bubble = None
         self._streaming_buffer = ""
@@ -813,10 +903,10 @@ class CTKApp(App):
 
     def on_chat_tool_call(self, event: ChatToolCall) -> None:
         """Render a tool call panel inline in the message stream."""
+        if self.main is None or not self._turn_visible():
+            return
         self._clear_turn_indicator()
         self._fold_thinking()
-        if self.main is None:
-            return
         text = Text()
         if event.status == "started":
             text.append("⚙  ", style="bold yellow")
@@ -834,16 +924,18 @@ class CTKApp(App):
         self.main.messages.scroll_end(animate=False)
 
     def on_chat_done(self, event: ChatDone) -> None:
+        turn = self._turn
+        visible = self._turn_visible()
         self._clear_turn_indicator()
         if self.main is not None:
-            if event.cancelled:
+            if visible and event.cancelled:
                 self.main.messages.mount(
                     Static(
                         Text("(cancelled)", style="dim italic"),
                         classes="message-system",
                     )
                 )
-            if event.error:
+            if visible and event.error:
                 self.main.messages.mount(
                     Static(Text(f"error: {event.error}"), classes="message-error")
                 )
@@ -854,11 +946,11 @@ class CTKApp(App):
         # rebuild the main pane (which would destroy the live streaming
         # widgets that are still visible at this point).
         try:
-            if self._current_tree is not None:
-                self._safe_save(self._current_tree)
-            if self.sidebar is not None:
-                self.sidebar.refresh_list()
+            if turn is not None:
+                self._safe_save(turn.tree)
+                self._after_turn_saved(turn, visible)
         finally:
+            self._turn = None
             self._turn_active = False
             self._active_worker = None
             self._streaming_bubble = None
@@ -871,34 +963,55 @@ class CTKApp(App):
     def on_stream_token(self, event: StreamToken) -> None:
         # Custom Textual messages dispatch to ``on_<snake_case_name>``.
         # In the tool path, the bubble is created lazily on the first token.
+        if self._turn is None:
+            return
+        self._streaming_buffer += event.text
+        if not self._turn_visible() or self.main is None:
+            return  # buffered; shown if the user re-opens the turn's tree
         self._clear_turn_indicator()
         self._fold_thinking()
         if self._streaming_bubble is None:
-            if not self._turn_active or self.main is None:
-                return
             self._ensure_live_bubble()
-        self._streaming_buffer += event.text
         self._update_streaming_bubble(self._streaming_buffer)
 
     def on_stream_done(self, event: StreamDone) -> None:
         assert self.main is not None
+        turn = self._turn
+        visible = self._turn_visible()
         self.main.set_streaming(False)
+        self._turn = None
         self._turn_active = False
+        self._active_worker = None
         if event.error:
             self.notify(f"Stream error: {event.error}", severity="error")
-        # Persist the final assistant content into the tree and save.
-        if self._streaming_bubble is not None and self._current_tree is not None:
-            final_text = self._streaming_buffer
-            path = self._current_tree.get_longest_path()
-            if path and path[-1].role == MessageRole.ASSISTANT:
-                path[-1].content = MessageContent(text=final_text)
-            self._safe_save(self._current_tree)
+        # Persist the final assistant content into the turn's tree and save.
+        if turn is not None:
+            reply = turn.tree.message_map.get(turn.reply_id or "")
+            if reply is not None:
+                reply.content = MessageContent(text=self._streaming_buffer)
+            self._safe_save(turn.tree)
 
         self._streaming_bubble = None
         self._streaming_buffer = ""
-        if self.sidebar is not None:
-            self.sidebar.refresh_list()
+        if turn is not None:
+            self._after_turn_saved(turn, visible)
         self._refresh_status()
+
+    def _after_turn_saved(self, turn: ChatTurn, visible: bool) -> None:
+        """Surface a finished turn: refresh the sidebar, or say where it went.
+
+        Refreshing the sidebar moves its cursor to row 0, which opens that
+        row's conversation. That is right when the user is watching the
+        turn's conversation (now the most recent, so row 0), but would yank
+        a user who switched away to read another one, so then only notify.
+        """
+        if visible:
+            if self.sidebar is not None:
+                self.sidebar.refresh_list()
+            return
+        self.notify(
+            f"Reply saved to '{turn.tree.title or '(untitled)'}' (Ctrl+R to refresh)."
+        )
 
     def _update_streaming_bubble(self, text: str) -> None:
         assert self.main is not None
@@ -935,7 +1048,9 @@ class CTKApp(App):
         self.sidebar.refresh_list()
 
     def action_new_conversation(self) -> None:
-        # Drop the current tree; next message will seed a new one.
+        # Drop the current tree; next message will seed a new one. An
+        # in-flight turn keeps writing to (and saves) its own tree.
+        self._drop_turn_widgets()
         self._current_tree = None
         if self.main is not None:
             self.main.messages.show_empty("New conversation — type a message to begin.")
@@ -990,6 +1105,10 @@ class CTKApp(App):
         """
         if self._current_tree is not None and self._current_tree.id == tree_id:
             return self._current_tree
+        # The in-flight turn's tree holds unsaved messages; changes made to a
+        # DB copy would be overwritten when the turn saves.
+        if self._turn is not None and self._turn.tree.id == tree_id:
+            return self._turn.tree
         try:
             return self.db.load_conversation(tree_id)
         except Exception:
@@ -1215,6 +1334,8 @@ class CTKApp(App):
         if self._current_tree is None:
             self.notify("No conversation loaded.", severity="warning")
             return
+        if self._refuse_mid_turn():
+            return
         target_id = self._focused_message_id()
         if target_id is None:
             self.notify(
@@ -1272,6 +1393,8 @@ class CTKApp(App):
         """Return the focused message id, or notify + return None."""
         if self._current_tree is None:
             self.notify("No conversation loaded.", severity="warning")
+            return None
+        if self._refuse_mid_turn():
             return None
         target_id = self._focused_message_id()
         if target_id is None:
