@@ -511,3 +511,194 @@ class TestHTMLCopiesOnlyReferencedMedia:
         ]
         HTMLExporter().export_to_file(convs, str(out), embed=False, db_dir=str(db))
         assert list((out / "media").iterdir()) == []
+
+
+# ==================== 5. Stored XSS in the HTML export ====================
+
+_XSS_PAYLOADS = [
+    "</SCRIPT><img src=x onerror=alert(1)>",
+    "</script ><svg onload=alert(1)>",
+    "</ScRiPt\t>",
+    "<!--<script>alert(1)</script>",
+    "a & b   c   d",
+]
+
+
+def _js_function(js: str, name: str) -> str:
+    """Slice a top-level ``function name(...) {...}`` out of the embedded JS."""
+    start = js.index(f"function {name}(")
+    end = js.index("\n}\n", start) + 3
+    return js[start:end]
+
+
+def _run_node(script: str) -> str:
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not available")
+    result = subprocess.run(
+        [node, "-e", script], capture_output=True, text=True, timeout=30, check=True
+    )
+    return result.stdout
+
+
+class TestScriptEmbeddingEscapes:
+    @pytest.fixture
+    def html(self):
+        from ctk.exporters.html import HTMLExporter
+
+        convs = []
+        for i, payload in enumerate(_XSS_PAYLOADS):
+            conv = _conv_with_image(f"c{i}", None, title=payload, text=payload)
+            conv.metadata.tags = [payload]
+            conv.metadata.source = payload
+            convs.append(conv)
+        return HTMLExporter().export_conversations(convs, embed=True)
+
+    @staticmethod
+    def _embedded(html, marker):
+        import json
+
+        idx = html.index(marker) + len(marker)
+        obj, end = json.JSONDecoder().raw_decode(html, idx)
+        return obj, html[idx:end]
+
+    @pytest.mark.parametrize(
+        "marker", ["const CONVERSATIONS = ", "const STATS = "], ids=["convs", "stats"]
+    )
+    def test_no_markup_characters_in_embedded_json(self, html, marker):
+        _, raw = self._embedded(html, marker)
+        for ch in ("<", ">", "&", " ", " "):
+            assert ch not in raw
+
+    def test_embedded_json_round_trips(self, html):
+        convs, _ = self._embedded(html, "const CONVERSATIONS = ")
+        assert [c["title"] for c in convs] == _XSS_PAYLOADS
+        assert [c["messages"][0]["content"] for c in convs] == _XSS_PAYLOADS
+        stats, _ = self._embedded(html, "const STATS = ")
+        assert set(stats["tags"]) == set(_XSS_PAYLOADS)
+
+    def test_payload_cannot_close_the_script(self, html):
+        lowered = html.lower()
+        assert "<img src=x onerror" not in lowered
+        assert "<svg onload" not in lowered
+
+
+class TestMarkdownSanitizer:
+    @pytest.fixture
+    def js(self):
+        from ctk.exporters.html import HTMLExporter
+
+        return HTMLExporter()._get_javascript()
+
+    def test_dompurify_is_loaded_pinned_with_sri(self):
+        from ctk.exporters.html import HTMLExporter
+
+        html = HTMLExporter().export_conversations([], embed=True)
+        assert (
+            "https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js" in html
+        )
+        assert (
+            'integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL"'
+            in html
+        )
+        # marked is the other script that touches message markup: pin it too.
+        assert (
+            'integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te"'
+            in html
+        )
+
+    def test_marked_output_goes_through_dompurify(self, js):
+        body = _js_function(js, "processMessageContent")
+        assert "DOMPurify.sanitize(" in body
+        assert "marked.parse(" in body
+
+    def _harness(self, js, purify_stub):
+        return "\n".join(
+            [
+                "const marked = { parse: s => s };",  # worst case: raw HTML passes through
+                purify_stub,
+                _js_function(js, "escapeHtml"),
+                _js_function(js, "plainTextToHtml"),
+                _js_function(js, "processMessageContent"),
+            ]
+        )
+
+    def test_without_dompurify_falls_back_to_escaping(self, js):
+        import json
+
+        script = self._harness(js, "") + "\nconsole.log(JSON.stringify(%s));" % (
+            "processMessageContent("
+            + json.dumps("<img src=x onerror=alert(1)>\nhi")
+            + ")"
+        )
+        out = json.loads(_run_node(script))
+        assert "<img" not in out
+        assert "&lt;img" in out
+
+    def test_with_dompurify_sanitize_wraps_output(self, js):
+        import json
+
+        stub = "const DOMPurify = { sanitize: s => 'SANITIZED[' + s + ']' };"
+        script = self._harness(js, stub) + "\nconsole.log(JSON.stringify(%s));" % (
+            "processMessageContent('hello <b>x</b>')"
+        )
+        out = json.loads(_run_node(script))
+        assert out.startswith("SANITIZED[") and out.endswith("]")
+
+    def test_restored_math_is_escaped_and_literal(self, js):
+        import json
+
+        stub = "const DOMPurify = { sanitize: s => s };"
+        texts = ["$<img src=x onerror=alert(1)>$", "$$a + b$$", "x $$c$$ y"]
+        script = self._harness(js, stub) + "\nconsole.log(JSON.stringify(%s));" % (
+            json.dumps(texts) + ".map(processMessageContent)"
+        )
+        out = json.loads(_run_node(script))
+        assert "<img" not in out[0] and "&lt;img" in out[0]
+        # "$$" must survive verbatim (no String.replace "$" pattern expansion).
+        assert "$$a + b$$" in out[1]
+        assert "$$c$$" in out[2]
+
+
+class TestEscapeHtml:
+    def test_escapes_quotes_and_markup(self):
+        import json
+
+        from ctk.exporters.html import HTMLExporter
+
+        js = HTMLExporter()._get_javascript()
+        calls = "[escapeHtml(%s), escapeHtml(null), escapeHtml(5)]" % json.dumps(
+            "\"'<>&"
+        )
+        script = (
+            _js_function(js, "escapeHtml") + f"\nconsole.log(JSON.stringify({calls}));"
+        )
+        out = json.loads(_run_node(script))
+        assert out == ["&quot;&#39;&lt;&gt;&amp;", "", "5"]
+
+    def test_escape_html_does_not_need_a_dom(self):
+        from ctk.exporters.html import HTMLExporter
+
+        body = _js_function(HTMLExporter()._get_javascript(), "escapeHtml")
+        assert "document" not in body
+
+
+class TestMediaGalleryAttributes:
+    def test_gallery_builds_attributes_via_dom(self):
+        from ctk.exporters.html import HTMLExporter
+
+        body = _js_function(HTMLExporter()._get_javascript(), "renderMediaGallery")
+        assert 'src="${' not in body
+        assert 'data-conv-id="${' not in body
+        assert 'alt="${' not in body
+        assert "innerHTML = `" not in body
+
+    def test_load_error_message_is_escaped(self):
+        from ctk.exporters.html import HTMLExporter
+
+        loader = HTMLExporter()._get_jsonl_loader()
+        assert "${error.message}" not in loader
+        assert "escapeHtml(error.message)" in loader

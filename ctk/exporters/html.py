@@ -19,6 +19,25 @@ logger = logging.getLogger(__name__)
 #: MessageContent attributes that hold lists of MediaContent references.
 _MEDIA_KINDS = ("images", "audio", "video", "documents")
 
+#: Characters that must not appear literally in JSON embedded in a <script>.
+#: "<" and ">" cover every case variant of "</script" and "<!--"; "&" is
+#: included for XHTML parsers; U+2028/U+2029 are line terminators in older JS.
+#: JSON only ever contains them inside strings, where the escape is lossless.
+_SCRIPT_UNSAFE_CHARS = {
+    ord("<"): "\\u003c",
+    ord(">"): "\\u003e",
+    ord("&"): "\\u0026",
+    0x2028: "\\u2028",
+    0x2029: "\\u2029",
+}
+
+
+def _json_for_script(obj: Any) -> str:
+    """Serialize ``obj`` as JSON that is safe to inline in an HTML <script>."""
+    return json.dumps(obj, ensure_ascii=False, indent=2).translate(
+        _SCRIPT_UNSAFE_CHARS
+    )
+
 
 class HTMLExporter(ExporterPlugin):
     """Export conversations to interactive HTML app with localStorage features"""
@@ -401,15 +420,8 @@ class HTMLExporter(ExporterPlugin):
 
         if embed:
             # Embed data directly in HTML
-            conv_json = json.dumps(conversations, ensure_ascii=False, indent=2)
-            stats_json = json.dumps(stats, ensure_ascii=False, indent=2)
-            # Escape for safe embedding
-            conv_json = conv_json.replace("</script>", "<\\/script>").replace(
-                "<!--", "<\\!--"
-            )
-            stats_json = stats_json.replace("</script>", "<\\/script>").replace(
-                "<!--", "<\\!--"
-            )
+            conv_json = _json_for_script(conversations)
+            stats_json = _json_for_script(stats)
             data_script = f"""
         const CONVERSATIONS = {conv_json};
         const STATS = {stats_json};
@@ -451,7 +463,14 @@ class HTMLExporter(ExporterPlugin):
             crossorigin="anonymous"></script>
 
     <!-- Marked.js for markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
+            integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te"
+            crossorigin="anonymous"></script>
+
+    <!-- DOMPurify sanitizes rendered markdown (message text is untrusted) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js"
+            integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL"
+            crossorigin="anonymous"></script>
 
     <!-- Highlight.js for code syntax highlighting -->
     <link rel="stylesheet"
@@ -2519,7 +2538,15 @@ marked.setOptions({
 function processMessageContent(text) {
     if (!text) return '';
 
-    // Protect LaTeX blocks from markdown processing
+    // Message text is untrusted: never let it reach innerHTML as markup
+    // unless the sanitizer is available.
+    if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+        return plainTextToHtml(text);
+    }
+
+    // Protect LaTeX blocks from markdown processing. Placeholders are plain
+    // alphanumerics so marked leaves them intact (underscores would become
+    // emphasis and the math would be lost).
     const mathBlocks = [];
     let processedText = text;
 
@@ -2527,37 +2554,48 @@ function processMessageContent(text) {
     processedText = processedText.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'display', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     processedText = processedText.replace(/\\\\\\[([\\s\\S]+?)\\\\\\]/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'display', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     // Extract inline math ($...$, \\(...\\))
     processedText = processedText.replace(/\\$([^\\$\\n]+?)\\$/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'inline', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     processedText = processedText.replace(/\\\\\\(([^\\)]+?)\\\\\\)/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'inline', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     // Now render markdown
     let html = marked.parse(processedText);
 
-    // Restore math blocks
+    // Restore math blocks as escaped text (KaTeX reads text content, so
+    // rendering is unchanged). A replacer function keeps "$$" literal.
     mathBlocks.forEach((block, index) => {
-        html = html.replace(`___MATH_BLOCK_${index}___`, block.content);
+        const escaped = escapeHtml(block.content);
+        html = html.replace(`CTKMATHBLOCK${index}CTK`, () => escaped);
     });
 
-    return html;
+    return DOMPurify.sanitize(html);
+}
+
+/**
+ * Render untrusted plain text as HTML: escaped, with line breaks preserved.
+ * @param {string} text - Raw message text
+ * @returns {string} - Safe HTML
+ */
+function plainTextToHtml(text) {
+    return '<p>' + escapeHtml(text).split('\\n').join('<br>') + '</p>';
 }
 
 /**
@@ -2772,9 +2810,14 @@ function handleHashChange() {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Safe for both element content and quoted attribute values.
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function updateHash(path) {
@@ -4360,40 +4403,51 @@ function renderMediaGallery() {
         const div = document.createElement('div');
         div.className = 'media-item';
 
-        const captionHtml = showCaptions && item.caption
-            ? `<div class="media-item-caption">${escapeHtml(item.caption)}</div>`
-            : '';
-
         // Use base64 data if available, otherwise fall back to URL
         const imgSrc = item.data
             ? `data:${item.mime_type};base64,${item.data}`
             : item.url;
 
-        const titleTrunc = escapeHtml(item.conversationTitle.substring(0, 30)) +
+        // Built via the DOM (never innerHTML): url, ids and captions come
+        // from import files.
+        const img = document.createElement('img');
+        img.className = 'media-item-image';
+        img.setAttribute('src', imgSrc || '');
+        img.setAttribute('alt', item.caption || '');
+        div.appendChild(img);
+
+        const info = document.createElement('div');
+        info.className = 'media-item-info';
+        if (showCaptions && item.caption) {
+            const caption = document.createElement('div');
+            caption.className = 'media-item-caption';
+            caption.textContent = item.caption;
+            info.appendChild(caption);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'media-item-meta';
+        const convLink = document.createElement('a');
+        convLink.className = 'media-item-conversation';
+        convLink.dataset.convId = item.conversationId;
+        convLink.textContent = item.conversationTitle.substring(0, 30) +
             (item.conversationTitle.length > 30 ? '...' : '');
-        const timestampHtml = item.timestamp
-            ? `<span>${new Date(item.timestamp).toLocaleDateString()}</span>`
-            : '';
-        div.innerHTML = `
-            <img src="${imgSrc}" alt="${escapeHtml(item.caption)}" class="media-item-image">
-            <div class="media-item-info">
-                ${captionHtml}
-                <div class="media-item-meta">
-                    <a class="media-item-conversation" data-conv-id="${item.conversationId}">
-                        ${titleTrunc}
-                    </a>
-                    ${timestampHtml}
-                </div>
-            </div>
-        `;
+        meta.appendChild(convLink);
+        if (item.timestamp) {
+            const ts = document.createElement('span');
+            ts.textContent = new Date(item.timestamp).toLocaleDateString();
+            meta.appendChild(ts);
+        }
+        info.appendChild(meta);
+        div.appendChild(info);
 
         // Click to open in lightbox
-        div.querySelector('img').addEventListener('click', () => {
+        img.addEventListener('click', () => {
             openLightbox(imgSrc, item.caption);
         });
 
         // Click conversation link to navigate
-        div.querySelector('.media-item-conversation').addEventListener('click', (e) => {
+        convLink.addEventListener('click', (e) => {
             e.stopPropagation();
             const conv = CONVERSATIONS.find(c => c.id === item.conversationId);
             if (conv) {
@@ -4506,7 +4560,7 @@ fetch('conversations.jsonl')
         loadingDiv.innerHTML = `
             <div style="color: var(--danger); font-size: 1.2rem; margin-bottom: 1rem;">
                 ⚠️ Error Loading Data</div>
-            <div style="margin-bottom: 1rem;">${error.message}</div>
+            <div style="margin-bottom: 1rem;">${escapeHtml(error.message)}</div>
             <div style="font-size: 0.9rem; color: var(--text-secondary);">
                 <p>This HTML file needs to load data from
                     <code>conversations.jsonl</code>.</p>
