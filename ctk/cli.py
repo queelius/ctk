@@ -1615,10 +1615,10 @@ def cmd_duplicate(args):
 
 def cmd_sql(args):
     """Execute SQL queries with Rich table output"""
-    import sqlite3
-
     from rich.console import Console
     from rich.table import Table
+
+    from ctk.core.readonly_sql import connect_read_only
 
     console = Console()
 
@@ -1640,8 +1640,7 @@ def cmd_sql(args):
         return 1
 
     try:
-        # Open database in read-only mode
-        conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+        conn = connect_read_only(str(db_file))
         cursor = conn.cursor()
 
         # Show schema if requested

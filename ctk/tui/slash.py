@@ -664,11 +664,13 @@ def cmd_clear(app: "CTKApp", args: str) -> Optional[str]:
 def cmd_sql(app: "CTKApp", args: str) -> str:
     """Execute a read-only SQL query and return the rows as text.
 
-    Opens the underlying SQLite file in read-only URI mode (same
-    pattern as ``ctk sql`` at the shell prompt) so the query can't
-    mutate the database even if it tries.
+    Opens the underlying SQLite file through the shared read-only
+    connection (same as ``ctk sql``) so the query can't mutate the
+    database even if it tries.
     """
     import sqlite3
+
+    from ctk.core.readonly_sql import connect_read_only
 
     query = args.strip()
     if not query:
@@ -677,7 +679,7 @@ def cmd_sql(app: "CTKApp", args: str) -> str:
     if db_file is None or str(db_file) == ":memory:":
         return "Cannot run /sql on an in-memory database."
     try:
-        conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+        conn = connect_read_only(str(db_file))
     except sqlite3.OperationalError as exc:
         return f"Could not open database read-only: {exc}"
     try:

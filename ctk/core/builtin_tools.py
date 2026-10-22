@@ -6,13 +6,18 @@ if/elif dispatcher with a dict-dispatched, behavior-preserving registry.
 """
 
 import logging
+import sqlite3
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from sqlalchemy import text
 
 from ctk.core.constants import MAX_QUERY_LENGTH, MAX_SQL_ROWS
 from ctk.core.database import ConversationDB
+from ctk.core.readonly_sql import (
+    READ_ONLY_MESSAGE,
+    connect_read_only,
+    is_read_only_violation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -939,33 +944,32 @@ def _do_execute_sql(ctx: ToolContext) -> ToolResult:
         return ToolResult.message(
             f"Error: sql query exceeds maximum length of {MAX_QUERY_LENGTH} characters"
         )
-    params = ctx.args.get("params", [])
+    params = ctx.args.get("params") or []
 
+    db_file = getattr(ctx.db, "db_path", None)
+    if not db_file or db_file == ":memory:" or "://" in str(db_file):
+        return ToolResult.message("Error: execute_sql requires a file-backed SQLite DB")
+
+    # A fresh connection, never the engine's pooled one: read-only state set
+    # on a shared connection leaks into every later write.
     try:
-        with ctx.db.engine.connect() as conn:
-            conn.execute(text("PRAGMA query_only = ON"))
-            if params:
-                result = conn.execute(
-                    text(sql),
-                    {f"p{i}": v for i, v in enumerate(params)},
-                )
-            else:
-                result = conn.execute(text(sql))
+        conn = connect_read_only(db_file)
+    except sqlite3.Error as e:
+        return ToolResult.message(f"SQL error: {e}")
+    try:
+        cursor = conn.execute(sql, tuple(params))
+        columns = [d[0] for d in cursor.description] if cursor.description else []
+        rows = cursor.fetchmany(MAX_SQL_ROWS + 1)
+    except sqlite3.Error as e:
+        if is_read_only_violation(e):
+            return ToolResult.message(f"Error: {READ_ONLY_MESSAGE}")
+        return ToolResult.message(f"SQL error: {e}")
+    finally:
+        conn.close()
 
-            columns = list(result.keys())
-            rows = result.fetchmany(MAX_SQL_ROWS + 1)
-
-            truncated = len(rows) > MAX_SQL_ROWS
-            if truncated:
-                rows = rows[:MAX_SQL_ROWS]
-
-    except Exception as e:
-        error_msg = str(e)
-        if "query_only" in error_msg.lower() or "readonly" in error_msg.lower():
-            return ToolResult.message(
-                "Error: Only SELECT queries are allowed (database is read-only)."
-            )
-        return ToolResult.message(f"SQL error: {error_msg}")
+    truncated = len(rows) > MAX_SQL_ROWS
+    if truncated:
+        rows = rows[:MAX_SQL_ROWS]
 
     if not rows:
         return ToolResult(
