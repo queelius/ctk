@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 from glob import glob
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sqlalchemy import text
 
@@ -647,7 +647,10 @@ def get_default_db_path() -> str:
     return str(Path(db_path).expanduser())
 
 
-def resolve_db_path(path_arg: Optional[str]) -> tuple[Path, Path]:
+DB_FILENAME = "conversations.db"
+
+
+def resolve_db_path(path_arg: Optional[str]) -> Tuple[Path, Path]:
     """
     Resolve database path, handling directory structure.
 
@@ -655,34 +658,52 @@ def resolve_db_path(path_arg: Optional[str]) -> tuple[Path, Path]:
     - conversations.db (the actual SQLite file)
     - media/ (for attachments)
 
+    Accepts either the directory or ``<dir>/conversations.db``. Any other
+    ``*.db`` name is rejected: ConversationDB would silently open the sibling
+    ``conversations.db`` instead.
+
     Returns:
         Tuple of (db_dir, db_file) paths
+
+    Raises:
+        ValueError: for a ``*.db`` path not named ``conversations.db``
     """
     db_path = path_arg if path_arg else get_default_db_path()
     path = Path(db_path).expanduser()
 
-    # If it looks like a file path (has .db suffix), use parent as dir
     if path.suffix == ".db":
+        if path.name != DB_FILENAME:
+            raise ValueError(
+                f"{path} is not a CTK database; pass its directory or "
+                f"<dir>/{DB_FILENAME}"
+            )
         db_dir = path.parent
-        db_file = path
     else:
-        # It's a directory path
         db_dir = path
-        db_file = path / "conversations.db"
 
-    return db_dir, db_file
+    return db_dir, db_dir / DB_FILENAME
+
+
+def _resolve_or_report(path_arg: Optional[str], console) -> Optional[Tuple[Path, Path]]:
+    """resolve_db_path, printing the error instead of raising."""
+    try:
+        return resolve_db_path(path_arg)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        return None
 
 
 def cmd_init(args):
     """Initialize a new database"""
-    import shutil
-
     from rich.console import Console
 
     console = Console()
 
     # Get database path
-    db_dir, db_file = resolve_db_path(args.path)
+    resolved = _resolve_or_report(args.path, console)
+    if resolved is None:
+        return 1
+    db_dir, db_file = resolved
 
     # Check if exists
     if db_file.exists() and not args.force:
@@ -690,10 +711,17 @@ def cmd_init(args):
         console.print("Use --force to overwrite")
         return 1
 
-    # Remove existing if force
-    if db_dir.exists() and args.force:
-        shutil.rmtree(db_dir)
-        console.print("[yellow]Removed existing database directory[/yellow]")
+    # Remove only the SQLite file and its sidecars; the directory may hold
+    # config, backups, media, or unrelated files.
+    if args.force:
+        removed = False
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            candidate = db_file.with_name(db_file.name + suffix)
+            if candidate.exists():
+                candidate.unlink()
+                removed = True
+        if removed:
+            console.print("[yellow]Removed existing database[/yellow]")
 
     try:
         # Create new database (ConversationDB handles directory creation)
@@ -718,7 +746,10 @@ def cmd_info(args):
     console = Console()
 
     # Get database path
-    db_dir, db_file = resolve_db_path(args.path)
+    resolved = _resolve_or_report(args.path, console)
+    if resolved is None:
+        return 1
+    db_dir, db_file = resolved
 
     if not db_file.exists():
         console.print(f"[red]Database not found:[/red] {db_file}")
@@ -807,7 +838,10 @@ def cmd_vacuum(args):
     console = Console()
 
     # Get database path
-    db_dir, db_file = resolve_db_path(args.path)
+    resolved = _resolve_or_report(args.path, console)
+    if resolved is None:
+        return 1
+    db_dir, db_file = resolved
 
     if not db_file.exists():
         console.print(f"[red]Database not found:[/red] {db_file}")
@@ -859,7 +893,10 @@ def cmd_backup(args):
     console = Console()
 
     # Get source database path
-    source_dir, source_file = resolve_db_path(args.source)
+    resolved = _resolve_or_report(args.source, console)
+    if resolved is None:
+        return 1
+    source_dir, source_file = resolved
 
     if not source_file.exists():
         console.print(f"[red]Source database not found:[/red] {source_file}")
