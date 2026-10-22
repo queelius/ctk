@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ctk.core.models import ConversationTree, Message
+from ctk.core.paths import safe_component
 from ctk.core.plugin import ExporterPlugin
 
 
@@ -90,7 +91,9 @@ class ECHOExporter(ExporterPlugin):
 
         # Export each conversation
         for conv in conversations:
-            conv_export_dir = conv_dir / conv.id
+            # Ids come from import files: confine each to one path component.
+            conv_dir_name = safe_component(conv.id, fallback="conversation")
+            conv_export_dir = conv_dir / conv_dir_name
             conv_export_dir.mkdir(exist_ok=True)
 
             # Export conversation JSON (tree structure)
@@ -122,7 +125,7 @@ class ECHOExporter(ExporterPlugin):
                     "source": conv.metadata.source,
                     "model": conv.metadata.model,
                     "message_count": len(conv.message_map),
-                    "path": f"conversations/{conv.id}/",
+                    "path": f"conversations/{conv_dir_name}/",
                 }
             )
 

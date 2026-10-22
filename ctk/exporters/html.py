@@ -3,12 +3,38 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 """
 
 import json
+import logging
 import os
+import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
+from ctk.core.paths import MEDIA_DIRNAME, resolve_media_ref
 from ctk.core.plugin import ExporterPlugin
+
+logger = logging.getLogger(__name__)
+
+#: MessageContent attributes that hold lists of MediaContent references.
+_MEDIA_KINDS = ("images", "audio", "video", "documents")
+
+#: Characters that must not appear literally in JSON embedded in a <script>.
+#: "<" and ">" cover every case variant of "</script" and "<!--"; "&" is
+#: included for XHTML parsers; U+2028/U+2029 are line terminators in older JS.
+#: JSON only ever contains them inside strings, where the escape is lossless.
+_SCRIPT_UNSAFE_CHARS = {
+    ord("<"): "\\u003c",
+    ord(">"): "\\u003e",
+    ord("&"): "\\u0026",
+    0x2028: "\\u2028",
+    0x2029: "\\u2029",
+}
+
+
+def _json_for_script(obj: Any) -> str:
+    """Serialize ``obj`` as JSON that is safe to inline in an HTML <script>."""
+    return json.dumps(obj, ensure_ascii=False, indent=2).translate(_SCRIPT_UNSAFE_CHARS)
 
 
 class HTMLExporter(ExporterPlugin):
@@ -41,8 +67,6 @@ class HTMLExporter(ExporterPlugin):
 
         if media_dir:
             # Hybrid mode: embed conversation data but put media in separate directory
-            import shutil
-            from pathlib import Path
 
             # Determine output directory and paths
             if file_path.endswith(".html"):
@@ -62,13 +86,9 @@ class HTMLExporter(ExporterPlugin):
             os.makedirs(output_dir, exist_ok=True)
             os.makedirs(media_output_dir, exist_ok=True)
 
-            # Copy media files if db_dir is provided
+            # Copy only the media the exported conversations reference
             if db_dir:
-                source_media = Path(db_dir) / "media"
-                if source_media.exists():
-                    for media_file in source_media.iterdir():
-                        if media_file.is_file():
-                            shutil.copy2(media_file, media_output_dir)
+                self._copy_referenced_media(conversations, db_dir, media_output_dir)
 
             # Generate HTML with embedded data but media URLs pointing to media_dir
             html_content = self.export_conversations(
@@ -86,8 +106,6 @@ class HTMLExporter(ExporterPlugin):
                 f.write(html_content)
         else:
             # Multi-file export: index.html + conversations.jsonl + media/
-            import shutil
-            from pathlib import Path
 
             if file_path.endswith(".html"):
                 # Specific HTML filename provided - use its directory
@@ -105,14 +123,9 @@ class HTMLExporter(ExporterPlugin):
 
             jsonl_path = os.path.join(output_dir, "conversations.jsonl")
 
-            # Copy media files if db_dir is provided
+            # Copy only the media the exported conversations reference
             if db_dir:
-                source_media = Path(db_dir) / "media"
-                if source_media.exists():
-                    # Copy all media files
-                    for media_file in source_media.iterdir():
-                        if media_file.is_file():
-                            shutil.copy2(media_file, media_output_dir)
+                self._copy_referenced_media(conversations, db_dir, media_output_dir)
 
             # Generate HTML without embedded data
             html_content = self.export_conversations(
@@ -128,6 +141,37 @@ class HTMLExporter(ExporterPlugin):
                     f.write(json.dumps(conv, ensure_ascii=False) + "\n")
                 # Write stats as last line with special marker
                 f.write(json.dumps({"__stats__": stats}, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _referenced_media(
+        conversations: List[ConversationTree], db_dir: str
+    ) -> List[Path]:
+        """Existing files in db_dir/media referenced by the conversations' messages.
+
+        Each message's image, audio, video and document references are
+        resolved with resolve_media_ref, so anything outside the media
+        directory (or missing) is excluded.
+        """
+        found: Dict[Path, None] = {}
+        for conv in conversations:
+            for msg in conv.message_map.values():
+                content = msg.content
+                for kind in _MEDIA_KINDS:
+                    for media in getattr(content, kind, None) or []:
+                        path = resolve_media_ref(db_dir, media.url or media.path)
+                        if path is not None:
+                            found[path] = None
+        return list(found)
+
+    def _copy_referenced_media(
+        self, conversations: List[ConversationTree], db_dir: str, dest_dir: str
+    ) -> None:
+        """Copy only the media files the exported conversations reference."""
+        media_root = (Path(db_dir) / MEDIA_DIRNAME).resolve()
+        for src in self._referenced_media(conversations, db_dir):
+            dest = Path(dest_dir) / src.relative_to(media_root)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
 
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export conversations to HTML5"""
@@ -149,7 +193,6 @@ class HTMLExporter(ExporterPlugin):
             media_dir: If set, use file URLs to this directory instead of embedding
         """
         import base64
-        from pathlib import Path
 
         conv_data: List[Dict[str, Any]] = []
         date_range: Dict[str, Any] = {"earliest": None, "latest": None}
@@ -214,31 +257,10 @@ class HTMLExporter(ExporterPlugin):
                             # Already have base64 data
                             img_data["data"] = img.data
                         elif embed and db_dir:
-                            # Try to read image from disk and encode as base64
-                            image_path = None
-                            if img_ref:
-                                # Try various path resolutions
-                                candidates = []
-                                if img_ref.startswith("media/"):
-                                    # Relative URL like 'media/xxx.png'
-                                    candidates.append(Path(db_dir) / img_ref)
-                                elif "/" not in img_ref and "\\" not in img_ref:
-                                    # Just a filename - look in media/ directory
-                                    candidates.append(Path(db_dir) / "media" / img_ref)
-                                    # Also try directly in db_dir
-                                    candidates.append(Path(db_dir) / img_ref)
-                                else:
-                                    # Some other path - try relative to db_dir
-                                    candidates.append(Path(db_dir) / img_ref)
-                                    # Also try as absolute path
-                                    if Path(img_ref).is_absolute():
-                                        candidates.append(Path(img_ref))
-
-                                # Find first existing path
-                                for candidate in candidates:
-                                    if candidate.exists():
-                                        image_path = candidate
-                                        break
+                            # Read the image from the DB's media directory and
+                            # encode as base64. Refs come from import files, so
+                            # only files contained in db_dir/media are read.
+                            image_path = resolve_media_ref(db_dir, img_ref)
 
                             if image_path:
                                 try:
@@ -273,12 +295,10 @@ class HTMLExporter(ExporterPlugin):
                                         file=sys.stderr,
                                     )
                             elif img_ref:
-                                import sys
-
-                                print(
-                                    f"Warning: Image not found: {img_ref}"
-                                    f" (looked in {db_dir}/media/)",
-                                    file=sys.stderr,
+                                logger.warning(
+                                    "Image not found or outside %s/media, skipped: %r",
+                                    db_dir,
+                                    img_ref,
                                 )
 
                         images.append(img_data)
@@ -398,15 +418,8 @@ class HTMLExporter(ExporterPlugin):
 
         if embed:
             # Embed data directly in HTML
-            conv_json = json.dumps(conversations, ensure_ascii=False, indent=2)
-            stats_json = json.dumps(stats, ensure_ascii=False, indent=2)
-            # Escape for safe embedding
-            conv_json = conv_json.replace("</script>", "<\\/script>").replace(
-                "<!--", "<\\!--"
-            )
-            stats_json = stats_json.replace("</script>", "<\\/script>").replace(
-                "<!--", "<\\!--"
-            )
+            conv_json = _json_for_script(conversations)
+            stats_json = _json_for_script(stats)
             data_script = f"""
         const CONVERSATIONS = {conv_json};
         const STATS = {stats_json};
@@ -448,7 +461,14 @@ class HTMLExporter(ExporterPlugin):
             crossorigin="anonymous"></script>
 
     <!-- Marked.js for markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
+            integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te"
+            crossorigin="anonymous"></script>
+
+    <!-- DOMPurify sanitizes rendered markdown (message text is untrusted) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js"
+            integrity="sha384-a7SzOxErzJ3ZpQz0zJ32d67dSitNzPcbfybc/ykU9KJhMgZkwqfSxlhhdJRS+XGL"
+            crossorigin="anonymous"></script>
 
     <!-- Highlight.js for code syntax highlighting -->
     <link rel="stylesheet"
@@ -2516,7 +2536,15 @@ marked.setOptions({
 function processMessageContent(text) {
     if (!text) return '';
 
-    // Protect LaTeX blocks from markdown processing
+    // Message text is untrusted: never let it reach innerHTML as markup
+    // unless the sanitizer is available.
+    if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+        return plainTextToHtml(text);
+    }
+
+    // Protect LaTeX blocks from markdown processing. Placeholders are plain
+    // alphanumerics so marked leaves them intact (underscores would become
+    // emphasis and the math would be lost).
     const mathBlocks = [];
     let processedText = text;
 
@@ -2524,37 +2552,48 @@ function processMessageContent(text) {
     processedText = processedText.replace(/\\$\\$([\\s\\S]+?)\\$\\$/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'display', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     processedText = processedText.replace(/\\\\\\[([\\s\\S]+?)\\\\\\]/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'display', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     // Extract inline math ($...$, \\(...\\))
     processedText = processedText.replace(/\\$([^\\$\\n]+?)\\$/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'inline', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     processedText = processedText.replace(/\\\\\\(([^\\)]+?)\\\\\\)/g, (match, content) => {
         const index = mathBlocks.length;
         mathBlocks.push({type: 'inline', content: match});
-        return `___MATH_BLOCK_${index}___`;
+        return `CTKMATHBLOCK${index}CTK`;
     });
 
     // Now render markdown
     let html = marked.parse(processedText);
 
-    // Restore math blocks
+    // Restore math blocks as escaped text (KaTeX reads text content, so
+    // rendering is unchanged). A replacer function keeps "$$" literal.
     mathBlocks.forEach((block, index) => {
-        html = html.replace(`___MATH_BLOCK_${index}___`, block.content);
+        const escaped = escapeHtml(block.content);
+        html = html.replace(`CTKMATHBLOCK${index}CTK`, () => escaped);
     });
 
-    return html;
+    return DOMPurify.sanitize(html);
+}
+
+/**
+ * Render untrusted plain text as HTML: escaped, with line breaks preserved.
+ * @param {string} text - Raw message text
+ * @returns {string} - Safe HTML
+ */
+function plainTextToHtml(text) {
+    return '<p>' + escapeHtml(text).split('\\n').join('<br>') + '</p>';
 }
 
 /**
@@ -2769,9 +2808,14 @@ function handleHashChange() {
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // Safe for both element content and quoted attribute values.
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function updateHash(path) {
@@ -4357,40 +4401,51 @@ function renderMediaGallery() {
         const div = document.createElement('div');
         div.className = 'media-item';
 
-        const captionHtml = showCaptions && item.caption
-            ? `<div class="media-item-caption">${escapeHtml(item.caption)}</div>`
-            : '';
-
         // Use base64 data if available, otherwise fall back to URL
         const imgSrc = item.data
             ? `data:${item.mime_type};base64,${item.data}`
             : item.url;
 
-        const titleTrunc = escapeHtml(item.conversationTitle.substring(0, 30)) +
+        // Built via the DOM (never innerHTML): url, ids and captions come
+        // from import files.
+        const img = document.createElement('img');
+        img.className = 'media-item-image';
+        img.setAttribute('src', imgSrc || '');
+        img.setAttribute('alt', item.caption || '');
+        div.appendChild(img);
+
+        const info = document.createElement('div');
+        info.className = 'media-item-info';
+        if (showCaptions && item.caption) {
+            const caption = document.createElement('div');
+            caption.className = 'media-item-caption';
+            caption.textContent = item.caption;
+            info.appendChild(caption);
+        }
+
+        const meta = document.createElement('div');
+        meta.className = 'media-item-meta';
+        const convLink = document.createElement('a');
+        convLink.className = 'media-item-conversation';
+        convLink.dataset.convId = item.conversationId;
+        convLink.textContent = item.conversationTitle.substring(0, 30) +
             (item.conversationTitle.length > 30 ? '...' : '');
-        const timestampHtml = item.timestamp
-            ? `<span>${new Date(item.timestamp).toLocaleDateString()}</span>`
-            : '';
-        div.innerHTML = `
-            <img src="${imgSrc}" alt="${escapeHtml(item.caption)}" class="media-item-image">
-            <div class="media-item-info">
-                ${captionHtml}
-                <div class="media-item-meta">
-                    <a class="media-item-conversation" data-conv-id="${item.conversationId}">
-                        ${titleTrunc}
-                    </a>
-                    ${timestampHtml}
-                </div>
-            </div>
-        `;
+        meta.appendChild(convLink);
+        if (item.timestamp) {
+            const ts = document.createElement('span');
+            ts.textContent = new Date(item.timestamp).toLocaleDateString();
+            meta.appendChild(ts);
+        }
+        info.appendChild(meta);
+        div.appendChild(info);
 
         // Click to open in lightbox
-        div.querySelector('img').addEventListener('click', () => {
+        img.addEventListener('click', () => {
             openLightbox(imgSrc, item.caption);
         });
 
         // Click conversation link to navigate
-        div.querySelector('.media-item-conversation').addEventListener('click', (e) => {
+        convLink.addEventListener('click', (e) => {
             e.stopPropagation();
             const conv = CONVERSATIONS.find(c => c.id === item.conversationId);
             if (conv) {
@@ -4503,7 +4558,7 @@ fetch('conversations.jsonl')
         loadingDiv.innerHTML = `
             <div style="color: var(--danger); font-size: 1.2rem; margin-bottom: 1rem;">
                 ⚠️ Error Loading Data</div>
-            <div style="margin-bottom: 1rem;">${error.message}</div>
+            <div style="margin-bottom: 1rem;">${escapeHtml(error.message)}</div>
             <div style="font-size: 0.9rem; color: var(--text-secondary);">
                 <p>This HTML file needs to load data from
                     <code>conversations.jsonl</code>.</p>
