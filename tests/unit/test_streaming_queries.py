@@ -26,6 +26,16 @@ from ctk.core.models import (
 )
 
 
+def _db_ts(dt):
+    """Render dt in the ORM's SQLite storage format.
+
+    Raw-SQL writes bypass the DateTime type; Python's sqlite3 adapter drops
+    the fraction for whole-second values, which keyset cursors compare as
+    strings against ".ffffff" values.
+    """
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
 def _create_db_with_conversations(n: int = 10) -> ConversationDB:
     """Helper to create an in-memory DB with n conversations."""
     db = ConversationDB(":memory:")
@@ -72,7 +82,11 @@ def _create_db_with_conversations(n: int = 10) -> ConversationDB:
                     "UPDATE conversations SET updated_at = :ua, created_at = :ca "
                     "WHERE id = :id"
                 ),
-                {"ua": updated_at, "ca": created_at, "id": f"conv-{i:03d}"},
+                {
+                    "ua": _db_ts(updated_at),
+                    "ca": _db_ts(created_at),
+                    "id": f"conv-{i:03d}",
+                },
             )
 
     return db

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from sqlalchemy import and_, create_engine, distinct, func, or_, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, selectinload, sessionmaker
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.pool import StaticPool
 
 from .constants import (
@@ -677,6 +678,15 @@ class ConversationDB:
             # Set denormalized branch flag (True when tree has more than one root-to-leaf path)
             conv_model.is_branching = len(conversation.get_all_paths()) > 1
 
+            # The column has onupdate=func.now(), which fires for any UPDATE
+            # that leaves updated_at out of its SET clause (an unchanged value,
+            # or an autoflush that INSERTed the row before later field writes).
+            # Re-assign (an autoflushed onupdate expires the attribute) and
+            # force the tree's own timestamp into the statement.
+            if conversation.metadata.updated_at is not None:
+                conv_model.updated_at = conversation.metadata.updated_at
+                flag_modified(conv_model, "updated_at")
+
             session.commit()
             msg_count = len(conversation.message_map)
             logger.info(
@@ -830,6 +840,9 @@ class ConversationDB:
                     metadata=msg_model.metadata_json or {},
                 )
                 conversation.add_message(message)
+
+            # add_message() stamps updated_at with now(); restore the stored value.
+            conversation.metadata.updated_at = conv_model.updated_at
 
             logger.info(
                 f"Loaded conversation {conversation_id} with {len(messages)} messages"
@@ -1077,16 +1090,15 @@ class ConversationDB:
 
                 # Apply cursor filter (skip items already seen)
                 if cursor:  # non-empty cursor = subsequent page
+                    # Bind as a datetime so the column type renders it in its
+                    # own storage format (microseconds included); a truncated
+                    # string skips rows that share the boundary's second.
                     cursor_ts, cursor_id = decode_cursor(cursor)
-                    # Format timestamp as string matching SQLite storage format
-                    # to avoid Python 3.12+ datetime adapter format mismatch
-                    # (isoformat uses 'T' separator, SQLite uses space)
-                    cursor_ts_str = cursor_ts.strftime("%Y-%m-%d %H:%M:%S")
                     query = query.filter(
                         or_(
-                            ConversationModel.updated_at < cursor_ts_str,
+                            ConversationModel.updated_at < cursor_ts,
                             and_(
-                                ConversationModel.updated_at == cursor_ts_str,
+                                ConversationModel.updated_at == cursor_ts,
                                 ConversationModel.id < cursor_id,
                             ),
                         )
@@ -1655,15 +1667,14 @@ class ConversationDB:
                 # Cursor-based (keyset) pagination
                 # Apply cursor filter
                 if cursor:  # non-empty = subsequent page
+                    # Bound as a datetime; see list_conversations.
                     cursor_ts, cursor_id = decode_cursor(cursor)
-                    # Format timestamp as string matching SQLite storage format
-                    cursor_ts_str = cursor_ts.strftime("%Y-%m-%d %H:%M:%S")
                     if ascending:
                         query = query.filter(
                             or_(
-                                order_field > cursor_ts_str,
+                                order_field > cursor_ts,
                                 and_(
-                                    order_field == cursor_ts_str,
+                                    order_field == cursor_ts,
                                     ConversationModel.id > cursor_id,
                                 ),
                             )
@@ -1671,9 +1682,9 @@ class ConversationDB:
                     else:
                         query = query.filter(
                             or_(
-                                order_field < cursor_ts_str,
+                                order_field < cursor_ts,
                                 and_(
-                                    order_field == cursor_ts_str,
+                                    order_field == cursor_ts,
                                     ConversationModel.id < cursor_id,
                                 ),
                             )

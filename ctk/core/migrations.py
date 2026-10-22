@@ -75,11 +75,25 @@ def _m3_is_branching(conn: Connection) -> None:
     )
 
 
+def _m5_normalize_timestamp_format(conn: Connection) -> None:
+    # Rows stamped by the old func.now() defaults hold whole-second UTC text
+    # ("YYYY-MM-DD HH:MM:SS"); ORM-written values carry ".ffffff". Keyset
+    # cursors compare these as strings, so give every value the ORM format.
+    for column in ("created_at", "updated_at"):
+        conn.execute(
+            text(
+                f"UPDATE conversations SET {column} = {column} || '.000000' "
+                f"WHERE length({column}) = 19"
+            )
+        )
+
+
 MIGRATIONS: List[Migration] = [
     Migration(1, "slug_summary_index", _m1_slug_summary_index),
     Migration(2, "keyset_list_index", _m2_keyset_list_index),
     Migration(3, "is_branching_column", _m3_is_branching),
     Migration(4, "rebuild_list_index", _m4_rebuild_list_index),
+    Migration(5, "normalize_timestamp_format", _m5_normalize_timestamp_format),
 ]
 
 

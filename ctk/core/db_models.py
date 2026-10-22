@@ -24,7 +24,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
 
 
 class Base(DeclarativeBase):
@@ -64,9 +63,9 @@ class ConversationModel(Base):
     # Basic fields
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     slug: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), onupdate=func.now()
+        DateTime, default=datetime.now, onupdate=datetime.now
     )
 
     # Summary (LLM-generated)
@@ -210,7 +209,7 @@ class TagModel(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Relationships
     conversations: Mapped[List["ConversationModel"]] = relationship(
@@ -315,7 +314,7 @@ class EmbeddingModel(Base):
     dimensions: Mapped[int] = mapped_column(Integer)  # Embedding dimensionality
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Relationships
     conversation: Mapped["ConversationModel"] = relationship(
@@ -392,7 +391,7 @@ class SimilarityModel(Base):
     )  # Embedding model
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Relationships
     conversation1: Mapped["ConversationModel"] = relationship(
@@ -449,7 +448,7 @@ class EmbeddingSessionModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Embedding configuration
     provider: Mapped[str] = mapped_column(String, nullable=False)
@@ -498,7 +497,7 @@ class CurrentGraphModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
     # Embedding session reference
     embedding_session_id: Mapped[Optional[int]] = mapped_column(

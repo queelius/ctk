@@ -29,6 +29,17 @@ from ctk.core.models import (
 )
 from ctk.core.pagination import decode_cursor, encode_cursor
 
+
+def _db_ts(dt):
+    """Render dt in the ORM's SQLite storage format.
+
+    Raw-SQL writes bypass the DateTime type; Python's sqlite3 adapter drops
+    the fraction for whole-second values, which keyset cursors compare as
+    strings against ".ffffff" values.
+    """
+    return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
 # =============================================================================
 # 1. TestCursorEncoding - Test cursor encode/decode utilities
 # =============================================================================
@@ -269,7 +280,11 @@ class TestCursorPagination:
                         "UPDATE conversations SET updated_at = :ua, created_at = :ca "
                         "WHERE id = :id"
                     ),
-                    {"ua": updated_at, "ca": created_at, "id": f"conv-{i:03d}"},
+                    {
+                        "ua": _db_ts(updated_at),
+                        "ca": _db_ts(created_at),
+                        "id": f"conv-{i:03d}",
+                    },
                 )
 
         return db
@@ -391,7 +406,7 @@ class TestCursorPagination:
                     sql_text(
                         "UPDATE conversations SET updated_at = :ua WHERE id = :id"
                     ),
-                    {"ua": updated_at, "id": f"conv-{i:03d}"},
+                    {"ua": _db_ts(updated_at), "id": f"conv-{i:03d}"},
                 )
 
         # Paginate through starred only
@@ -497,7 +512,7 @@ class TestCursorPagination:
                         "UPDATE conversations SET updated_at = :ua, created_at = :ua "
                         "WHERE id = :id"
                     ),
-                    {"ua": same_time, "id": f"conv-{i}"},
+                    {"ua": _db_ts(same_time), "id": f"conv-{i}"},
                 )
 
         # Get all with pagination
@@ -571,7 +586,11 @@ class TestSearchCursorPagination:
                         "UPDATE conversations SET updated_at = :ua, created_at = :ca "
                         "WHERE id = :id"
                     ),
-                    {"ua": updated_at, "ca": created_at, "id": f"conv-{i:03d}"},
+                    {
+                        "ua": _db_ts(updated_at),
+                        "ca": _db_ts(created_at),
+                        "id": f"conv-{i:03d}",
+                    },
                 )
 
         return db

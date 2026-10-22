@@ -131,7 +131,8 @@ class DatabaseOperations:
                             conv_hash = self.comparator.compute_hash(conv)
                             seen_hashes.add(conv_hash)
 
-                        stats["total_output"] += 1
+                        # A newer duplicate replaces its row; count rows, not saves.
+                        stats["total_output"] = len(seen_ids)
 
                         if progress_callback:
                             progress_callback(stats)
