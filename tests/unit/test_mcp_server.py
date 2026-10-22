@@ -17,14 +17,11 @@ Verifies:
 """
 
 import asyncio
-import os
 
 import pytest
 import mcp.types as types
 
-# Set test database path before importing anything that triggers get_db
-TEST_DB_PATH = "/home/spinoza/github/beta/ctk/dev/openai-db"
-os.environ["CTK_DATABASE_PATH"] = TEST_DB_PATH
+from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
 
 pytestmark = pytest.mark.unit
 
@@ -41,20 +38,24 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def db():
+    """The MCP server's own DB (isolated per test by conftest), seeded with one conversation."""
     from ctk.mcp_server import get_db
 
-    return get_db()
+    db = get_db()
+    tree = ConversationTree(id="abcdef12-seeded", title="Seeded conversation")
+    tree.add_message(
+        Message(id="m1", role=MessageRole.USER, content=MessageContent(text="hello"))
+    )
+    db.save_conversation(tree)
+    return db
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def first_conv_prefix(db):
-    """Return an 8-char prefix of the first conversation in the DB, or None."""
-    convs = db.list_conversations(limit=1)
-    if not convs:
-        return None
-    return convs[0].id[:8]
+    """An 8-char prefix of the seeded conversation's id."""
+    return db.list_conversations(limit=1)[0].id[:8]
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +250,6 @@ class TestHandleTool:
         self, event_loop, db, first_conv_prefix
     ):
         """find_similar (legacy name + legacy params) must NOT return 'Unknown tool'."""
-        if first_conv_prefix is None:
-            pytest.skip("No conversations in test DB")
         from ctk.interfaces.mcp.projection import handle_tool
 
         result = event_loop.run_until_complete(
@@ -263,8 +262,6 @@ class TestHandleTool:
 
     def test_get_conversation_alias_id_param(self, event_loop, db, first_conv_prefix):
         """get_conversation with legacy 'id' alias must work."""
-        if first_conv_prefix is None:
-            pytest.skip("No conversations in test DB")
         from ctk.interfaces.mcp.projection import handle_tool
 
         result = event_loop.run_until_complete(
@@ -278,8 +275,6 @@ class TestHandleTool:
         self, event_loop, db, first_conv_prefix
     ):
         """update_conversation with legacy 'id' alias and no changes returns 'No changes'."""
-        if first_conv_prefix is None:
-            pytest.skip("No conversations in test DB")
         from ctk.interfaces.mcp.projection import handle_tool
 
         result = event_loop.run_until_complete(

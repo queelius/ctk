@@ -2,6 +2,7 @@
 Pytest configuration and shared fixtures
 """
 
+import itertools
 import json
 import tempfile
 from datetime import datetime
@@ -17,6 +18,30 @@ from ctk.core.models import (
     MessageContent,
     MessageRole,
 )
+
+_mcp_db_ids = itertools.count()
+
+
+@pytest.fixture(scope="session")
+def _mcp_db_root(tmp_path_factory):
+    return tmp_path_factory.mktemp("mcp-db")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_mcp_server_db(_mcp_db_root, monkeypatch):
+    """Point the MCP server's lazily opened DB at a fresh per-test directory.
+
+    ``ctk.interfaces.mcp.server.get_db`` caches a module-global DB resolved from
+    ``CTK_DATABASE_PATH`` or the user's config, so without this any test that
+    reaches ``handle_call_tool`` would open (and migrate) a real database.
+    """
+    from ctk.interfaces.mcp import server
+
+    monkeypatch.setenv("CTK_DATABASE_PATH", str(_mcp_db_root / str(next(_mcp_db_ids))))
+    monkeypatch.setattr(server, "_db", None)
+    yield
+    if server._db is not None:
+        server._db.close()
 
 
 @pytest.fixture
