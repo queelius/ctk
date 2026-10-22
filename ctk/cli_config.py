@@ -9,6 +9,7 @@ Commands for managing CTK configuration:
 """
 
 import json
+import sys
 
 from ctk.core.config import Config, get_config
 
@@ -90,7 +91,11 @@ def cmd_set(args):
             value = False
 
     old_value = config.get(args.key)
-    config.set(args.key, value)
+    try:
+        config.set(args.key, value)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
     if old_value is not None:
         print(f"Updated: {args.key}")
@@ -119,7 +124,7 @@ def cmd_reset(args):
     if args.section:
         # Reset specific section
         if args.section in Config.DEFAULTS:
-            config.config[args.section] = Config.DEFAULTS[args.section].copy()
+            config.config[args.section] = Config.defaults()[args.section]
             config.save()
             console.print(f"[green]Reset section '{args.section}' to defaults[/green]")
         else:
@@ -127,7 +132,7 @@ def cmd_reset(args):
             return 1
     else:
         # Reset entire config
-        config.config = Config.DEFAULTS.copy()
+        config.config = Config.defaults()
         config.save()
         console.print("[green]Reset all configuration to defaults[/green]")
 

@@ -5,6 +5,7 @@ Security note: API keys should be stored in environment variables, not in
 the config file. This module will warn if credentials are found in config files.
 """
 
+import copy
 import json
 import logging
 import os
@@ -61,7 +62,15 @@ class Config:
             config_path: Optional custom config path
         """
         self.config_path = config_path or self.DEFAULT_CONFIG_PATH
+        # Set when an existing file could not be read; save() then refuses to
+        # replace the user's file with defaults.
+        self._load_error: Optional[str] = None
         self.config = self.load()
+
+    @classmethod
+    def defaults(cls) -> Dict[str, Any]:
+        """A fresh deep copy of DEFAULTS (merging into it must never alias)."""
+        return copy.deepcopy(cls.DEFAULTS)
 
     def load(self) -> Dict[str, Any]:
         """
@@ -69,31 +78,29 @@ class Config:
 
         Also checks for and warns about credentials in the config file.
         """
-        if self.config_path.exists():
-            try:
-                with open(self.config_path, "r") as f:
-                    user_config = json.load(f)
-                # Merge with defaults (user config takes precedence)
-                config = self._deep_merge(self.DEFAULTS.copy(), user_config)
-
-                # Check for credentials in config and warn
-                # (Done after merge so we check the final config)
-                self._warn_credentials_on_load(user_config)
-
-                return config
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid JSON in config file: {e}, using defaults")
-                return self.DEFAULTS.copy()
-            except (IOError, OSError) as e:
-                logger.error(f"Error reading config file: {e}, using defaults")
-                return self.DEFAULTS.copy()
-            except Exception as e:
-                logger.error(f"Unexpected error loading config: {e}, using defaults")
-                return self.DEFAULTS.copy()
+        if not self.config_path.exists():
+            self.save(self.defaults())
+            return self.defaults()
+        try:
+            with open(self.config_path, "r") as f:
+                user_config = json.load(f)
+        except json.JSONDecodeError as e:
+            self._load_error = f"invalid JSON: {e}"
+        except (IOError, OSError) as e:
+            self._load_error = f"unreadable: {e}"
         else:
-            # Create default config file
-            self.save(self.DEFAULTS)
-            return self.DEFAULTS.copy()
+            if not isinstance(user_config, dict):
+                self._load_error = "top-level JSON value is not an object"
+        if self._load_error:
+            logger.error(
+                f"Config file {self.config_path} {self._load_error}; using defaults"
+            )
+            return self.defaults()
+
+        # Merge with defaults (user config takes precedence)
+        config = self._deep_merge(self.defaults(), user_config)
+        self._warn_credentials_on_load(user_config)
+        return config
 
     def _warn_credentials_on_load(self, user_config: Dict[str, Any]) -> None:
         """Check user config for credentials and log warnings."""
@@ -114,6 +121,11 @@ class Config:
 
     def save(self, config: Optional[Dict[str, Any]] = None):
         """Save configuration to file"""
+        if self._load_error:
+            raise ValueError(
+                f"Config file {self.config_path} failed to load ({self._load_error});"
+                " refusing to overwrite it. Fix or move it first."
+            )
         config = config or self.config
 
         # Ensure directory exists
@@ -152,9 +164,12 @@ class Config:
         target = self.config
 
         # Navigate to parent
-        for k in keys[:-1]:
+        for i, k in enumerate(keys[:-1]):
             if k not in target:
                 target[k] = {}
+            elif not isinstance(target[k], dict):
+                prefix = ".".join(keys[: i + 1])
+                raise ValueError(f"Cannot set {key}: {prefix} is not a section")
             target = target[k]
 
         # Set value
