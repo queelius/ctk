@@ -707,14 +707,12 @@ class DatabaseOperations:
                 # Determine which to keep
                 keeper = self._select_keeper(db, group, keep)
 
-                # Delete others
-                with db.session_scope() as session:
-                    for conv_id in group:
-                        if conv_id != keeper:
-                            session.query(ConversationModel).filter_by(
-                                id=conv_id
-                            ).delete()
-                            stats["conversations_removed"] += 1
+                # Delete others through the ORM so messages, tags, embeddings,
+                # similarities and FTS rows go with them (a bulk query.delete()
+                # skips cascades and left them orphaned).
+                for conv_id in group:
+                    if conv_id != keeper and db.delete_conversation(conv_id):
+                        stats["conversations_removed"] += 1
 
     def _select_keeper(self, db: ConversationDB, group: List[str], keep: str) -> str:
         """Select which conversation to keep from a duplicate group"""
