@@ -255,7 +255,9 @@ class OpenAIImporter(ImporterPlugin):
                 # (rejects symlinks to, or symlinked subdirs pointing, elsewhere).
                 matches = [
                     Path(m)
-                    for m in glob.glob(os.path.join(glob.escape(str(directory)), pattern))
+                    for m in glob.glob(
+                        os.path.join(glob.escape(str(directory)), pattern)
+                    )
                     if is_within(source_root, m) and Path(m).is_file()
                 ]
                 if matches:

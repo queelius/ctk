@@ -34,9 +34,7 @@ _SCRIPT_UNSAFE_CHARS = {
 
 def _json_for_script(obj: Any) -> str:
     """Serialize ``obj`` as JSON that is safe to inline in an HTML <script>."""
-    return json.dumps(obj, ensure_ascii=False, indent=2).translate(
-        _SCRIPT_UNSAFE_CHARS
-    )
+    return json.dumps(obj, ensure_ascii=False, indent=2).translate(_SCRIPT_UNSAFE_CHARS)
 
 
 class HTMLExporter(ExporterPlugin):
