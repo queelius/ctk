@@ -13,7 +13,6 @@ All tests should FAIL initially (RED phase of TDD).
 import base64
 import json
 from datetime import datetime, timedelta
-from typing import List
 
 import pytest
 from sqlalchemy import text as sql_text
@@ -503,12 +502,7 @@ class TestCursorPagination:
 
         # Get all with pagination
         result1 = db.list_conversations(cursor="", page_size=3)
-        result2 = db.list_conversations(cursor=result1.next_cursor, page_size=3)
-
-        # Should be deterministic (ordered by id as tiebreaker)
-        all_ids = [item.id for item in result1.items] + [
-            item.id for item in result2.items
-        ]
+        db.list_conversations(cursor=result1.next_cursor, page_size=3)
 
         # Check deterministic ordering (should be sorted by ID since timestamps are same)
         # Order depends on implementation, but should be consistent

@@ -12,12 +12,12 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Any, List
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
-from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
-from ctk.core.plugin import BasePlugin, ExporterPlugin, ImporterPlugin, PluginRegistry
+from ctk.core.models import ConversationTree
+from ctk.core.plugin import ExporterPlugin, ImporterPlugin, PluginRegistry
 
 # ==================== Mock Plugins for Testing ====================
 

@@ -9,9 +9,8 @@ import io
 import logging
 import os
 import re
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TextIO
+from typing import Any, List, Optional, TextIO
 
 from ctk.core.models import ConversationTree, Message, MessageRole
 from ctk.core.plugin import ExporterPlugin
@@ -169,9 +168,7 @@ class MarkdownExporter(ExporterPlugin):
         filename = f"{date_str}{sanitized}-{short_id}.md"
         if "/" in filename or "\\" in filename or ".." in filename:
             # Fallback to a completely safe filename
-            logger.warning(
-                f"Filename generation produced unsafe result, using fallback"
-            )
+            logger.warning("Filename generation produced unsafe result, using fallback")
             filename = f"{date_str}conversation-{short_id}.md"
 
         return filename

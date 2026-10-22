@@ -55,7 +55,10 @@ def validate_conversation_id(
 
     # Enforce full UUID format when partial IDs are not allowed
     if not allow_partial:
-        uuid_pattern = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        uuid_pattern = (
+            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+            r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        )
         if not re.match(uuid_pattern, value):
             raise ValidationError(f"Full UUID required, got: {value}")
 

@@ -2,9 +2,6 @@
 Unit tests for database operations
 """
 
-import json
-from datetime import datetime
-
 import pytest
 
 from ctk.core.database import ConversationDB

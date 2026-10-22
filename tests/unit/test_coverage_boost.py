@@ -2,9 +2,7 @@
 Targeted tests to boost coverage to 80%
 """
 
-import json
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -29,7 +27,7 @@ class TestJSONLExporterExtended:
         exporter = JSONLExporter()
         output_path = temp_dir / "test.jsonl"
 
-        result = exporter.export_to_file([sample_conversation], str(output_path))
+        exporter.export_to_file([sample_conversation], str(output_path))
 
         assert output_path.exists()
         assert output_path.stat().st_size > 0

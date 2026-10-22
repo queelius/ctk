@@ -207,7 +207,7 @@ class TestMessageContentAdvanced:
     def test_add_image(self):
         """Test adding images to content"""
         content = MessageContent(text="Check this out")
-        img = content.add_image(
+        content.add_image(
             url="https://example.com/image.png",
             caption="Test image",
             mime_type="image/png",
@@ -222,7 +222,7 @@ class TestMessageContentAdvanced:
     def test_add_tool_call(self):
         """Test adding tool calls to content"""
         content = MessageContent(text="Let me calculate that")
-        tool = content.add_tool_call(name="calculator", arguments={"expression": "2+2"})
+        content.add_tool_call(name="calculator", arguments={"expression": "2+2"})
 
         assert len(content.tool_calls) == 1
         assert content.tool_calls[0].name == "calculator"

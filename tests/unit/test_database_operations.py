@@ -6,7 +6,6 @@ from datetime import datetime
 
 import pytest
 
-from ctk.core.database import ConversationDB
 from ctk.core.models import (
     ConversationMetadata,
     ConversationTree,

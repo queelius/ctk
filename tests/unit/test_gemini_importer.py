@@ -692,7 +692,10 @@ class TestGeminiImportEdgeCases:
     def test_unicode_content(self):
         """Unicode characters in content should be preserved."""
         importer = GeminiImporter()
-        text = "Bonjour! \u00c7a va? \U0001f600 \u4f60\u597d \u0417\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435"
+        text = (
+            "Bonjour! \u00c7a va? \U0001f600 \u4f60\u597d "
+            "\u0417\u0434\u0440\u0430\u0432\u0441\u0442\u0432\u0443\u0439\u0442\u0435"
+        )
         data = {"turns": [_make_turn("user", text)]}
         result = importer.import_data(data)
         msg = result[0].get_longest_path()[0]

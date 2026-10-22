@@ -1,10 +1,8 @@
 """Tests for ctk.core.network_analysis module."""
 
 import json
-import os
-import tempfile
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

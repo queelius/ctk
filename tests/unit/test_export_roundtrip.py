@@ -8,9 +8,7 @@ from datetime import datetime
 import pytest
 
 from ctk.core.models import (
-    ContentType,
     ConversationTree,
-    MediaContent,
     Message,
     MessageContent,
     MessageRole,

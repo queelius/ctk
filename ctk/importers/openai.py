@@ -2,30 +2,25 @@
 OpenAI/ChatGPT conversation importer
 """
 
-import base64
 import glob
 import json
 import logging
-import os
-import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ctk.core.plugin import ImporterPlugin
-from ctk.core.utils import parse_timestamp
-
-logger = logging.getLogger(__name__)
 from ctk.core.models import (
-    ContentType,
     ConversationMetadata,
     ConversationTree,
-    MediaContent,
     Message,
     MessageContent,
     MessageRole,
     ReasoningBlock,
     ToolCall,
 )
+from ctk.core.plugin import ImporterPlugin
+from ctk.core.utils import parse_timestamp
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIImporter(ImporterPlugin):

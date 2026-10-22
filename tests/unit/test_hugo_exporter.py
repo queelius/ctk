@@ -9,10 +9,7 @@ Tests the Hugo page bundle exporter including:
 - export_to_file: End-to-end export with directory structure
 """
 
-import re
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 

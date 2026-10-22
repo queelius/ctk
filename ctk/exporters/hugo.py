@@ -5,14 +5,12 @@ Exports conversations as Hugo page bundles for static site generation.
 Each conversation becomes a directory with index.md and associated media.
 """
 
-import os
 import re
 import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.models import ConversationTree
 from ctk.core.plugin import ExporterPlugin
 
 
@@ -48,7 +46,8 @@ class HugoExporter(ExporterPlugin):
                 - path_selection: How to handle branching (longest, first, last)
                 - include_draft: Mark as draft (default: False)
                 - date_prefix: Include date in directory name (default: True)
-                - hugo_organize: Organization strategy - "none" (flat), "tags", "source", "date" (default: "date")
+                - hugo_organize: Organization strategy - "none" (flat), "tags", "source",
+                  "date" (default: "date")
         """
         db_dir = kwargs.get("db_dir")
         path_selection = kwargs.get("path_selection", "longest")

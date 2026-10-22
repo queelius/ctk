@@ -10,10 +10,8 @@ exposed through all three interface layers:
 
 import asyncio
 import json
-import os
 from datetime import datetime, timedelta
-from io import StringIO
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import text as sql_text
@@ -245,8 +243,6 @@ class TestCLICmdQueryCursor:
 
     def test_query_parser_has_cursor_flag(self):
         """ctk query parser should accept --cursor flag."""
-        import argparse
-
         from ctk.cli import main
 
         # Build the parser via main's setup
@@ -290,7 +286,7 @@ class TestCLICmdQueryCursor:
         args.cursor = cursor_val
         args.page_size = 5
 
-        with patch("ctk.cli.ConversationDB") as mock_db_cls, patch(
+        with patch("ctk.cli.ConversationDB"), patch(
             "ctk.core.db_helpers.search_conversations_helper"
         ) as mock_helper:
             mock_helper.return_value = 0

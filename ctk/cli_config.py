@@ -8,9 +8,7 @@ Commands for managing CTK configuration:
 - set: Set a configuration value
 """
 
-import argparse
 import json
-from typing import List, Optional
 
 from ctk.core.config import Config, get_config
 
@@ -188,7 +186,7 @@ def add_config_commands(subparsers):
     show_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     # path
-    path_parser = config_subparsers.add_parser("path", help="Show config file path")
+    config_subparsers.add_parser("path", help="Show config file path")
 
     # get
     get_parser = config_subparsers.add_parser("get", help="Get a configuration value")
@@ -211,9 +209,7 @@ def add_config_commands(subparsers):
     )
 
     # edit
-    edit_parser = config_subparsers.add_parser(
-        "edit", help="Open config file in editor"
-    )
+    config_subparsers.add_parser("edit", help="Open config file in editor")
 
     return config_parser
 

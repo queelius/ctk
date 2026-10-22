@@ -4,8 +4,7 @@ Unit tests for ConversationIndex.
 Tests the in-memory index for O(1) slug and prefix resolution.
 """
 
-import threading
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 

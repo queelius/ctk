@@ -5,7 +5,7 @@ Google Gemini/Bard conversation importer
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ctk.core.models import (
     ConversationMetadata,

@@ -10,9 +10,7 @@ Covers:
 2. iter_search_results() - generator version of search_conversations()
 """
 
-import gc
 from datetime import datetime, timedelta
-from typing import Generator
 
 import pytest
 from sqlalchemy import text as sql_text

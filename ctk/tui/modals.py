@@ -15,7 +15,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static, TextArea
+from textual.widgets import Input, Label, Static, TextArea
 
 
 class SystemPromptModal(ModalScreen[Optional[str]]):
@@ -305,7 +305,8 @@ class HelpModal(ModalScreen[None]):
             "[cyan]branch[/cyan] are inverted relative to git. In CTK:"
         )
         out.append(
-            "  • [cyan]fork[/cyan]   = snip to focused message (drop later messages + sibling branches)"
+            "  • [cyan]fork[/cyan]   = snip to focused message (drop later messages"
+            " + sibling branches)"
         )
         out.append("  • [cyan]branch[/cyan] = duplicate the entire tree under a new id")
         out.append(

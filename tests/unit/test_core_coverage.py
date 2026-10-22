@@ -4,7 +4,6 @@ Quick tests to boost coverage for core modules
 
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -17,7 +16,7 @@ from ctk.core.models import (
     MessageContent,
     MessageRole,
 )
-from ctk.core.plugin import ExporterPlugin, ImporterPlugin, PluginRegistry
+from ctk.core.plugin import PluginRegistry
 
 
 class TestDatabaseAdditionalCoverage:
@@ -227,10 +226,6 @@ class TestModelsCoverage:
     @pytest.mark.unit
     def test_message_with_parent(self):
         """Test message with parent relationship"""
-        parent = Message(
-            id="parent", role=MessageRole.USER, content=MessageContent(text="Question")
-        )
-
         child = Message(
             id="child",
             role=MessageRole.ASSISTANT,

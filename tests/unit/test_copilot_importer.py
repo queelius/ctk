@@ -11,7 +11,6 @@ Tests cover:
 import json
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -328,7 +327,7 @@ class TestCopilotParseChatSession:
 
     @pytest.mark.unit
     def test_last_message_date_timestamp(self, importer):
-        """lastMessageDate in milliseconds should set updated_at, but add_message() overwrites it."""
+        """lastMessageDate in ms should set updated_at, but add_message() overwrites it."""
         ts_ms = 1700001000000
         data = _make_session(
             requests=[_make_turn("Hi", "Hello")],

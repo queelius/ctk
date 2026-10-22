@@ -5,16 +5,13 @@ These tests focus on the public contracts and behaviors that users depend on,
 rather than implementation details. They should survive refactoring.
 """
 
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-
 from ctk.api import CTK, ConversationBuilder, ConversationLoader
 from ctk.core.database import ConversationDB
-from ctk.core.models import ConversationTree, Message, MessageContent, MessageRole
+from ctk.core.models import ConversationTree, MessageRole
 
 
 class TestCTKFluentAPI:
@@ -354,7 +351,7 @@ class TestFluentAPIIntegration:
         # When: Performing database operations
         ctk.get("conv-123")
         ctk.delete("conv-456")
-        stats = ctk.stats()
+        ctk.stats()
 
         # Then: Should call appropriate database methods
         mock_db_instance.__enter__.return_value.load_conversation.assert_called_with(

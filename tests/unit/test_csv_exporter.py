@@ -367,7 +367,7 @@ class TestCSVExporterMessageMode:
         )
 
         reader = csv.reader(io.StringIO(result))
-        headers = next(reader)
+        next(reader)  # skip header row
         rows = list(reader)
 
         # First path should be one of the paths through the tree
@@ -382,7 +382,7 @@ class TestCSVExporterMessageMode:
         )
 
         reader = csv.reader(io.StringIO(result))
-        headers = next(reader)
+        next(reader)  # skip header row
         rows = list(reader)
 
         # Last path should be one of the paths through the tree

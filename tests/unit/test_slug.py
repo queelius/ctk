@@ -1,7 +1,5 @@
 """Unit tests for slug generation utilities."""
 
-import pytest
-
 from ctk.core.slug import generate_slug, make_unique_slug, slug_matches
 
 
