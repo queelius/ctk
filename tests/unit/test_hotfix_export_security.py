@@ -452,3 +452,62 @@ class TestHugoConversationIdTraversal:
             hugo_organize="none",
         )
         assert (out / "hello-world-a1b2c3d4" / "index.md").is_file()
+
+
+# ==================== 4. HTML export copies only referenced media ====================
+
+
+class TestHTMLCopiesOnlyReferencedMedia:
+    @pytest.fixture
+    def db_two_images(self, tmp_path):
+        db = tmp_path / "db"
+        (db / "media").mkdir(parents=True)
+        (db / "media" / "a.png").write_bytes(b"A")
+        (db / "media" / "b.png").write_bytes(b"B")
+        (db / "media" / "unrelated.png").write_bytes(b"U")
+        conv_a = _conv_with_image("conv-a", "media/a.png")
+        conv_b = _conv_with_image("conv-b", "media/b.png")
+        return db, conv_a, conv_b
+
+    def test_multi_file_export(self, db_two_images, tmp_path):
+        from ctk.exporters.html import HTMLExporter
+
+        db, conv_a, _ = db_two_images
+        out = tmp_path / "out"
+        HTMLExporter().export_to_file([conv_a], str(out), embed=False, db_dir=str(db))
+        assert sorted(p.name for p in (out / "media").iterdir()) == ["a.png"]
+
+    def test_media_dir_export(self, db_two_images, tmp_path):
+        from ctk.exporters.html import HTMLExporter
+
+        db, conv_a, _ = db_two_images
+        out = tmp_path / "out"
+        HTMLExporter().export_to_file(
+            [conv_a], str(out / "index.html"), db_dir=str(db), media_dir="assets"
+        )
+        assert sorted(p.name for p in (out / "assets").iterdir()) == ["a.png"]
+
+    def test_bare_filename_ref_is_copied(self, tmp_path):
+        from ctk.exporters.html import HTMLExporter
+
+        db = tmp_path / "db"
+        (db / "media").mkdir(parents=True)
+        (db / "media" / "a.png").write_bytes(b"A")
+        (db / "media" / "b.png").write_bytes(b"B")
+        out = tmp_path / "out"
+        HTMLExporter().export_to_file(
+            [_conv_with_image("c", "a.png")], str(out), embed=False, db_dir=str(db)
+        )
+        assert sorted(p.name for p in (out / "media").iterdir()) == ["a.png"]
+
+    def test_outside_refs_are_not_copied(self, db_with_secret, tmp_path):
+        from ctk.exporters.html import HTMLExporter
+
+        db, secret = db_with_secret
+        out = tmp_path / "out"
+        convs = [
+            _conv_with_image(f"c{i}", _outside_ref(kind, secret))
+            for i, kind in enumerate(_OUTSIDE_REFS)
+        ]
+        HTMLExporter().export_to_file(convs, str(out), embed=False, db_dir=str(db))
+        assert list((out / "media").iterdir()) == []

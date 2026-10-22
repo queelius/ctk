@@ -5,14 +5,19 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 import json
 import logging
 import os
+import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
-from ctk.core.paths import resolve_media_ref
+from ctk.core.paths import MEDIA_DIRNAME, resolve_media_ref
 from ctk.core.plugin import ExporterPlugin
 
 logger = logging.getLogger(__name__)
+
+#: MessageContent attributes that hold lists of MediaContent references.
+_MEDIA_KINDS = ("images", "audio", "video", "documents")
 
 
 class HTMLExporter(ExporterPlugin):
@@ -45,8 +50,6 @@ class HTMLExporter(ExporterPlugin):
 
         if media_dir:
             # Hybrid mode: embed conversation data but put media in separate directory
-            import shutil
-            from pathlib import Path
 
             # Determine output directory and paths
             if file_path.endswith(".html"):
@@ -66,13 +69,9 @@ class HTMLExporter(ExporterPlugin):
             os.makedirs(output_dir, exist_ok=True)
             os.makedirs(media_output_dir, exist_ok=True)
 
-            # Copy media files if db_dir is provided
+            # Copy only the media the exported conversations reference
             if db_dir:
-                source_media = Path(db_dir) / "media"
-                if source_media.exists():
-                    for media_file in source_media.iterdir():
-                        if media_file.is_file():
-                            shutil.copy2(media_file, media_output_dir)
+                self._copy_referenced_media(conversations, db_dir, media_output_dir)
 
             # Generate HTML with embedded data but media URLs pointing to media_dir
             html_content = self.export_conversations(
@@ -90,8 +89,6 @@ class HTMLExporter(ExporterPlugin):
                 f.write(html_content)
         else:
             # Multi-file export: index.html + conversations.jsonl + media/
-            import shutil
-            from pathlib import Path
 
             if file_path.endswith(".html"):
                 # Specific HTML filename provided - use its directory
@@ -109,14 +106,9 @@ class HTMLExporter(ExporterPlugin):
 
             jsonl_path = os.path.join(output_dir, "conversations.jsonl")
 
-            # Copy media files if db_dir is provided
+            # Copy only the media the exported conversations reference
             if db_dir:
-                source_media = Path(db_dir) / "media"
-                if source_media.exists():
-                    # Copy all media files
-                    for media_file in source_media.iterdir():
-                        if media_file.is_file():
-                            shutil.copy2(media_file, media_output_dir)
+                self._copy_referenced_media(conversations, db_dir, media_output_dir)
 
             # Generate HTML without embedded data
             html_content = self.export_conversations(
@@ -132,6 +124,37 @@ class HTMLExporter(ExporterPlugin):
                     f.write(json.dumps(conv, ensure_ascii=False) + "\n")
                 # Write stats as last line with special marker
                 f.write(json.dumps({"__stats__": stats}, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _referenced_media(
+        conversations: List[ConversationTree], db_dir: str
+    ) -> List[Path]:
+        """Existing files in db_dir/media referenced by the conversations' messages.
+
+        Each message's image, audio, video and document references are
+        resolved with resolve_media_ref, so anything outside the media
+        directory (or missing) is excluded.
+        """
+        found: Dict[Path, None] = {}
+        for conv in conversations:
+            for msg in conv.message_map.values():
+                content = msg.content
+                for kind in _MEDIA_KINDS:
+                    for media in getattr(content, kind, None) or []:
+                        path = resolve_media_ref(db_dir, media.url or media.path)
+                        if path is not None:
+                            found[path] = None
+        return list(found)
+
+    def _copy_referenced_media(
+        self, conversations: List[ConversationTree], db_dir: str, dest_dir: str
+    ) -> None:
+        """Copy only the media files the exported conversations reference."""
+        media_root = (Path(db_dir) / MEDIA_DIRNAME).resolve()
+        for src in self._referenced_media(conversations, db_dir):
+            dest = Path(dest_dir) / src.relative_to(media_root)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
 
     def export_data(self, conversations: List[ConversationTree], **kwargs) -> Any:
         """Export conversations to HTML5"""
