@@ -1000,14 +1000,17 @@ class CTKApp(App):
     def _after_turn_saved(self, turn: ChatTurn, visible: bool) -> None:
         """Surface a finished turn: refresh the sidebar, or say where it went.
 
-        Refreshing the sidebar moves its cursor to row 0, which opens that
-        row's conversation. That is right when the user is watching the
-        turn's conversation (now the most recent, so row 0), but would yank
-        a user who switched away to read another one, so then only notify.
+        Refreshing the sidebar resets its cursor to row 0, which would open
+        that row's conversation; row 0 is not necessarily the turn's (sort
+        order, filters), so the cursor is put back on the turn's row at
+        once. The queued highlight events then resolve to the conversation
+        already shown and are no-ops. A user who switched away to read
+        another conversation is not refreshed under, only notified.
         """
         if visible:
             if self.sidebar is not None:
                 self.sidebar.refresh_list()
+                self.sidebar.select_conversation(turn.tree.id)
             return
         self.notify(
             f"Reply saved to '{turn.tree.title or '(untitled)'}' (Ctrl+R to refresh)."

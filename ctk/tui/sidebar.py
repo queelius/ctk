@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 from textual.containers import Vertical
 from textual.widgets import DataTable, Static, Tab, Tabs
+from textual.widgets.data_table import RowDoesNotExist
 
 from ctk.core.database import ConversationDB
 from ctk.core.models import PaginatedResult
@@ -138,6 +139,15 @@ class ConversationList(Vertical):
             return row_key.value if row_key else None
         except Exception:
             return None
+
+    def select_conversation(self, conv_id: str) -> bool:
+        """Move the cursor to ``conv_id``'s row; False if it isn't loaded."""
+        try:
+            row = self._table.get_row_index(conv_id)
+        except RowDoesNotExist:
+            return False
+        self._table.move_cursor(row=row)
+        return True
 
     def focus_table(self) -> None:
         self._table.focus()

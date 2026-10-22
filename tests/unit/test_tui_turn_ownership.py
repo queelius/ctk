@@ -145,10 +145,10 @@ async def _wait(pilot, predicate, steps: int = 200) -> None:
     raise AssertionError("condition never became true")
 
 
-async def _start_turn_in_a(app, pilot, provider):
-    """Open row 0 (A), submit QUESTION, wait until the turn is mid-stream."""
+async def _start_turn_in_a(app, pilot, provider, row: int = 0):
+    """Open ``row`` (A), submit QUESTION, wait until the turn is mid-stream."""
     await pilot.pause()
-    a_id = await _open_row(app, pilot, 0)
+    a_id = await _open_row(app, pilot, row)
     await _submit(app, pilot)
     await _wait(pilot, provider.started.is_set)
     await pilot.pause(0.05)
@@ -334,5 +334,46 @@ async def test_tree_mutations_on_other_conversation_allowed_mid_turn(db):
 
             await _finish_turn(app, pilot, provider)
             _assert_turn_persisted(db, a_id)
+    finally:
+        provider.gate.set()
+
+
+def _bump_updated_at(db: ConversationDB, conv_id: str, ts: str) -> None:
+    # Raw SQL: the ORM's onupdate would overwrite an explicit updated_at.
+    from sqlalchemy import text
+
+    with db.session_scope() as session:
+        session.execute(
+            text("UPDATE conversations SET updated_at = :ts WHERE id = :id"),
+            {"ts": ts, "id": conv_id},
+        )
+
+
+@pytest.mark.parametrize("tools", [True, False], ids=["tools", "no-tools"])
+async def test_finished_turn_keeps_its_conversation_selected(db, tools):
+    """The post-turn sidebar refresh must not jump to whatever is in row 0.
+
+    Another conversation sorts above A (here: a future updated_at), so the
+    refresh's reset-to-row-0 would otherwise open it and drop A's reply view.
+    """
+    other = db.list_conversations()[0].id
+    _bump_updated_at(db, other, "2099-01-01 00:00:00")
+    provider = GatedProvider()
+    app = CTKApp(db=db, provider=provider, enable_tools=tools)
+    try:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.sidebar.refresh_list()
+            await pilot.pause()
+            a_id = await _start_turn_in_a(app, pilot, provider, row=1)
+            assert a_id != other
+
+            await _finish_turn(app, pilot, provider)
+            await pilot.pause(0.1)
+
+            assert app.sidebar.selected_conversation_id() == a_id
+            assert app._current_tree.id == a_id, "view must stay on the turn's conv"
+            _, replies = _user_and_reply(app._current_tree)
+            assert len(replies) == 1
     finally:
         provider.gate.set()
