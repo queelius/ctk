@@ -23,7 +23,13 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    backref,
+    mapped_column,
+    relationship,
+)
 
 
 class Base(DeclarativeBase):
@@ -397,13 +403,13 @@ class SimilarityModel(Base):
     conversation1: Mapped["ConversationModel"] = relationship(
         "ConversationModel",
         foreign_keys=[conversation1_id],
-        backref="similarities_as_conv1",
+        backref=backref("similarities_as_conv1", cascade="all, delete-orphan"),
     )
 
     conversation2: Mapped["ConversationModel"] = relationship(
         "ConversationModel",
         foreign_keys=[conversation2_id],
-        backref="similarities_as_conv2",
+        backref=backref("similarities_as_conv2", cascade="all, delete-orphan"),
     )
 
     # Indexes and constraints
