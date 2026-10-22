@@ -72,11 +72,12 @@ class StreamToken(TextualMessage):
 
 
 class StreamDone(TextualMessage):
-    """A streaming response finished (or errored)."""
+    """A streaming response finished (or errored, or was cancelled)."""
 
-    def __init__(self, error: Optional[str] = None) -> None:
+    def __init__(self, error: Optional[str] = None, cancelled: bool = False) -> None:
         super().__init__()
         self.error = error
+        self.cancelled = cancelled
 
 
 class ChatAssistantText(TextualMessage):
@@ -607,15 +608,32 @@ class CTKApp(App):
 
     @work(thread=True, exclusive=True)
     def _stream_worker(self, history: List[LLMMessage]) -> None:
-        """Worker thread: pulls tokens from ``stream_chat`` and posts them."""
+        """Worker thread: pulls tokens from ``stream_chat`` and posts them.
+
+        Checks for cancellation (Escape) between chunks, like the tool
+        path; a provider blocked inside one chunk is noticed at the next.
+        """
+        from textual.worker import get_current_worker
+
+        worker = get_current_worker()
+        stream = None
         try:
             assert self.provider is not None
-            for chunk in self.provider.stream_chat(history):
+            stream = self.provider.stream_chat(history)
+            for chunk in stream:
+                if worker is not None and worker.is_cancelled:
+                    self.post_message(StreamDone(cancelled=True))
+                    return
                 if chunk:
                     self.post_message(StreamToken(chunk))
         except Exception as exc:  # pragma: no cover — surfaces any provider error
             self.post_message(StreamDone(error=str(exc)))
             return
+        finally:
+            # Close the provider's stream (e.g. the HTTP response) on cancel.
+            close = getattr(stream, "close", None)
+            if close is not None:
+                close()
         self.post_message(StreamDone())
 
     # ------------------------------------------------------------------
@@ -984,11 +1002,24 @@ class CTKApp(App):
         self._active_worker = None
         if event.error:
             self.notify(f"Stream error: {event.error}", severity="error")
+        if visible and event.cancelled:
+            self.main.messages.mount(
+                Static(
+                    Text("(cancelled)", style="dim italic"),
+                    classes="message-system",
+                )
+            )
+            self.main.messages.scroll_end(animate=False)
         # Persist the final assistant content into the turn's tree and save.
+        # A reply that never received a token is dropped rather than stored
+        # as an empty assistant message (matching the tool path).
         if turn is not None:
             reply = turn.tree.message_map.get(turn.reply_id or "")
             if reply is not None:
-                reply.content = MessageContent(text=self._streaming_buffer)
+                if self._streaming_buffer:
+                    reply.content = MessageContent(text=self._streaming_buffer)
+                else:
+                    turn.tree.delete_subtree(reply.id)
             self._safe_save(turn.tree)
 
         self._streaming_bubble = None

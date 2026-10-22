@@ -377,3 +377,71 @@ async def test_finished_turn_keeps_its_conversation_selected(db, tools):
             assert len(replies) == 1
     finally:
         provider.gate.set()
+
+
+class SlowStreamProvider(GatedProvider):
+    """No-tools stream of 400 tokens, 20 ms apart (several seconds end to end).
+
+    ``finished`` flips only if the consumer drains the whole stream, so the
+    cancel tests do not depend on wall-clock timing.
+    """
+
+    finished = False
+
+    def stream_chat(self, messages, **kwargs):
+        import time as _t
+
+        for i in range(400):
+            if i == 1:
+                self.started.set()
+            _t.sleep(0.02)
+            yield f"t{i} "
+        self.finished = True
+
+
+async def test_escape_cancels_no_tools_stream(db):
+    """Escape must stop a --no-tools stream early and keep the partial text."""
+    provider = SlowStreamProvider()
+    app = CTKApp(db=db, provider=provider, enable_tools=False)
+    async with app.run_test() as pilot:
+        a_id = await _start_turn_in_a(app, pilot, provider)
+        app.action_cancel_turn_or_dismiss()
+        await _wait(pilot, lambda: not app._turn_active, steps=1000)
+        await pilot.pause(0.05)
+
+        assert not provider.finished, "the worker ignored the cancel"
+        assert [
+            n for n in app.query(".message-system") if "cancelled" in str(n.content)
+        ], "a (cancelled) marker must be appended"
+        tree = db.load_conversation(a_id)
+        users, _ = _user_and_reply(tree)
+        assert len(users) == 1
+        replies = tree.get_children(users[0].id)
+        assert len(replies) == 1
+        assert replies[0].role == MessageRole.ASSISTANT
+        assert replies[0].content.text.startswith("t0 ")
+        assert "t399" not in replies[0].content.text
+
+
+async def test_cancel_before_any_no_tools_token_persists_no_empty_reply(db):
+    provider = GatedProvider()
+
+    def _stall(messages, **kwargs):
+        provider.started.set()
+        provider.gate.wait(10)  # the first token is held until after cancel
+        for i in range(50):
+            yield f"late{i}"
+
+    provider.stream_chat = _stall
+    app = CTKApp(db=db, provider=provider, enable_tools=False)
+    async with app.run_test() as pilot:
+        a_id = await _start_turn_in_a(app, pilot, provider)
+        app.action_cancel_turn_or_dismiss()  # before the first token lands
+        provider.gate.set()
+        await _wait(pilot, lambda: not app._turn_active, steps=500)
+        await pilot.pause(0.1)
+
+        tree = db.load_conversation(a_id)
+        users, _ = _user_and_reply(tree)
+        assert len(users) == 1, "the user message is still persisted"
+        assert not tree.get_children(users[0].id), "no empty reply persisted"
