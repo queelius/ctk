@@ -145,9 +145,10 @@ Schema changes go through the versioned `PRAGMA user_version` migration runner (
 ### Gotchas
 - **CLI no-subcommand path**: `ctk` opens the TUI, requires `database.default_path` in config (defaults to `~/.ctk`) or `--db`.
 - **`ConversationDB(":memory:")`** must be special-cased to use true in-memory SQLite (not a file at `:memory:/conversations.db`).
-- **`ConversationModel.updated_at`** has `onupdate=func.now()`. The ORM overwrites explicit values; use raw SQL in tests when you need to force timestamps.
+- **`ConversationModel.updated_at`** has `onupdate=datetime.now` (Python-side, like every column default since 2.20.1; never `func.now()`, which wrote whole-second UTC text). It fires for any UPDATE that omits the column, so `save_conversation` forces the tree's own value with `flag_modified`; other ORM writes (star/pin/...) still bump it. `load_conversation` restores the stored value after `add_message()` re-stamps it.
 - **`ConversationTree.add_message()`** overwrites `metadata.updated_at` to `datetime.now()`.
-- **Python 3.12 SQLite datetime**: `isoformat()` uses `T`, SQLite stores with space. Use `strftime("%Y-%m-%d %H:%M:%S")` for cursor comparisons.
+- **Timestamp storage format**: keyset cursors compare `updated_at` as *strings*, so every stored value must use the ORM's `YYYY-MM-DD HH:MM:SS.ffffff` (migration 5 normalized legacy whole-second rows). Bind cursor values as `datetime` objects so the column type renders them; never a truncated `strftime` string (dropped same-second rows). Raw-SQL writes in tests must use `strftime("%Y-%m-%d %H:%M:%S.%f")`: Python's sqlite3 adapter omits the fraction for whole seconds.
+- **User SQL** (`execute_sql`, `ctk sql`, `/sql`) goes through `ctk.core.readonly_sql.connect_read_only`: a *fresh* `mode=ro` connection with an authorizer. Never run user SQL on the engine's pooled connection (state like `PRAGMA query_only` leaks into later writes, and the authorizer only checks statements at prepare time).
 - **Importer model detection**: sort `model_map.items()` by key length DESC to avoid short-key matches (gpt-4 vs gpt-4-turbo).
 - **`textual-image` protocol detection** runs at module import time and is broken once Textual takes over stdin. `ctk/tui/app.py:run()` calls `_detect_image_protocol_eagerly()` before mounting the app.
 - **Modal callbacks must capture conversation id at open time** (see `_on_system_prompt_saved`, `_on_file_attached`). Otherwise a sidebar switch mid-modal applies the change to the wrong tree.
