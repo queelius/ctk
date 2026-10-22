@@ -5,12 +5,15 @@ Covers path containment for media references and conversation ids
 XSS in the HTML exporter.
 """
 
-import os
-from pathlib import Path
-
 import pytest
 
-from ctk.core.paths import is_within, resolve_media_ref, safe_component, safe_join
+from ctk.core.paths import (
+    is_safe_component,
+    is_within,
+    resolve_media_ref,
+    safe_component,
+    safe_join,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -42,7 +45,9 @@ class TestSafeJoin:
         assert safe_join(tmp_path, "a.png") == (tmp_path / "a.png").resolve()
 
     def test_nested_relative_ref(self, tmp_path):
-        assert safe_join(tmp_path, "sub/a.png") == (tmp_path / "sub" / "a.png").resolve()
+        assert (
+            safe_join(tmp_path, "sub/a.png") == (tmp_path / "sub" / "a.png").resolve()
+        )
 
     def test_rejects_absolute(self, tmp_path):
         assert safe_join(tmp_path, "/etc/passwd") is None
@@ -135,6 +140,11 @@ class TestSafeComponent:
     def test_non_string_input(self):
         assert safe_component(None)  # type: ignore[arg-type]
 
+    def test_is_safe_component(self):
+        assert is_safe_component("file-abc_123.png")
+        for bad in ("", "..", ".x", "a/b", "a\\b", "*", None):
+            assert not is_safe_component(bad)
+
 
 class TestResolveMediaRef:
     @pytest.fixture
@@ -147,14 +157,16 @@ class TestResolveMediaRef:
         return db
 
     def test_media_prefixed_ref(self, db_dir):
-        assert resolve_media_ref(db_dir, "media/img.png") == (
-            db_dir / "media" / "img.png"
-        ).resolve()
+        assert (
+            resolve_media_ref(db_dir, "media/img.png")
+            == (db_dir / "media" / "img.png").resolve()
+        )
 
     def test_bare_filename_ref(self, db_dir):
-        assert resolve_media_ref(db_dir, "img.png") == (
-            db_dir / "media" / "img.png"
-        ).resolve()
+        assert (
+            resolve_media_ref(db_dir, "img.png")
+            == (db_dir / "media" / "img.png").resolve()
+        )
 
     @pytest.mark.parametrize(
         "ref",
@@ -179,3 +191,190 @@ class TestResolveMediaRef:
 
     def test_no_db_dir(self):
         assert resolve_media_ref(None, "media/img.png") is None
+
+
+# ==================== Shared fixtures for exporter tests ====================
+
+
+def _conv_with_image(conv_id, image_url, title="Conv", text="hello"):
+    from ctk.core.models import (
+        ConversationMetadata,
+        ConversationTree,
+        Message,
+        MessageContent,
+        MessageRole,
+    )
+
+    conv = ConversationTree(
+        id=conv_id,
+        title=title,
+        metadata=ConversationMetadata(created_at=None, updated_at=None),
+    )
+    content = MessageContent(text=text)
+    if image_url is not None:
+        content.add_image(url=image_url)
+    conv.add_message(
+        Message(id=f"{conv_id}-m1", role=MessageRole.USER, content=content)
+    )
+    return conv
+
+
+@pytest.fixture
+def db_with_secret(tmp_path):
+    """A DB dir with one legit media file, plus a secret outside media/."""
+    db = tmp_path / "db"
+    (db / "media").mkdir(parents=True)
+    (db / "media" / "ok.png").write_bytes(b"OKPNG")
+    (db / "conversations.db").write_bytes(b"SQLITE-DB-CONTENTS")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP-SECRET")
+    return db, secret
+
+
+def _b64(raw: bytes) -> str:
+    import base64
+
+    return base64.b64encode(raw).decode()
+
+
+# ==================== 2. File exfiltration via crafted imports ====================
+
+
+class TestOpenAIAssetPointerContainment:
+    @pytest.fixture
+    def importer(self, tmp_path):
+        from ctk.importers.openai import OpenAIImporter
+
+        export = tmp_path / "export"
+        export.mkdir()
+        media = tmp_path / "db" / "media"
+        media.mkdir(parents=True)
+        (tmp_path / "secret-key.txt").write_text("TOP-SECRET")
+        imp = OpenAIImporter()
+        imp.source_dir = str(export)
+        imp.media_dir = str(media)
+        return imp, export, media
+
+    def test_legit_asset_is_copied(self, importer):
+        imp, export, media = importer
+        (export / "file-abc-photo.png").write_bytes(b"PNG")
+        assert imp._resolve_and_copy_image("file-service://file-abc") is not None
+        assert [p.read_bytes() for p in media.iterdir()] == [b"PNG"]
+
+    def test_legit_dalle_asset_is_copied(self, importer):
+        imp, export, media = importer
+        (export / "dalle-generations").mkdir()
+        (export / "dalle-generations" / "file-abc-uuid.webp").write_bytes(b"WEBP")
+        assert imp._resolve_and_copy_image("file-service://abc") is not None
+        assert [p.read_bytes() for p in media.iterdir()] == [b"WEBP"]
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "file-service://../secret",
+            "file-service://../secret-key.txt",
+            "file-service://..",
+            "file-service:///etc/passwd",
+            "file-service://sub/../../secret",
+            "file-service://..\\secret",
+            "file-service://",
+        ],
+    )
+    def test_traversal_ids_are_rejected(self, importer, url):
+        imp, export, media = importer
+        assert imp._resolve_and_copy_image(url) is None
+        assert list(media.iterdir()) == []
+
+    def test_glob_metacharacters_are_literal(self, importer):
+        imp, export, media = importer
+        (export / "file-abc-photo.png").write_bytes(b"PNG")
+        for url in (
+            "file-service://*",
+            "file-service://file-?bc",
+            "file-service://[f]ile-abc",
+        ):
+            assert imp._resolve_and_copy_image(url) is None
+        assert list(media.iterdir()) == []
+
+    def test_symlink_in_export_pointing_outside_is_rejected(self, importer, tmp_path):
+        imp, export, media = importer
+        (export / "file-abc-photo.png").symlink_to(tmp_path / "secret-key.txt")
+        assert imp._resolve_and_copy_image("file-service://file-abc") is None
+        assert list(media.iterdir()) == []
+
+    def test_symlinked_dalle_dir_pointing_outside_is_rejected(self, importer, tmp_path):
+        imp, export, media = importer
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "file-abc-x.png").write_bytes(b"STOLEN")
+        (export / "dalle-generations").symlink_to(outside)
+        assert imp._resolve_and_copy_image("file-service://file-abc") is None
+        assert list(media.iterdir()) == []
+
+
+_OUTSIDE_REFS = ["absolute", "dotdot", "db_file"]
+
+
+def _outside_ref(kind, secret):
+    return {
+        "absolute": str(secret),
+        "dotdot": "../secret.txt",
+        "db_file": "conversations.db",
+    }[kind]
+
+
+class TestHTMLImageContainment:
+    @pytest.mark.parametrize("ref_kind", _OUTSIDE_REFS)
+    def test_refs_outside_media_are_not_embedded(self, db_with_secret, ref_kind):
+        from ctk.exporters.html import HTMLExporter
+
+        db, secret = db_with_secret
+        html = HTMLExporter().export_conversations(
+            [_conv_with_image("c1", _outside_ref(ref_kind, secret))],
+            embed=True,
+            db_dir=str(db),
+        )
+        assert _b64(b"TOP-SECRET") not in html
+        assert _b64(b"SQLITE-DB-CONTENTS") not in html
+
+    def test_media_ref_is_still_embedded(self, db_with_secret):
+        from ctk.exporters.html import HTMLExporter
+
+        db, _ = db_with_secret
+        for ref in ("media/ok.png", "ok.png"):
+            html = HTMLExporter().export_conversations(
+                [_conv_with_image("c1", ref)], embed=True, db_dir=str(db)
+            )
+            assert _b64(b"OKPNG") in html
+
+
+class TestHugoImageContainment:
+    @pytest.mark.parametrize("ref_kind", _OUTSIDE_REFS)
+    def test_refs_outside_media_are_not_copied(
+        self, db_with_secret, tmp_path, ref_kind
+    ):
+        from ctk.exporters.hugo import HugoExporter
+
+        db, secret = db_with_secret
+        out = tmp_path / "site"
+        HugoExporter().export_to_file(
+            [_conv_with_image("c1", _outside_ref(ref_kind, secret))],
+            str(out),
+            db_dir=str(db),
+            hugo_organize="none",
+        )
+        copied = [p for p in out.rglob("*") if p.is_file() and p.name != "index.md"]
+        assert copied == []
+
+    def test_media_ref_is_still_copied(self, db_with_secret, tmp_path):
+        from ctk.exporters.hugo import HugoExporter
+
+        db, _ = db_with_secret
+        out = tmp_path / "site"
+        HugoExporter().export_to_file(
+            [_conv_with_image("c1", "media/ok.png")],
+            str(out),
+            db_dir=str(db),
+            hugo_organize="none",
+        )
+        assert [p.read_bytes() for p in out.rglob("*.png")] == [b"OKPNG"]

@@ -79,6 +79,15 @@ def safe_component(name: Optional[str], fallback: str = "item") -> str:
     return f"{cleaned or fallback}-{digest[:8]}"
 
 
+def is_safe_component(name: Optional[str]) -> bool:
+    """Return True if ``name`` is already a safe single path component.
+
+    Equivalent to ``safe_component(name) == name``: use it to reject, rather
+    than rewrite, an untrusted name that must be used literally.
+    """
+    return isinstance(name, str) and bool(name) and safe_component(name) == name
+
+
 def resolve_media_ref(db_dir: Optional[PathLike], ref: Optional[str]) -> Optional[Path]:
     """Resolve a stored media reference to an existing file in ``db_dir/media``.
 

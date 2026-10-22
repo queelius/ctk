@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from ctk.core.paths import is_safe_component, is_within
 from ctk.core.plugin import ImporterPlugin
 from ctk.core.utils import parse_timestamp
 
@@ -225,34 +226,45 @@ class OpenAIImporter(ImporterPlugin):
         import uuid
         from pathlib import Path
 
-        # Extract file ID from URL
+        # Extract file ID from URL. The id comes from the (untrusted) export
+        # file, so it must be a single literal name: no separators, no "..",
+        # and glob metacharacters are escaped below.
         file_id = file_service_url.replace("file-service://", "")
+        if not is_safe_component(file_id):
+            logger.warning(f"Rejecting unsafe asset id in {file_service_url!r}")
+            return None
+        literal_id = glob.escape(file_id)
 
         # Search patterns:
         # 1. Main directory: {uuid}-{filename}.{ext}
         # 2. Main directory with file- prefix: file-{id}-{filename}.{ext}
         # 3. dalle-generations: file-{id}-{uuid}.{ext}
+        source_root = Path(self.source_dir)
+        search = [
+            (source_root, [f"{literal_id}-*", f"file-{literal_id}-*"]),
+            (
+                source_root / "dalle-generations",
+                [f"file-{literal_id}-*", f"{literal_id}-*"],
+            ),
+        ]
 
         source_path = None
-
-        # Try main directory patterns
-        for pattern in [f"{file_id}-*", f"file-{file_id}-*"]:
-            matches = glob.glob(str(Path(self.source_dir) / pattern))
-            if matches:
-                source_path = Path(matches[0])
+        for directory, patterns in search:
+            for pattern in patterns:
+                # Every match must really live inside the export directory
+                # (rejects symlinks to, or symlinked subdirs pointing, elsewhere).
+                matches = [
+                    Path(m)
+                    for m in glob.glob(os.path.join(glob.escape(str(directory)), pattern))
+                    if is_within(source_root, m) and Path(m).is_file()
+                ]
+                if matches:
+                    source_path = matches[0]
+                    break
+            if source_path:
                 break
 
-        # Try dalle-generations directory
         if not source_path:
-            dalle_dir = Path(self.source_dir) / "dalle-generations"
-            if dalle_dir.exists():
-                for pattern in [f"file-{file_id}-*", f"{file_id}-*"]:
-                    matches = glob.glob(str(dalle_dir / pattern))
-                    if matches:
-                        source_path = Path(matches[0])
-                        break
-
-        if not source_path or not source_path.exists():
             logger.warning(f"Could not find image file for {file_service_url}")
             return None
 

@@ -3,12 +3,16 @@ HTML Exporter - Interactive browser-based conversation viewer with localStorage
 """
 
 import json
+import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
+from ctk.core.paths import resolve_media_ref
 from ctk.core.plugin import ExporterPlugin
+
+logger = logging.getLogger(__name__)
 
 
 class HTMLExporter(ExporterPlugin):
@@ -149,7 +153,6 @@ class HTMLExporter(ExporterPlugin):
             media_dir: If set, use file URLs to this directory instead of embedding
         """
         import base64
-        from pathlib import Path
 
         conv_data: List[Dict[str, Any]] = []
         date_range: Dict[str, Any] = {"earliest": None, "latest": None}
@@ -214,31 +217,10 @@ class HTMLExporter(ExporterPlugin):
                             # Already have base64 data
                             img_data["data"] = img.data
                         elif embed and db_dir:
-                            # Try to read image from disk and encode as base64
-                            image_path = None
-                            if img_ref:
-                                # Try various path resolutions
-                                candidates = []
-                                if img_ref.startswith("media/"):
-                                    # Relative URL like 'media/xxx.png'
-                                    candidates.append(Path(db_dir) / img_ref)
-                                elif "/" not in img_ref and "\\" not in img_ref:
-                                    # Just a filename - look in media/ directory
-                                    candidates.append(Path(db_dir) / "media" / img_ref)
-                                    # Also try directly in db_dir
-                                    candidates.append(Path(db_dir) / img_ref)
-                                else:
-                                    # Some other path - try relative to db_dir
-                                    candidates.append(Path(db_dir) / img_ref)
-                                    # Also try as absolute path
-                                    if Path(img_ref).is_absolute():
-                                        candidates.append(Path(img_ref))
-
-                                # Find first existing path
-                                for candidate in candidates:
-                                    if candidate.exists():
-                                        image_path = candidate
-                                        break
+                            # Read the image from the DB's media directory and
+                            # encode as base64. Refs come from import files, so
+                            # only files contained in db_dir/media are read.
+                            image_path = resolve_media_ref(db_dir, img_ref)
 
                             if image_path:
                                 try:
@@ -273,12 +255,10 @@ class HTMLExporter(ExporterPlugin):
                                         file=sys.stderr,
                                     )
                             elif img_ref:
-                                import sys
-
-                                print(
-                                    f"Warning: Image not found: {img_ref}"
-                                    f" (looked in {db_dir}/media/)",
-                                    file=sys.stderr,
+                                logger.warning(
+                                    "Image not found or outside %s/media, skipped: %r",
+                                    db_dir,
+                                    img_ref,
                                 )
 
                         images.append(img_data)

@@ -5,6 +5,7 @@ Exports conversations as Hugo page bundles for static site generation.
 Each conversation becomes a directory with index.md and associated media.
 """
 
+import logging
 import os
 import re
 import shutil
@@ -13,7 +14,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ctk.core.models import ConversationTree, Message, MessageRole
+from ctk.core.paths import resolve_media_ref
 from ctk.core.plugin import ExporterPlugin
+
+logger = logging.getLogger(__name__)
 
 
 class HugoExporter(ExporterPlugin):
@@ -348,18 +352,18 @@ class HugoExporter(ExporterPlugin):
     ) -> Dict[str, str]:
         """Copy images to bundle and return mapping of old to new paths."""
         image_map = {}
-        db_path = Path(db_dir)
 
         for img in images:
             img_ref = img["url"]
 
-            # Determine source path
-            if img_ref.startswith("media/"):
-                src_path = db_path / img_ref
-            elif "/" not in img_ref and "\\" not in img_ref:
-                src_path = db_path / "media" / img_ref
-            else:
-                src_path = db_path / img_ref
+            # Refs come from import files: only files contained in
+            # db_dir/media may be copied into the bundle.
+            src_path = resolve_media_ref(db_dir, img_ref)
+            if src_path is None:
+                logger.warning(
+                    "Image not found or outside %s/media, skipped: %r", db_dir, img_ref
+                )
+                continue
 
             if src_path.exists():
                 # Get filename
