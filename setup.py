@@ -34,7 +34,7 @@ setup(
         "pydantic>=2.0.0",
         "requests>=2.31.0",
         "rich>=13.0.0",
-        "mcp>=1.0.0",
+        "mcp>=1.0.0,<2",  # mcp 2.x removed the lowlevel Server decorator API
         "networkx>=3.0",
         "scikit-learn>=1.3.0",
         "numpy>=1.24.0",
