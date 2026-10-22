@@ -548,9 +548,33 @@ class QueryBuilder:
         self._desc: bool = True
 
     def where(self, **kwargs) -> "QueryBuilder":
-        """Add filter conditions"""
+        """Add filter conditions.
+
+        Keys are ConversationModel columns (``title="x"``) or boolean flags
+        for ``<flag>_at`` timestamp columns (``starred=True``). Unknown keys
+        raise ValueError: a dropped filter would widen get()/delete_all().
+        """
+        for key, value in kwargs.items():
+            self._filter_clause(key, value)  # validate now, fail fast
         self.filters.update(kwargs)
         return self
+
+    @staticmethod
+    def _filter_clause(key: str, value: Any):
+        """SQL clause for one where() filter, derived from the table columns."""
+        from ctk.core.db_models import ConversationModel
+
+        columns = ConversationModel.__table__.columns
+        if key in columns:
+            return getattr(ConversationModel, key) == value
+        flag_column = f"{key}_at"
+        if flag_column in columns and isinstance(value, bool):
+            column = getattr(ConversationModel, flag_column)
+            return column.isnot(None) if value else column.is_(None)
+        raise ValueError(
+            f"Unknown filter {key!r}; use a conversation column or a boolean"
+            f" flag ({', '.join(c[:-3] for c in columns.keys() if c.endswith('_at'))})"
+        )
 
     def limit(self, n: int) -> "QueryBuilder":
         """Limit results"""
@@ -576,14 +600,11 @@ class QueryBuilder:
         # Import the models we need
         from ctk.core.db_models import ConversationModel
 
-        results = []
         with self.ctk.db.session_scope() as session:
-            query = session.query(ConversationModel)
+            query = session.query(ConversationModel.id)
 
-            # Apply filters
             for key, value in self.filters.items():
-                if hasattr(ConversationModel, key):
-                    query = query.filter(getattr(ConversationModel, key) == value)
+                query = query.filter(self._filter_clause(key, value))
 
             # Apply ordering
             if self._order_by and hasattr(ConversationModel, self._order_by):
@@ -598,14 +619,12 @@ class QueryBuilder:
             if self._offset:
                 query = query.offset(self._offset)
 
-            # Convert to ConversationTree objects
-            for conv_model in query.all():
-                # We need to reload using the ID to get full tree structure
-                conv_tree = self.ctk.db.load_conversation(conv_model.id)
-                if conv_tree:
-                    results.append(conv_tree)
+            ids = [row[0] for row in query.all()]
 
-        return results
+        # Load full trees outside the query session: load_conversation opens
+        # its own session_scope, which closes the shared scoped session.
+        trees = (self.ctk.db.load_conversation(conv_id) for conv_id in ids)
+        return [tree for tree in trees if tree]
 
     def count(self) -> int:
         """Count matching conversations"""
@@ -618,8 +637,7 @@ class QueryBuilder:
             query = session.query(ConversationModel)
 
             for key, value in self.filters.items():
-                if hasattr(ConversationModel, key):
-                    query = query.filter(getattr(ConversationModel, key) == value)
+                query = query.filter(self._filter_clause(key, value))
 
             return query.count()
 
