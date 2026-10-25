@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 
 from ctk.core.models import (
-    ConversationMetadata,
     ConversationTree,
     Message,
     MessageContent,

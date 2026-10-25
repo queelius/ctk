@@ -12,7 +12,6 @@ HEALTH_CHECK_TIMEOUT = 5  # Quick health/availability check
 MODEL_LIST_TIMEOUT = 30  # Listing available models
 SHORT_TIMEOUT = 2  # Very short checks (Ollama health)
 EMBEDDING_TIMEOUT = 60  # Embedding generation timeout
-MIGRATION_LOCK_TIMEOUT = 30.0  # Database migration lock
 
 # --- Database & Query Limits ---
 

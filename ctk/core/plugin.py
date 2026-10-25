@@ -453,7 +453,10 @@ class PluginRegistry:
             logger.debug(f"Loaded built-in plugin: {plugin_name}")
 
     def _load_plugins_from_dir(
-        self, directory: Path, base_class: Type, registry: Dict[str, BasePlugin]
+        self,
+        directory: Path,
+        base_class: Type,
+        registry: Dict[str, BasePlugin],
     ):
         """Load plugins from a directory with security validation"""
         for file_path in directory.glob("*.py"):
@@ -491,7 +494,8 @@ class PluginRegistry:
                         ):
 
                             try:
-                                plugin_instance = obj()
+                                # issubclass(obj, base_class) above
+                                plugin_instance = cast(BasePlugin, obj())
                                 plugin_name = plugin_instance.name or module_name
 
                                 # Security: Validate plugin instance

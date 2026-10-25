@@ -249,13 +249,16 @@ async def test_escape_cancels_inflight_turn(tmp_path):
 
 @pytest.mark.asyncio
 async def test_cancel_before_first_event_persists_no_empty_message(tmp_path):
+    import threading
+
+    # Block the stream until after the cancel. A sleep-based stall raced the
+    # cancel and lost on a loaded machine, so events arrived "before" it.
+    release = threading.Event()
+
     class StallProvider(ScriptedProvider):
         def stream_turn(self, messages, tools=None, **kwargs):
-            import time as _t
-
-            for i in range(200):
-                _t.sleep(0.2)
-                yield StreamEvent(kind="reasoning", text=f"late{i}")
+            release.wait(timeout=30)
+            yield StreamEvent(kind="reasoning", text="late")
             yield StreamEvent(kind="done", finish_reason="stop")
 
     db = ConversationDB(str(tmp_path / "db"))
@@ -277,6 +280,9 @@ async def test_cancel_before_first_event_persists_no_empty_message(tmp_path):
                 if not app._turn_active:
                     break
             assert app._turn_active is False
+            release.set()  # events arriving after the cancel must be dropped
+            await pilot.pause(0.3)
             assert _assistant_messages(app) == []  # no empty message persisted
     finally:
+        release.set()
         db.close()

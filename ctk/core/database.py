@@ -5,9 +5,7 @@ Security note: Schema migrations use file locking to prevent race conditions
 when multiple connections attempt to migrate simultaneously.
 """
 
-import fcntl
 import logging
-import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -26,7 +24,6 @@ from .constants import (
     AMBIGUITY_CHECK_LIMIT,
     DEFAULT_SEARCH_LIMIT,
     DEFAULT_TIMELINE_LIMIT,
-    MIGRATION_LOCK_TIMEOUT,
     SEARCH_BUFFER,
     TITLE_MATCH_BOOST,
 )
@@ -65,63 +62,6 @@ def _escape_like(pattern: str) -> str:
     expands its semantics and returns unrelated matches.
     """
     return pattern.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-@contextmanager
-def migration_lock(lock_path: Path, timeout: float = 30.0):
-    """
-    Acquire an exclusive file lock for database migrations.
-
-    This prevents race conditions when multiple processes try to migrate
-    the schema simultaneously.
-
-    Args:
-        lock_path: Path to the lock file
-        timeout: Maximum time to wait for the lock (seconds)
-
-    Yields:
-        True if lock was acquired, False if timeout
-
-    Raises:
-        TimeoutError: If lock cannot be acquired within timeout
-    """
-    lock_file = None
-    start_time = time.time()
-
-    try:
-        # Create lock file
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_file = open(lock_path, "w")
-
-        # Try to acquire lock with timeout
-        while True:
-            try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                logger.debug(f"Migration lock acquired: {lock_path}")
-                yield True
-                return
-            except (IOError, OSError):
-                if time.time() - start_time > timeout:
-                    logger.warning(f"Migration lock timeout after {timeout}s")
-                    raise TimeoutError(
-                        f"Could not acquire migration lock within {timeout}s"
-                    )
-                time.sleep(0.1)  # Wait and retry
-
-    finally:
-        if lock_file:
-            try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            except Exception as e:
-                logger.warning(f"Error unlocking migration lock: {e}")
-            finally:
-                lock_file.close()
-            # Clean up lock file
-            try:
-                lock_path.unlink()
-            except (IOError, OSError):
-                pass
-            logger.debug(f"Migration lock released: {lock_path}")
 
 
 def _summary_from_row(
@@ -222,19 +162,7 @@ class ConversationDB:
         logger.info(f"Database schema initialized at {self.db_path}")
 
     def _migrate_schema(self):
-        """Apply versioned schema migrations under a file lock for directory DBs."""
-        if self.db_dir is None:
-            self._run_migrations()
-            return
-        lock_path = self.db_dir / ".migration.lock"
-        try:
-            with migration_lock(lock_path, timeout=MIGRATION_LOCK_TIMEOUT):
-                self._run_migrations()
-        except TimeoutError:
-            logger.warning("Migration lock timeout - another process may be migrating")
-            self._run_migrations()
-
-    def _run_migrations(self):
+        """Apply versioned schema migrations (serialized by SQLite's write lock)."""
         from ctk.core.migrations import run_migrations
 
         run_migrations(self.engine, generate_slugs=self._generate_missing_slugs)

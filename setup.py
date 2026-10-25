@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="conversation-tk",
-    version="2.20.1",
+    version="2.20.2",
     author="Alex Towell",
     author_email="lex@metafunctor.com",
     description="A robust toolkit for managing tree-based conversations from multiple sources",
@@ -23,12 +23,12 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",  # mcp requires 3.10+
     install_requires=[
         "sqlalchemy>=2.0.0",
         "pydantic>=2.0.0",

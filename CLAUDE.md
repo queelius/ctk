@@ -131,7 +131,7 @@ Single `LLMProvider` abstract base + one concrete impl (`OpenAIProvider`) wrappi
 
 ### Schema Migrations (`ctk/core/migrations.py`)
 
-Schema changes go through the versioned `PRAGMA user_version` migration runner (since 2.18.0). To add a new migration, append a `Migration` object to the `MIGRATIONS` list in `ctk/core/migrations.py` -- never edit a shipped entry. Each migration has a `version` int, a human-readable `description`, and an `up` SQL string. `run_migrations(conn)` is called at DB open time and is a no-op when the schema is already current. Conversation metadata columns (`title`, `source`, `tags`, `starred`, `pinned`, `archived`) are the single source of truth; the `metadata_json` blob holds only `custom_data`.
+Schema changes go through the versioned `PRAGMA user_version` migration runner (since 2.18.0). To add a new migration, append a `Migration` object to the `MIGRATIONS` list in `ctk/core/migrations.py` -- never edit a shipped entry. Each migration has a `version` int, a `name`, and an idempotent `apply(conn)` callable. `run_migrations(engine)` is called at DB open time and is a no-op when the schema is already current. Each step runs under `BEGIN IMMEDIATE` and re-reads `user_version` inside it, so concurrent processes serialize on SQLite's own write lock and each step applies once. Don't reintroduce an OS file lock: the old `fcntl` lock made ctk unimportable on Windows (fixed in 2.20.2). Conversation metadata columns (`title`, `source`, `tags`, `starred`, `pinned`, `archived`) are the single source of truth; the `metadata_json` blob holds only `custom_data`.
 
 ## Project Layout Beyond `ctk/`
 
@@ -172,7 +172,7 @@ starred = to_bool(starred_val) if starred_val is not None else None
 
 ### Testing
 - Unit tests in `tests/unit/`, integration tests in `tests/integration/`.
-- ~2135 unit tests pass as of 2.20.0.
+- ~2320 unit tests pass as of 2.20.2.
 - Coverage threshold: 59% (enforced in pytest.ini); actual ~67%, so single-file runs trip the threshold but full-suite runs stay under it. Don't gate work on the coverage report.
 - Markers: `unit`, `integration`, `slow`, `requires_ollama`, `requires_api_key`. Skip with `-m "not requires_ollama"`.
 
@@ -181,6 +181,7 @@ starred = to_bool(starred_val) if starred_val is not None else None
 ### Release Process
 - Version bumps: `ctk/__init__.py`, `setup.py`, `CITATION.cff`.
 - Build: `rm -rf dist/ build/ *.egg-info && python -m build`.
-- Publish: `twine check dist/* && twine upload dist/*`.
+- Publish: `twine check dist/* && twine upload dist/*` (manual; the repo has no PyPI secret).
+- Pushing a `v*` tag runs `release.yml`: the full `test.yml` matrix, then a GitHub release with `dist/*` attached. Python >= 3.10 (mcp's floor).
 - Tag: `git tag -a v<version> -m "..."` then `git push --follow-tags`.
 - PyPI package name: `conversation-tk`; entry point: `ctk=ctk.cli:main`.

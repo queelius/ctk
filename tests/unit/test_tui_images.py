@@ -240,10 +240,10 @@ async def test_message_view_mounts_image_widget(tmp_path):
             await pilot.pause()
             # Among the children of the message view, at least one
             # should be an InlineImage we mounted ourselves.
-            kinds = [type(c).__name__ for c in app.main.messages.children]
-            assert (
-                "InlineImage" in kinds
-            ), f"expected InlineImage in mounted widgets, got: {kinds}"
+            children = list(app.main.messages.children)
+            assert any(
+                isinstance(c, InlineImage) for c in children
+            ), f"expected InlineImage in mounted widgets, got: {children}"
     finally:
         db.close()
 

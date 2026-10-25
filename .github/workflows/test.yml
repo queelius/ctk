@@ -5,6 +5,7 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  workflow_call:  # release.yml gates on this workflow
 
 jobs:
   test:
@@ -13,13 +14,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     
@@ -47,10 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.11"
     
@@ -76,10 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.11"
     
@@ -92,7 +93,8 @@ jobs:
     
     - name: Run integration tests
       run: |
-        pytest tests/integration -v -m integration
+        # --no-cov: the pytest.ini coverage gate is for the full suite, not this subset
+        pytest tests/integration -v -m integration --no-cov
     
     - name: Test CLI commands
       run: |

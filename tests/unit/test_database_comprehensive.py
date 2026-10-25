@@ -542,7 +542,7 @@ class TestSearchConversations:
                 id=f"msg_1_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=f"msg_1_{i-1}" if i > 0 else None,
+                parent_id=f"msg_1_{i - 1}" if i > 0 else None,
             )
             conv1.add_message(msg)
 
@@ -557,7 +557,7 @@ class TestSearchConversations:
                 id=f"msg_2_{i}",
                 role=MessageRole.USER if i % 2 == 0 else MessageRole.ASSISTANT,
                 content=MessageContent(text=f"Message {i}"),
-                parent_id=f"msg_2_{i-1}" if i > 0 else None,
+                parent_id=f"msg_2_{i - 1}" if i > 0 else None,
             )
             conv2.add_message(msg)
 

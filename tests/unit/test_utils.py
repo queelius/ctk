@@ -6,7 +6,7 @@ Tests the shared utility functions:
 - try_parse_json: Handles dict, JSON string, and invalid inputs
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 

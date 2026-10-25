@@ -21,9 +21,6 @@ class TestTimeoutConstants:
     def test_embedding_timeout(self):
         assert constants.EMBEDDING_TIMEOUT == 60
 
-    def test_migration_lock_timeout(self):
-        assert constants.MIGRATION_LOCK_TIMEOUT == 30.0
-
 
 class TestLimitConstants:
     """Verify limit constants exist and have sensible values."""

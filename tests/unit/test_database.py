@@ -229,7 +229,7 @@ class TestConversationDB:
                     id=f"msg_{i}_{j}",
                     role=role,
                     content=MessageContent(text=f"Message {j}"),
-                    parent_id=f"msg_{i}_{j-1}" if j > 0 else None,
+                    parent_id=f"msg_{i}_{j - 1}" if j > 0 else None,
                 )
                 conv.add_message(msg)
 

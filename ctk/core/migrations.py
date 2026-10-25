@@ -6,8 +6,9 @@ Adding a schema change means appending a Migration, never editing an old one.
 """
 
 import logging
+import sqlite3
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, cast
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
@@ -107,23 +108,55 @@ def run_migrations(
         )
         return
 
-    with engine.connect() as conn:
-        current = conn.execute(text("PRAGMA user_version")).scalar() or 0
+    if _user_version(engine) >= max((m.version for m in MIGRATIONS), default=0):
+        return
 
     ran_any = False
     for migration in MIGRATIONS:
-        if migration.version <= current:
-            continue
         try:
-            with engine.begin() as conn:
-                migration.apply(conn)
-                conn.execute(text(f"PRAGMA user_version = {migration.version}"))
+            ran_any |= _apply_once(engine, migration)
         except Exception as exc:
             raise MigrationError(
                 f"migration {migration.version} ({migration.name}) failed: {exc}"
             ) from exc
-        logger.info("Applied migration %s (%s)", migration.version, migration.name)
-        ran_any = True
 
     if ran_any and generate_slugs is not None:
         generate_slugs()
+
+
+def _user_version(engine: Engine) -> int:
+    with engine.connect() as conn:
+        return conn.execute(text("PRAGMA user_version")).scalar() or 0
+
+
+def _apply_once(engine: Engine, migration: Migration) -> bool:
+    """Apply ``migration`` unless already applied, holding SQLite's write lock.
+
+    ``BEGIN IMMEDIATE`` takes the database's single write lock before the
+    version check, so concurrent processes serialize here and each step runs
+    exactly once, with no OS-specific file lock. pysqlite's legacy mode opens
+    transactions implicitly (and never before DDL), so the driver connection is
+    switched to manual transaction control for the step and then restored.
+    """
+    with engine.connect() as conn:
+        # run_migrations only proceeds on SQLite, so this is a sqlite3 connection.
+        driver = cast(sqlite3.Connection, conn.connection.driver_connection)
+        saved = driver.isolation_level
+        driver.isolation_level = None
+        try:
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
+                current = conn.execute(text("PRAGMA user_version")).scalar() or 0
+                if migration.version <= current:
+                    conn.exec_driver_sql("ROLLBACK")
+                    return False
+                migration.apply(conn)
+                conn.execute(text(f"PRAGMA user_version = {migration.version}"))
+                conn.exec_driver_sql("COMMIT")
+            except BaseException:
+                conn.exec_driver_sql("ROLLBACK")
+                raise
+        finally:
+            driver.isolation_level = saved
+    logger.info("Applied migration %s (%s)", migration.version, migration.name)
+    return True
