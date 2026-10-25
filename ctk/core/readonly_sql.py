@@ -53,6 +53,12 @@ _ALLOWED_ACTIONS = frozenset(
 
 _DENIED_FUNCTIONS = frozenset({"load_extension"})
 
+# SQLite before 3.41 checks UPDATE on the schema table while constructing an
+# FTS5 virtual table, which would make every MATCH query fail. Allowing that
+# check is safe: ``mode=ro`` already makes the main database unwritable, and
+# user UPDATEs of it also need ``writable_schema``, a PRAGMA denied below.
+_SCHEMA_TABLES = frozenset({"sqlite_master", "sqlite_schema"})
+
 READ_ONLY_MESSAGE = "Only SELECT queries are allowed (database is read-only)."
 
 
@@ -68,6 +74,9 @@ def _authorize(
     if action == sqlite3.SQLITE_FUNCTION:
         denied = (arg2 or "").lower() in _DENIED_FUNCTIONS
         return sqlite3.SQLITE_DENY if denied else sqlite3.SQLITE_OK
+    if action == sqlite3.SQLITE_UPDATE:
+        allowed = arg1 in _SCHEMA_TABLES and db_name == "main"
+        return sqlite3.SQLITE_OK if allowed else sqlite3.SQLITE_DENY
     if action == sqlite3.SQLITE_PRAGMA:
         name = (arg1 or "").lower()
         if name in _INTROSPECTION_PRAGMAS or (name in _READ_PRAGMAS and arg2 is None):

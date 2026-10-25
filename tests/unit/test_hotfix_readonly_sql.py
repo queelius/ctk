@@ -138,3 +138,34 @@ class TestReadOnlyConnectionCompat:
         finally:
             special.close()
         assert sorted(p.name for p in tmp_path.iterdir()) == [dirname]
+
+    def test_fts5_vtable_schema_check_allowed_on_old_sqlite(self):
+        """SQLite < 3.41 checks UPDATE on sqlite_master while building an FTS5 table.
+
+        Newer SQLite skips the check, so the end-to-end MATCH test cannot see it
+        here; it failed on CI's macOS Python 3.10 (SQLite 3.40).
+        """
+        import sqlite3
+
+        from ctk.core.readonly_sql import _authorize
+
+        for column in ("type", "name", "tbl_name", "rootpage", "sql"):
+            verdict = _authorize(
+                sqlite3.SQLITE_UPDATE, "sqlite_master", column, "main", None
+            )
+            assert verdict == sqlite3.SQLITE_OK
+        assert (
+            _authorize(sqlite3.SQLITE_UPDATE, "sqlite_master", "sql", "temp", None)
+            == sqlite3.SQLITE_DENY
+        )
+        assert (
+            _authorize(sqlite3.SQLITE_UPDATE, "conversations", "title", "main", None)
+            == sqlite3.SQLITE_DENY
+        )
+
+    def test_user_update_of_schema_table_still_rejected(self, db):
+        before = db.load_conversation("c1").title
+        out = _sql(db, "UPDATE sqlite_master SET sql = '' WHERE name = 'conversations'")
+        assert out.startswith(("SQL error", "Only SELECT")), out
+        assert db.load_conversation("c1").title == before
+        assert "hello" in _sql(db, "SELECT title FROM conversations")
