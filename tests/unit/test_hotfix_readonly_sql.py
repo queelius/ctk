@@ -115,3 +115,26 @@ class TestSlashSql:
         out = cmd_sql(SimpleNamespace(db=db), f"ATTACH DATABASE '{target}' AS w")
         assert out.startswith("SQL error")
         assert not target.exists()
+
+
+class TestReadOnlyConnectionCompat:
+    """2.20.2 follow-ups from an external review of the 2.20.1 authorizer."""
+
+    def test_fts5_match_query_allowed(self, db):
+        out = _sql(
+            db,
+            "SELECT count(*) AS n FROM conversations_fts "
+            "WHERE conversations_fts MATCH 'hello'",
+        )
+        assert "SQL error" not in out and "not allowed" not in out, out
+
+    @pytest.mark.parametrize("dirname", ["db#one", "db?mode=rwc", "db%41"])
+    def test_uri_special_characters_in_path(self, tmp_path, dirname):
+        special = ConversationDB(str(tmp_path / dirname))
+        try:
+            special.save_conversation(ConversationTree(id="c1", title="hello"))
+            out = _sql(special, "SELECT title FROM conversations")
+            assert "hello" in out, out
+        finally:
+            special.close()
+        assert sorted(p.name for p in tmp_path.iterdir()) == [dirname]

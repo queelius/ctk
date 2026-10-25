@@ -702,3 +702,82 @@ class TestMediaGalleryAttributes:
         loader = HTMLExporter()._get_jsonl_loader()
         assert "${error.message}" not in loader
         assert "escapeHtml(error.message)" in loader
+
+
+# ==================== 5. Exported media URLs match copied files (2.20.2) ====================
+
+
+_LOCAL_REFS = [
+    "media/a.png",
+    "a.png",
+    "sub/c.png",
+    "media/sub/c.png",
+    "media/alias.png",  # symlink to a.png inside media/
+    "media/x/../a.png",
+]
+_REMOTE_REF = "https://example.com/r.png"
+
+
+def _urls(node):
+    """Every "url" value anywhere in an exported JSON structure."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "url" and isinstance(value, str):
+                yield value
+            else:
+                yield from _urls(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _urls(item)
+
+
+class TestHTMLMediaUrlsMatchCopiedFiles:
+    @pytest.fixture
+    def db_and_convs(self, tmp_path):
+        db = tmp_path / "db"
+        (db / "media" / "sub").mkdir(parents=True)
+        (db / "media" / "a.png").write_bytes(b"A")
+        (db / "media" / "sub" / "c.png").write_bytes(b"C")
+        try:
+            (db / "media" / "alias.png").symlink_to(db / "media" / "a.png")
+            refs = _LOCAL_REFS
+        except OSError:  # no symlink privilege (e.g. Windows without dev mode)
+            refs = [r for r in _LOCAL_REFS if "alias" not in r]
+        convs = [_conv_with_image(f"c{i}", ref) for i, ref in enumerate(refs)]
+        convs.append(_conv_with_image("remote", _REMOTE_REF))
+        return db, convs
+
+    @staticmethod
+    def _assert_urls_resolve(urls, out):
+        assert _REMOTE_REF in urls  # remote references pass through untouched
+        local = [u for u in urls if u != _REMOTE_REF]
+        assert len(local) == len(urls) - 1
+        missing = [u for u in local if not (out / u).is_file()]
+        assert missing == [], f"page requests files the export lacks: {missing}"
+
+    def test_multi_file_export(self, db_and_convs, tmp_path):
+        import json
+
+        from ctk.exporters.html import HTMLExporter
+
+        db, convs = db_and_convs
+        out = tmp_path / "out"
+        HTMLExporter().export_to_file(convs, str(out), embed=False, db_dir=str(db))
+        lines = (out / "conversations.jsonl").read_text().splitlines()
+        urls = list(_urls([json.loads(line) for line in lines]))
+        self._assert_urls_resolve(urls, out)
+
+    def test_media_dir_export(self, db_and_convs, tmp_path):
+        from ctk.exporters.html import HTMLExporter
+
+        db, convs = db_and_convs
+        out = tmp_path / "out"
+        exporter = HTMLExporter()
+        exporter.export_to_file(
+            convs, str(out / "index.html"), db_dir=str(db), media_dir="assets"
+        )
+        # The URLs the page embeds come from _prepare_data with the same args.
+        conv_data, _ = exporter._prepare_data(
+            convs, db_dir=str(db), embed=True, media_dir="assets"
+        )
+        self._assert_urls_resolve(list(_urls(conv_data)), out)

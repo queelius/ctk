@@ -7,6 +7,7 @@ directory (absolute paths, ``..`` segments, or symlinks pointing elsewhere).
 """
 
 import hashlib
+import posixpath
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Optional, Union
 
@@ -88,23 +89,41 @@ def is_safe_component(name: Optional[str]) -> bool:
     return isinstance(name, str) and bool(name) and safe_component(name) == name
 
 
-def resolve_media_ref(db_dir: Optional[PathLike], ref: Optional[str]) -> Optional[Path]:
-    """Resolve a stored media reference to an existing file in ``db_dir/media``.
+def media_ref_name(ref: Optional[str]) -> Optional[PurePosixPath]:
+    """The path a stored media reference names inside the media directory.
 
-    Accepts the forms importers write (``media/<name>`` or a bare
-    ``<name>``). Returns None for remote URLs, ``data:`` URIs, absolute paths,
-    anything escaping the media directory, and missing files. Only files
-    inside the media directory are ever returned, so a crafted reference can
-    neither pull arbitrary files from disk nor the database itself into an
-    export.
+    Accepts the forms importers write (``media/<name>`` or a bare ``<name>``)
+    and normalizes ``.``/``..`` segments lexically. Returns None for remote
+    URLs, ``data:`` URIs, absolute paths, and anything that escapes upward.
+    Exporters name copied files with this value and point URLs at it, so the
+    two always agree (resolve_media_ref follows symlinks, so its result can
+    carry a different name).
     """
-    if not db_dir or not isinstance(ref, str) or not ref:
+    if not isinstance(ref, str) or not ref:
         return None
     if "://" in ref or ref.startswith("data:"):
         return None
     prefix = MEDIA_DIRNAME + "/"
     rel = ref[len(prefix) :] if ref.startswith(prefix) else ref
-    candidate = safe_join(Path(db_dir) / MEDIA_DIRNAME, rel)
+    name = PurePosixPath(posixpath.normpath(rel))
+    if name.is_absolute() or name.parts[:1] in ((), (".",), ("..",)):
+        return None
+    return name
+
+
+def resolve_media_ref(db_dir: Optional[PathLike], ref: Optional[str]) -> Optional[Path]:
+    """Resolve a stored media reference to an existing file in ``db_dir/media``.
+
+    Returns None wherever ``media_ref_name`` does, and for missing files or
+    anything whose resolved path (symlinks followed) leaves the media
+    directory. Only files inside the media directory are ever returned, so a
+    crafted reference can neither pull arbitrary files from disk nor the
+    database itself into an export.
+    """
+    name = media_ref_name(ref)
+    if not db_dir or name is None:
+        return None
+    candidate = safe_join(Path(db_dir) / MEDIA_DIRNAME, str(name))
     if candidate is None or not candidate.is_file():
         return None
     return candidate

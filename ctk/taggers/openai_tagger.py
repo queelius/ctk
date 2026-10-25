@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from ctk.core.constants import OPENAI_API_BASE
 from ctk.taggers.base import BaseLLMTagger
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class OpenAITagger(BaseLLMTagger):
 
         return OpenAI(
             api_key=self.api_key or "unused",
-            base_url=(self.base_url or "https://api.openai.com/v1").rstrip("/"),
+            base_url=(self.base_url or OPENAI_API_BASE).rstrip("/"),
             timeout=timeout if timeout is not None else self.timeout,
         )
 

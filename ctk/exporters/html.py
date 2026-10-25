@@ -7,11 +7,11 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Tuple
 
 from ctk.core.models import ConversationTree
-from ctk.core.paths import MEDIA_DIRNAME, resolve_media_ref
+from ctk.core.paths import MEDIA_DIRNAME, media_ref_name, resolve_media_ref
 from ctk.core.plugin import ExporterPlugin
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class HTMLExporter(ExporterPlugin):
 
             # Create output directory and media directory
             os.makedirs(output_dir, exist_ok=True)
-            media_output_dir = os.path.join(output_dir, "media")
+            media_output_dir = os.path.join(output_dir, MEDIA_DIRNAME)
             os.makedirs(media_output_dir, exist_ok=True)
 
             jsonl_path = os.path.join(output_dir, "conversations.jsonl")
@@ -135,7 +135,9 @@ class HTMLExporter(ExporterPlugin):
                 f.write(html_content)
 
             # Generate JSONL data
-            conv_data, stats = self._prepare_data(conversations)
+            conv_data, stats = self._prepare_data(
+                conversations, db_dir=db_dir, embed=False, media_dir=MEDIA_DIRNAME
+            )
             with open(jsonl_path, "w", encoding="utf-8") as f:
                 for conv in conv_data:
                     f.write(json.dumps(conv, ensure_ascii=False) + "\n")
@@ -145,31 +147,33 @@ class HTMLExporter(ExporterPlugin):
     @staticmethod
     def _referenced_media(
         conversations: List[ConversationTree], db_dir: str
-    ) -> List[Path]:
-        """Existing files in db_dir/media referenced by the conversations' messages.
+    ) -> Dict[PurePosixPath, Path]:
+        """Export name -> source file for media the conversations reference.
 
         Each message's image, audio, video and document references are
         resolved with resolve_media_ref, so anything outside the media
-        directory (or missing) is excluded.
+        directory (or missing) is excluded. Names come from media_ref_name,
+        the same rule _prepare_data uses for URLs.
         """
-        found: Dict[Path, None] = {}
+        found: Dict[PurePosixPath, Path] = {}
         for conv in conversations:
             for msg in conv.message_map.values():
                 content = msg.content
                 for kind in _MEDIA_KINDS:
                     for media in getattr(content, kind, None) or []:
-                        path = resolve_media_ref(db_dir, media.url or media.path)
-                        if path is not None:
-                            found[path] = None
-        return list(found)
+                        ref = media.url or media.path
+                        src = resolve_media_ref(db_dir, ref)
+                        name = media_ref_name(ref)
+                        if src is not None and name is not None:
+                            found[name] = src
+        return found
 
     def _copy_referenced_media(
         self, conversations: List[ConversationTree], db_dir: str, dest_dir: str
     ) -> None:
         """Copy only the media files the exported conversations reference."""
-        media_root = (Path(db_dir) / MEDIA_DIRNAME).resolve()
-        for src in self._referenced_media(conversations, db_dir):
-            dest = Path(dest_dir) / src.relative_to(media_root)
+        for name, src in self._referenced_media(conversations, db_dir).items():
+            dest = Path(dest_dir) / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
 
@@ -233,25 +237,18 @@ class HTMLExporter(ExporterPlugin):
                             "mime_type": img.mime_type or "image/png",
                         }
 
-                        # Determine the filename for this image
                         img_ref = img.url or img.path
-                        if img_ref:
-                            # Get just the filename
-                            if img_ref.startswith("media/"):
-                                filename = img_ref[6:]  # Remove 'media/' prefix
-                            elif "/" in img_ref:
-                                filename = img_ref.split("/")[-1]
-                            elif "\\" in img_ref:
-                                filename = img_ref.split("\\")[-1]
-                            else:
-                                filename = img_ref
-                        else:
-                            filename = None
+                        # Name the URL exactly as _copy_referenced_media names
+                        # the copy; refs it doesn't copy (remote URLs, missing
+                        # or unsafe paths) keep their original URL.
+                        copied_name = (
+                            media_ref_name(img_ref)
+                            if resolve_media_ref(db_dir, img_ref)
+                            else None
+                        )
 
-                        # If media_dir is set, use file URLs instead of embedding
-                        if media_dir and filename:
-                            # Set URL to point to media_dir
-                            img_data["url"] = f"{media_dir}/{filename}"
+                        if media_dir and copied_name:
+                            img_data["url"] = f"{media_dir}/{copied_name}"
                             # Don't embed data - we're using file references
                         elif img.data:
                             # Already have base64 data

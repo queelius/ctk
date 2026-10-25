@@ -12,6 +12,12 @@ HEALTH_CHECK_TIMEOUT = 5  # Quick health/availability check
 MODEL_LIST_TIMEOUT = 30  # Listing available models
 SHORT_TIMEOUT = 2  # Very short checks (Ollama health)
 EMBEDDING_TIMEOUT = 60  # Embedding generation timeout
+MIGRATION_LOCK_TIMEOUT = 30.0  # Wait for another process's schema migration
+
+# --- Endpoints ---
+
+OPENAI_API_BASE = "https://api.openai.com/v1"  # Default chat endpoint
+OPENAI_API_KEY_ENV = "OPENAI_API_KEY"  # OpenAI's credential; only sent to its host
 
 # --- Database & Query Limits ---
 

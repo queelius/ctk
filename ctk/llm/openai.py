@@ -16,7 +16,12 @@ import json
 import logging
 from typing import Any, Dict, Iterator, List, Optional
 
-from ctk.core.constants import DEFAULT_TIMEOUT, HEALTH_CHECK_TIMEOUT, MODEL_LIST_TIMEOUT
+from ctk.core.constants import (
+    DEFAULT_TIMEOUT,
+    HEALTH_CHECK_TIMEOUT,
+    MODEL_LIST_TIMEOUT,
+    OPENAI_API_BASE,
+)
 from ctk.llm.base import (
     AuthenticationError,
     ChatResponse,
@@ -52,9 +57,7 @@ class OpenAIProvider(LLMProvider):
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self.api_key = config.get("api_key")
-        self.base_url = (config.get("base_url") or "https://api.openai.com/v1").rstrip(
-            "/"
-        )
+        self.base_url = (config.get("base_url") or OPENAI_API_BASE).rstrip("/")
         self.organization = config.get("organization")
         self.timeout = config.get("timeout", DEFAULT_TIMEOUT)
 

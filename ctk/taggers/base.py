@@ -7,6 +7,7 @@ from abc import abstractmethod
 from typing import Any, Dict, List, Optional
 
 from ctk.core.config import get_config
+from ctk.core.constants import OPENAI_API_BASE
 from ctk.core.models import ConversationTree
 from ctk.core.plugin import BasePlugin
 
@@ -42,7 +43,9 @@ class BaseLLMTagger(BasePlugin):
         # Set attributes with overrides
         self.model = model or provider_config.get("default_model")
         self.base_url = base_url or provider_config.get("base_url")
-        self.api_key = api_key or self.config.get_api_key(self.provider_name)
+        self.api_key = api_key or self.config.api_key_for(
+            self.provider_name, self.base_url or OPENAI_API_BASE
+        )
         self.timeout = kwargs.get("timeout", provider_config.get("timeout", 30))
 
         # Store additional kwargs

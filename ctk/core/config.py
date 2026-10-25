@@ -11,11 +11,19 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+from ctk.core.constants import OPENAI_API_BASE, OPENAI_API_KEY_ENV
 
 logger = logging.getLogger(__name__)
 
 # Credential-related keys that should not be in config files
 SENSITIVE_KEYS = {"api_key", "api_secret", "token", "password", "secret", "credential"}
+
+
+def is_openai_endpoint(base_url: str) -> bool:
+    """True if ``base_url`` is OpenAI's own API host."""
+    return urlparse(base_url).hostname == urlparse(OPENAI_API_BASE).hostname
 
 
 class Config:
@@ -210,6 +218,26 @@ class Config:
                 f"For security, use environment variable {env_key} instead."
             )
         return config_key
+
+    def api_key_for(self, provider: str, base_url: str) -> Optional[str]:
+        """API key to send to ``base_url`` on behalf of profile ``provider``.
+
+        Same precedence as ``get_api_key`` (``<PROFILE>_API_KEY``, then the
+        profile's config-file key), except that OPENAI_API_KEY is OpenAI's
+        credential and is only returned for OpenAI's own host. That covers
+        both the fallback for other profiles and the ``openai`` profile's own
+        variable, since that profile is often pointed at a local server via
+        ``--base-url``, OPENAI_BASE_URL, or a legacy config. A config-file
+        key was set for its profile explicitly and is used as is.
+        """
+        to_openai = is_openai_endpoint(base_url)
+        if f"{provider.upper()}_API_KEY" != OPENAI_API_KEY_ENV or to_openai:
+            key = self.get_api_key(provider)
+        else:
+            key = self.get(f"providers.{provider}.api_key")
+        if key:
+            return key
+        return os.environ.get(OPENAI_API_KEY_ENV) if to_openai else None
 
     def _find_sensitive_keys(self, config: Dict, path: str = "") -> List[str]:
         """

@@ -21,18 +21,10 @@ from __future__ import annotations
 
 import os
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
-
 from ctk.core.config import get_config
+from ctk.core.constants import OPENAI_API_BASE
 from ctk.llm.base import LLMProvider
 from ctk.llm.openai import OpenAIProvider
-
-OPENAI_API_BASE = "https://api.openai.com/v1"
-
-
-def _is_openai_endpoint(base_url: str) -> bool:
-    """True if ``base_url`` is OpenAI's own API host."""
-    return urlparse(base_url).hostname == urlparse(OPENAI_API_BASE).hostname
 
 
 def list_profiles() -> List[str]:
@@ -99,17 +91,9 @@ def build_provider(
     resolved: Dict[str, Any] = {
         "model": model or provider_config.get("default_model") or "gpt-3.5-turbo",
         "base_url": resolved_base_url,
-        # Env-var lookup keys off the profile name so e.g. profile
-        # ``muse`` reads MUSE_API_KEY. OPENAI_API_KEY is a fallback only for
-        # OpenAI's own endpoint: sending it to whatever host a profile names
-        # (often plain-http LAN servers) would leak it.
-        "api_key": api_key
-        or cfg.get_api_key(name)
-        or (
-            os.environ.get("OPENAI_API_KEY")
-            if _is_openai_endpoint(resolved_base_url)
-            else None
-        ),
+        # Env-var lookup keys off the profile name (profile ``muse`` reads
+        # MUSE_API_KEY); OPENAI_API_KEY only ever goes to OpenAI's host.
+        "api_key": api_key or cfg.api_key_for(name, resolved_base_url),
         "timeout": timeout or provider_config.get("timeout") or 120,
         # The profile this provider was built from; readers reach it via
         # ``provider.profile_name`` (see LLMProvider.__init__).

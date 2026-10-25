@@ -13,6 +13,8 @@ from typing import Callable, List, Optional, cast
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
 
+from ctk.core.constants import MIGRATION_LOCK_TIMEOUT
+
 logger = logging.getLogger(__name__)
 
 
@@ -134,15 +136,22 @@ def _apply_once(engine: Engine, migration: Migration) -> bool:
 
     ``BEGIN IMMEDIATE`` takes the database's single write lock before the
     version check, so concurrent processes serialize here and each step runs
-    exactly once, with no OS-specific file lock. pysqlite's legacy mode opens
-    transactions implicitly (and never before DDL), so the driver connection is
-    switched to manual transaction control for the step and then restored.
+    exactly once, with no OS-specific file lock. Waiting for that lock uses
+    MIGRATION_LOCK_TIMEOUT rather than the connection's (shorter) busy timeout,
+    since another process's migration can legitimately take a while. pysqlite's
+    legacy mode opens transactions implicitly (and never before DDL), so the
+    driver connection is switched to manual transaction control for the step.
+    Both settings are restored afterwards.
     """
     with engine.connect() as conn:
         # run_migrations only proceeds on SQLite, so this is a sqlite3 connection.
         driver = cast(sqlite3.Connection, conn.connection.driver_connection)
-        saved = driver.isolation_level
+        saved_isolation = driver.isolation_level
+        saved_busy_ms = conn.exec_driver_sql("PRAGMA busy_timeout").scalar()
         driver.isolation_level = None
+        conn.exec_driver_sql(
+            f"PRAGMA busy_timeout = {int(MIGRATION_LOCK_TIMEOUT * 1000)}"
+        )
         try:
             conn.exec_driver_sql("BEGIN IMMEDIATE")
             try:
@@ -157,6 +166,7 @@ def _apply_once(engine: Engine, migration: Migration) -> bool:
                 conn.exec_driver_sql("ROLLBACK")
                 raise
         finally:
-            driver.isolation_level = saved
+            conn.exec_driver_sql(f"PRAGMA busy_timeout = {int(saved_busy_ms or 0)}")
+            driver.isolation_level = saved_isolation
     logger.info("Applied migration %s (%s)", migration.version, migration.name)
     return True

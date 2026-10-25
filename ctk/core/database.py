@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .models import PaginatedResult
 
 from sqlalchemy import and_, create_engine, distinct, func, or_, text
+from sqlalchemy.engine import URL
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, scoped_session, selectinload, sessionmaker
 from sqlalchemy.orm.attributes import flag_modified
@@ -135,10 +136,13 @@ class ConversationDB:
             except (PermissionError, OSError) as e:
                 raise ValueError(f"Cannot create database directory: {e}") from e
 
-            connection_string = f"sqlite:///{self.db_path}"
+            # URL.create, not an f-string: SQLAlchemy parses a URL string, so
+            # '?', '#' or '%' in the directory name would be read as query
+            # parameters or escapes and open a different file.
+            sqlite_url = URL.create("sqlite", database=self.db_path)
             # Use StaticPool for SQLite to avoid connection issues in tests
             self.engine = create_engine(
-                connection_string,
+                sqlite_url,
                 echo=echo,
                 connect_args={"check_same_thread": False},
                 poolclass=StaticPool,

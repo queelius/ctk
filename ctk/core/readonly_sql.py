@@ -12,6 +12,7 @@ that other code has used.
 """
 
 import sqlite3
+from pathlib import Path
 from typing import Optional
 
 # PRAGMAs that take a table/index argument and only describe it.
@@ -38,6 +39,7 @@ _READ_PRAGMAS = frozenset(
         "compile_options",
         "database_list",
         "encoding",
+        "data_version",  # FTS5 reads it internally on every MATCH query
     }
 )
 
@@ -75,7 +77,11 @@ def _authorize(
 
 def connect_read_only(db_file: str) -> sqlite3.Connection:
     """Open ``db_file`` read-only with the read-only authorizer installed."""
-    conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
+    # as_uri() percent-encodes '#', '?' and '%' (and handles Windows drive
+    # letters); interpolating the raw path let those characters truncate it or
+    # inject URI parameters such as ``mode=rwc``.
+    uri = Path(db_file).resolve().as_uri() + "?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
     conn.set_authorizer(_authorize)
     return conn
 

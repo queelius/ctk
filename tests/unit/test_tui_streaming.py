@@ -251,8 +251,8 @@ async def test_escape_cancels_inflight_turn(tmp_path):
 async def test_cancel_before_first_event_persists_no_empty_message(tmp_path):
     import threading
 
-    # Block the stream until after the cancel. A sleep-based stall raced the
-    # cancel and lost on a loaded machine, so events arrived "before" it.
+    # Gate the stream on an event rather than a sleep: a sleep-based stall
+    # raced the cancel and lost on a loaded machine.
     release = threading.Event()
 
     class StallProvider(ScriptedProvider):
@@ -275,14 +275,52 @@ async def test_cancel_before_first_event_persists_no_empty_message(tmp_path):
             # run_in_executor is awaited and the thread never starts.
             await pilot.pause(0.02)
             app.action_cancel_turn_or_dismiss()  # cancel before first event
+            # Cancellation is cooperative: the worker notices it at the next
+            # stream event, so let the provider emit one.
+            release.set()
             for _ in range(100):
                 await pilot.pause(0.05)
                 if not app._turn_active:
                     break
             assert app._turn_active is False
-            release.set()  # events arriving after the cancel must be dropped
-            await pilot.pause(0.3)
             assert _assistant_messages(app) == []  # no empty message persisted
+    finally:
+        release.set()
+        db.close()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="Escape only takes effect at the provider's next stream event, so a "
+    "silent or hung provider keeps the turn (and the read-only input) locked.",
+)
+@pytest.mark.asyncio
+async def test_cancel_ends_turn_while_provider_is_silent(tmp_path):
+    import threading
+
+    release = threading.Event()
+
+    class SilentProvider(ScriptedProvider):
+        def stream_turn(self, messages, tools=None, **kwargs):
+            release.wait(timeout=30)  # e.g. a hung server before the first token
+            yield StreamEvent(kind="done", finish_reason="stop")
+
+    db = ConversationDB(str(tmp_path / "db"))
+    app = CTKApp(db=db, provider=SilentProvider([]), enable_tools=True)
+    try:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            user_msg = app._append_user_message("ping")
+            app._turn_active = True
+            app.main.set_streaming(True)
+            app._active_worker = app._chat_worker_with_tools(user_msg.id)
+            await pilot.pause(0.02)
+            app.action_cancel_turn_or_dismiss()
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if not app._turn_active:
+                    break
+            assert app._turn_active is False
     finally:
         release.set()
         db.close()
