@@ -190,6 +190,47 @@ class TestCleanupTempFiles:
 
 
 # ---------------------------------------------------------------------------
+# protocol-aware image widget
+# ---------------------------------------------------------------------------
+
+
+def test_inline_image_uses_protocol_aware_image_alias(tmp_path, monkeypatch):
+    """InlineImage must use textual-image's protocol-aware Image alias."""
+    import textual_image.widget as textual_widget
+    from textual.widgets import Static
+
+    from ctk.core.models import ContentType, MediaContent
+    from ctk.tui.images import InlineImage
+
+    image_file = tmp_path / "test.png"
+    image_file.write_bytes(b"placeholder")
+
+    media = MediaContent(
+        type=ContentType.IMAGE,
+        path=str(image_file),
+        mime_type="image/png",
+    )
+
+    class ProtocolAwareImage(Static):
+        def __init__(self, path, classes=None):
+            self.image_path = path
+            super().__init__("", classes=classes)
+
+    class AutoImageSentinel(Static):
+        def __init__(self, path, classes=None):
+            self.image_path = path
+            super().__init__("", classes=classes)
+
+    monkeypatch.setattr(textual_widget, "Image", ProtocolAwareImage)
+    monkeypatch.setattr(textual_widget, "AutoImage", AutoImageSentinel)
+
+    children = list(InlineImage(media).compose())
+
+    assert isinstance(children[0], ProtocolAwareImage)
+    assert children[0].image_path == str(image_file)
+
+
+# ---------------------------------------------------------------------------
 # build_image_widgets — integration with Textual
 # ---------------------------------------------------------------------------
 

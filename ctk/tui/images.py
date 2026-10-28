@@ -4,10 +4,9 @@ Wraps ``textual-image`` so the rest of the TUI doesn't need to know
 about temp-file handling or the three different ways an image can be
 attached to a message (URL, local path, base64 data).
 
-``textual_image.widget.AutoImage`` auto-detects the terminal protocol
-on construction (Sixel for foot/wezterm/mlterm, TGP for Kitty/Ghostty,
-Halfcell for everything else) so callers just hand it a path and get
-the best rendering the terminal supports.
+``textual_image.widget.Image`` selects the appropriate widget for the
+detected terminal protocol, including the specialized Sixel widget
+when required.
 """
 
 from __future__ import annotations
@@ -116,7 +115,7 @@ def resolve_image_path(
     if media.data:
         return _write_data_to_tempfile(media.data, media.mime_type)
     if media.url:
-        # Treat http(s) as truly remote — AutoImage doesn't fetch and
+        # Treat http(s) as truly remote — the image widget doesn't fetch and
         # we won't either, so caption-only is the right call there.
         if media.url.startswith(("http://", "https://", "data:")):
             return None
@@ -148,14 +147,14 @@ def _fallback_label(media: MediaContent) -> str:
 class InlineImage(Vertical):
     """A single image attachment rendered inline below a message.
 
-    Composed of an ``AutoImage`` (when we can resolve a local file)
+    Composed of a protocol-aware image widget (when we can resolve a local file)
     plus a caption/fallback line. We always emit the caption — if the
     image fails to render, the user still sees what was attached.
 
     Falls back to caption-only when:
       - the source is a remote URL we won't fetch synchronously
       - base64 decode fails
-      - AutoImage raises during construction
+      - the image widget raises during construction
     """
 
     # Default size for the inline image area.
@@ -193,11 +192,11 @@ class InlineImage(Vertical):
 
     def compose(self) -> ComposeResult:
         # Lazy import so this module stays cheap when no images appear.
-        from textual_image.widget import AutoImage
+        from textual_image.widget import Image
 
         if self._path is not None:
             try:
-                yield AutoImage(self._path, classes="image-content")
+                yield Image(self._path, classes="image-content")
             except Exception as exc:
                 # Some renderers raise if the file isn't a real image,
                 # or if PIL can't decode it. Log once and fall through
